@@ -99,6 +99,8 @@ celerybeat-schedule
 
 # dotenv
 .env
+.env.development
+.env.testing
 
 # virtualenv
 .venv
