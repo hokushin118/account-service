@@ -35,7 +35,9 @@ app = Flask(__name__)
 
 # Import the routes After the Flask app is created
 # pylint: disable=wrong-import-position, cyclic-import, wrong-import-order
-from service import routes  # noqa: F401 E402
+from service import routes, config  # noqa: F401 E402
+
+app.config.from_object(config)
 
 
 @app.before_first_request
