@@ -1,0 +1,47 @@
+# Project name
+name: account-service
+
+services:
+  # PostgreSQL object-relational database system is used as Account data storage.
+  postgresql:
+    image: bitnami/postgresql:${POSTGRES_VERSION}
+    restart: on-failure
+    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
+      - 15432:5432 # external port / container port
+    env_file:
+      - .env
+    environment:
+      # ALLOW_EMPTY_PASSWORD is recommended only for development
+      - ALLOW_EMPTY_PASSWORD=yes
+      - POSTGRESQL_DATABASE=${DATABASE_NAME}
+      - POSTGRESQL_USERNAME=${DATABASE_USER}
+      - POSTGRESQL_PASSWORD=${DATABASE_PASSWORD}
+    volumes:
+      - postgresql_data:/bitnami/postgresql  # creating a volume to save PostgreSQL data locally
+    networks:
+      - ${BACKEND_NETWORK}
+    healthcheck: # Healthcheck for better container management
+      test: [ "CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      # Resource limits for production
+      resources:
+        limits:
+          cpus: '1'
+          memory: '1G'
+        reservations:
+          cpus: '0.5'
+          memory: '512M'
+
+volumes:
+  postgresql_data:
+    driver: local
+
+# networks
+networks:
+  cba_net:
+    name: ${BACKEND_NETWORK}
