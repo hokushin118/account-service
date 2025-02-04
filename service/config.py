@@ -1,9 +1,10 @@
 """
 Global Configuration for Application
 """
+import logging
 import os
 
-from service import app
+logger = logging.getLogger('account-service')
 
 
 def get_database_uri():
@@ -34,7 +35,7 @@ if not SECRET_KEY:
     SECRET_KEY = secrets.token_urlsafe(
         32
     )  # Generate a 32-character random key
-    app.logger.warning(
+    logger.warning(
         'Using a generated secret key. Set SECRET_KEY in environment for production.'
     )
 

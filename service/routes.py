@@ -11,8 +11,9 @@ from flask import jsonify, request, make_response, abort, url_for  # noqa; F401
 from service import app, VERSION, NAME
 from service.common import status
 
-HEALTH_ENDPOINT = '/health'
 ROOT_ENDPOINT = '/'
+HEALTH_ENDPOINT = '/health'
+INFO_ENDPOINT = '/info'
 
 
 ############################################################
@@ -24,11 +25,11 @@ def health():
     return jsonify({'status': 'UP'}), status.HTTP_200_OK
 
 
-######################################################################
-# GET INDEX
-######################################################################
-@app.route(ROOT_ENDPOINT)
-def index():
+############################################################
+# Info Endpoint
+############################################################
+@app.route(INFO_ENDPOINT)
+def info():
     """Returns information about the service."""
     uptime = 'Not yet started'
     if hasattr(app, 'start_time'):
@@ -40,3 +41,14 @@ def index():
         'uptime': uptime,
     }
     return jsonify(info_data), status.HTTP_200_OK
+
+
+######################################################################
+# GET INDEX
+######################################################################
+@app.route(ROOT_ENDPOINT)
+def index():
+    """Returns a welcome message."""
+    return jsonify(
+        {'message': 'Welcome to the Account API!'}
+    ), status.HTTP_200_OK
