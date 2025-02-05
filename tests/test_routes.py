@@ -9,6 +9,7 @@ import logging
 import os
 from unittest import TestCase
 
+from service import talisman
 from service.common import status  # HTTP Status Codes
 from service.models import Account, init_db, db
 from service.routes import app, HEALTH_ENDPOINT, ROOT_ENDPOINT, \
@@ -36,6 +37,7 @@ class TestAccountService(TestCase):
         app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
         app.logger.setLevel(logging.CRITICAL)
         init_db(app)
+        talisman.force_https = False
 
     @classmethod
     def tearDownClass(cls):
@@ -215,3 +217,19 @@ class TestAccountService(TestCase):
         account = self._create_accounts(1)[0]
         resp = self.client.delete(f"{ACCOUNT_ENDPOINT}/{account.id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_security_headers(self):
+        """It should return security headers."""
+        response = self.client.get(
+            ROOT_ENDPOINT,
+            environ_overrides=HTTPS_ENVIRON
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        headers = {
+            'X-Frame-Options': 'SAMEORIGIN',
+            'X-Content-Type-Options': 'nosniff',
+            'Content-Security-Policy': 'default-src \'self\'; object-src \'none\'',
+            'Referrer-Policy': 'strict-origin-when-cross-origin'
+        }
+        for key, value in headers.items():
+            self.assertEqual(response.headers.get(key), value)
