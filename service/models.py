@@ -46,6 +46,26 @@ class PersistentBase:
             ) from error
         return self
 
+    def partial_update(self, data):
+        """Partially updates the Account object with the given data."""
+        logger.info("Partially updating %s", data)
+        for key, value in data.items():
+            # Check if attribute exists and is not the primary key
+            if hasattr(self,
+                       key) and key != 'id':
+                try:
+                    setattr(self, key, value)
+                except ValueError as error:  # Handle type mismatches
+                    raise DataValidationError(
+                        f"Invalid value for {key}: {error}"
+                    ) from error
+            elif key == 'id':
+                raise DataValidationError("Cannot update primary key 'id'")
+            else:
+                raise DataValidationError(
+                    f"Attribute '{key}' is not valid for Account"
+                )
+
     def update(self):
         """Updates an existing record in the database."""
         logger.info("Updating %s", self)

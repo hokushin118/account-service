@@ -178,3 +178,34 @@ class TestAccountService(TestCase):
         """It should not Read an Account that is not found."""
         resp = self.client.put(f"{ACCOUNT_ENDPOINT}/0")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_partial_update_account_by_id(self):
+        """It should Partially Update an existing Account."""
+        # create an Account to update
+        test_account = AccountFactory()
+        resp = self.client.post(
+            ACCOUNT_ENDPOINT,
+            json=test_account.serialize()
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+        # partially update the account
+        new_account = resp.get_json()
+        updated_account_id = new_account['id']
+        update_data = {
+            'name': 'Test Account',
+            'email': 'test@example.com'
+        }
+        resp = self.client.patch(
+            f"{ACCOUNT_ENDPOINT}/{updated_account_id}",
+            json=update_data
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        updated_account = resp.get_json()
+        self.assertEqual(updated_account['name'], 'Test Account')
+        self.assertEqual(updated_account['email'], 'test@example.com')
+
+    def test_partial_update_account_by_id_not_found(self):
+        """It should not Read an Account that is not found."""
+        resp = self.client.patch(f"{ACCOUNT_ENDPOINT}/0")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

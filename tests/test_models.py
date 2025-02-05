@@ -180,3 +180,44 @@ class TestAccount(unittest.TestCase):
         """It should not Deserialize an account with a TypeError."""
         account = Account()
         self.assertRaises(DataValidationError, account.deserialize, [])
+
+    def test_partial_update_valid_data(self):
+        """It should partially update an account."""
+        account = AccountFactory()
+        account.create()
+        data = {'name': 'Updated Name', 'email': 'updated@example.com'}
+        account.partial_update(data)
+        self.assertEqual(account.name, 'Updated Name')
+        self.assertEqual(account.email, 'updated@example.com')
+
+    def test_partial_update_invalid_attribute(self):
+        """It should not partially update an account with invalid attribute."""
+        account = AccountFactory()
+        account.create()
+        data = {'non_existent_attribute': 'some_value'}
+        with self.assertRaises(DataValidationError) as context:
+            account.partial_update(data)
+        self.assertIn(
+            "Attribute 'non_existent_attribute' is not valid",
+            str(context.exception)
+        )
+
+    def test_partial_update_primary_key(self):
+        """It should not partially update an account with data containing primary key."""
+        account = AccountFactory()
+        account.create()
+        data = {'id': 456}
+        with self.assertRaises(DataValidationError) as context:
+            account.partial_update(data)
+        self.assertIn("Cannot update primary key 'id'", str(context.exception))
+
+    def test_partial_update_empty_data(self):
+        """It should not raise error while updating an account with empty data."""
+        account = AccountFactory()
+        account.create()
+        account.name = 'Test Account'
+        account.email = 'test@example.com'
+        data = {}
+        account.partial_update(data)  # Should not raise error
+        self.assertEqual(account.name, 'Test Account')
+        self.assertEqual(account.email, 'test@example.com')
