@@ -6,12 +6,18 @@ Test cases can be run with the following:
   coverage report -m
 """
 import logging
+import os
 from unittest import TestCase
 
 from service.common import status  # HTTP Status Codes
+from service.models import Account, init_db, db
 from service.routes import app, HEALTH_ENDPOINT, ROOT_ENDPOINT, \
     ACCOUNT_ENDPOINT
 from tests.factories import AccountFactory
+
+DATABASE_URI = os.getenv(
+    'DATABASE_URI', 'postgresql://postgres:postgres@localhost:15432/postgres'
+)
 
 HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
 
@@ -25,9 +31,11 @@ class TestAccountService(TestCase):
     @classmethod
     def setUpClass(cls):
         """Run once before all tests."""
-        app.config["TESTING"] = True
-        app.config["DEBUG"] = False
+        app.config['TESTING'] = True
+        app.config['DEBUG'] = False
+        app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
         app.logger.setLevel(logging.CRITICAL)
+        init_db(app)
 
     @classmethod
     def tearDownClass(cls):
@@ -35,7 +43,14 @@ class TestAccountService(TestCase):
 
     def setUp(self):
         """Runs before each test."""
+        db.session.query(Account).delete()  # clean up the last tests
+        db.session.commit()
+
         self.client = app.test_client()
+
+    def tearDown(self):
+        """Runs once after each test case."""
+        db.session.remove()
 
     ######################################################################
     #  H E L P E R   M E T H O D S
@@ -75,6 +90,44 @@ class TestAccountService(TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertEqual(data['status'], 'UP')
+
+    def test_create_account(self):
+        """It should Create a new Account."""
+        account = AccountFactory()
+        response = self.client.post(
+            ACCOUNT_ENDPOINT,
+            json=account.serialize(),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Make sure location header is set
+        location = response.headers.get('Location', None)
+        self.assertIsNotNone(location)
+
+        # Check the data is correct
+        new_account = response.get_json()
+        self.assertEqual(new_account['name'], account.name)
+        self.assertEqual(new_account['email'], account.email)
+        self.assertEqual(new_account['address'], account.address)
+        self.assertEqual(new_account['phone_number'], account.phone_number)
+        self.assertEqual(new_account['date_joined'], str(account.date_joined))
+
+    def test_unsupported_media_type(self):
+        """
+        It should not Create an Account when sending the wrong media
+        type.
+        """
+        account = AccountFactory()
+        response = self.client.post(
+            ACCOUNT_ENDPOINT,
+            json=account.serialize(),
+            content_type='test/html'
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+        )
 
     def test_get_account_list(self):
         """It should Get a list of Accounts."""
