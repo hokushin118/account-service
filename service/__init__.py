@@ -9,6 +9,7 @@ import os
 import sys
 
 from dotenv import load_dotenv
+from flask_talisman import Talisman
 
 # Load the correct .env file based on FLASK_ENV
 env = os.getenv('FLASK_ENV')
@@ -39,7 +40,7 @@ app = Flask(__name__)
 from service import routes, config, models  # noqa: F401 E402
 
 app.config.from_object(config)
-
+talisman = Talisman(app)
 
 @app.before_first_request
 def before_first_request():
