@@ -164,3 +164,40 @@ def update_account_by_id(account_id):
     account.update()
 
     return account.serialize(), status.HTTP_200_OK
+
+
+######################################################################
+# PARTIAL UPDATE AN EXISTING ACCOUNT
+######################################################################
+@app.route(f"{ACCOUNT_ENDPOINT}/<int:account_id>", methods=['PATCH'])
+def partial_update_account_by_id(account_id):
+    """
+    Partial Update an Account.
+
+    This endpoint will partially update an Account based on the posted data.
+    """
+    app.logger.info(
+        "Request to partially update an Account with id: %s",
+        account_id
+    )
+
+    account = Account.find(account_id)
+
+    if not account:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Account with id [{account_id}] could not be found."
+        )
+
+    data = request.get_json()
+
+    if not data:
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            'No data provided for update'
+        )
+
+    account.partial_update(data)
+    account.update()
+
+    return account.serialize(), status.HTTP_200_OK
