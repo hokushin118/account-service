@@ -10,6 +10,7 @@ from flask import jsonify, request, make_response, abort, url_for  # noqa; F401
 
 from service import app, VERSION, NAME
 from service.common import status
+from service.common.util import check_content_type
 from service.models import Account
 
 ROOT_ENDPOINT = '/'
@@ -55,6 +56,32 @@ def index():
         {'message': 'Welcome to the Account API!'}
     ), status.HTTP_200_OK
 
+######################################################################
+# CREATE A NEW ACCOUNT
+######################################################################
+@app.route(ACCOUNT_ENDPOINT, methods=['POST'])
+def create_accounts():
+    """
+    Creates an Account.
+
+    This endpoint will create an Account based the data in the body that is
+    posted.
+    """
+    app.logger.info('Request to create an Account...')
+
+    check_content_type('application/json')
+
+    account = Account()
+    account.deserialize(request.get_json())
+    account.create()
+    message = account.serialize()
+    # Uncomment once get_accounts has been implemented
+    # location_url = url_for("get_accounts", account_id=account.id, _external=True)
+    location_url = "/"  # Remove once get_accounts has been implemented
+
+    return make_response(
+        jsonify(message), status.HTTP_201_CREATED, {'Location': location_url}
+    )
 
 ######################################################################
 # LIST ALL ACCOUNTS

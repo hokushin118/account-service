@@ -1,6 +1,7 @@
 """
 Account service CLI.
-Flask CLI Command Extensions
+
+Flask CLI Command Extensions.
 """
 from service import app
 from service.models import db
