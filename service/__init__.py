@@ -9,6 +9,7 @@ import os
 import sys
 
 from dotenv import load_dotenv
+from flask_cors import CORS
 from flask_talisman import Talisman
 
 # Load the correct .env file based on FLASK_ENV
@@ -41,6 +42,9 @@ from service import routes, config, models  # noqa: F401 E402
 
 app.config.from_object(config)
 talisman = Talisman(app)
+# Enable CORS for all routes and origins
+cors = CORS(app)
+
 
 @app.before_first_request
 def before_first_request():
