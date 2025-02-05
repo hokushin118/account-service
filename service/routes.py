@@ -10,10 +10,12 @@ from flask import jsonify, request, make_response, abort, url_for  # noqa; F401
 
 from service import app, VERSION, NAME
 from service.common import status
+from service.models import Account
 
 ROOT_ENDPOINT = '/'
 HEALTH_ENDPOINT = '/health'
 INFO_ENDPOINT = '/info'
+ACCOUNT_ENDPOINT = '/accounts'
 
 
 ############################################################
@@ -52,3 +54,30 @@ def index():
     return jsonify(
         {'message': 'Welcome to the Account API!'}
     ), status.HTTP_200_OK
+
+
+######################################################################
+# LIST ALL ACCOUNTS
+######################################################################
+
+
+@app.route(ACCOUNT_ENDPOINT, methods=['GET'])
+def list_accounts():
+    """
+    List all Accounts.
+
+    This endpoint retrieves a list of all accounts.
+    """
+    app.logger.info('Request to list Accounts')
+
+    accounts = Account.all()
+    account_list = [account.serialize() for account in accounts]
+
+    app.logger.info("Returning %d accounts", len(account_list))
+
+    if account_list:
+        app.logger.debug(
+            f"Accounts returned: {account_list}"
+        )
+
+    return jsonify(account_list), status.HTTP_200_OK
