@@ -7,8 +7,17 @@ import os
 logger = logging.getLogger('account-service')
 
 
-def get_database_uri():
-    """Constructs and returns the database URI."""
+def get_database_uri() -> str:
+    """Constructs and returns the database URI.
+
+    This function prioritizes the DATABASE_URI environment variable.
+    If it's not set, it constructs the URI from individual database
+    credentials (user, password, name, host, port) from environment variables,
+    using default values if they are not set.
+
+    Returns:
+        The database URI string.
+    """
     uri = os.getenv('DATABASE_URI')
     if uri:
         return uri

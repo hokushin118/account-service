@@ -41,16 +41,34 @@ app = Flask(__name__)
 from service import routes, config, models  # noqa: F401 E402
 
 app.config.from_object(config)
-talisman = Talisman(app)
+
+# Define your CSP (adjust as needed for your application)
+# Allow inline styles (often needed by Swagger UI) and CDNs
+# Add Google Fonts
+# Add any CDNs needed by your app
+csp = {
+    'default-src': '\'self\'',
+    'script-src': ['\'self\'', 'https://cdn.jsdelivr.net', "'unsafe-inline'"],
+    'style-src': ['\'self\'', '\'unsafe-inline\'', 'https://cdn.jsdelivr.net',
+                  'https://fonts.googleapis.com'],
+    'img-src': ["'self'", "data:"],
+    'font-src': ['\'self\'', 'https://fonts.gstatic.com'],
+    # Important for Google Fonts
+    'connect-src': ['\'self\''],
+}
+
+talisman = Talisman(app, content_security_policy=csp)
 # Enable CORS for all routes and origins
 cors = CORS(app)
 
 
 @app.before_first_request
-def before_first_request():
-    """
-    Record the start time
-    :return: None
+def before_first_request() -> None:
+    """Records the application's start time.
+
+    This function is executed only once, before the first request is
+    handled. It records the current time as the application's start time,
+    which can then be used to calculate uptime.
     """
     app.start_time = datetime.datetime.now()
 

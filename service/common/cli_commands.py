@@ -13,9 +13,12 @@ from service.models import db
 #   flask db-create
 ######################################################################
 @app.cli.command("db-create")
-def db_create():
-    """
-    Recreates a local database. You should not use this on production.
+def db_create() -> None:
+    """Recreates the local database.
+
+    WARNING: This function should *never* be used in a production environment.
+    It drops all tables and recreates them, resulting in complete data loss.
+    This function is intended for development and testing purposes only.
     """
     db.drop_all()
     db.create_all()

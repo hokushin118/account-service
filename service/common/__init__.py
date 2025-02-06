@@ -1,4 +1,5 @@
 """
-Package: common
-Package for the application utilities
+Package: common.
+
+Package for the application utilities.
 """
