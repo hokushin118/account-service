@@ -11,7 +11,7 @@ from flask import jsonify, request, make_response, abort, url_for  # noqa; F401
 
 from service import app, VERSION, NAME
 from service.common import status
-from service.common.utils import check_content_type
+from service.common.utils import check_content_type, generate_etag_hash
 from service.models import Account
 from service.schemas import AccountDTO
 
@@ -156,7 +156,18 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
             f"Accounts returned: {account_list}"
         )
 
-    return jsonify(account_list), status.HTTP_200_OK
+    # 1. Generate the ETag:
+    etag_hash = generate_etag_hash(account_list)
+
+    # 2. Check If-None-Match:
+    if_none_match = request.headers.get('If-None-Match')
+    if if_none_match and if_none_match == etag_hash:
+        return make_response('', status.HTTP_304_NOT_MODIFIED)
+
+    # 3. Create the response with the ETag:
+    response = make_response(jsonify(account_list), status.HTTP_200_OK)
+    response.set_etag(etag_hash)  # Set the ETag header
+    return response
 
 
 ######################################################################
@@ -192,7 +203,22 @@ def find_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
 
     # Convert SQLAlchemy model to DTO
     account_dto = AccountDTO.from_orm(account)
-    return account_dto.dict(), status.HTTP_200_OK
+    data = account_dto.dict()
+
+    app.logger.debug(f"Account returned: {data}")
+
+    # 1. Generate the ETag:
+    etag_hash = generate_etag_hash(data)
+
+    # 2. Check for If-None-Match header:
+    if_none_match = request.headers.get('If-None-Match')
+    if if_none_match and if_none_match == etag_hash:
+        return make_response('', status.HTTP_304_NOT_MODIFIED)
+
+    # 3. Create the response with the ETag:
+    response = make_response(jsonify(data), status.HTTP_200_OK)
+    response.set_etag(etag_hash)  # Set the ETag header
+    return response
 
 
 ######################################################################

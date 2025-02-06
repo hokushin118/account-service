@@ -3,6 +3,7 @@ Utility functions.
 
 This module contains utility functions to REST API.
 """
+import hashlib
 from typing import Any, Union
 
 from flask import request, abort
@@ -56,3 +57,20 @@ def account_to_dict(account_or_dto: Union[object, dict]) -> dict[str, Any]:
         'phone_number': account_or_dto.phone_number,
         'date_joined': account_or_dto.date_joined.isoformat(),
     }
+
+
+def generate_etag_hash(data: dict) -> str:
+    """Generates an ETag hash for the given data.
+
+    This function calculates the MD5 hash of the string representation of the
+    input dictionary.  The resulting hash can be used as an ETag for caching
+    purposes.
+
+    Args:
+        data: A dictionary representing the data to be hashed.
+
+    Returns:
+        A string representing the hexadecimal MD5 hash of the data.
+    """
+    data_str = str(data).encode('utf-8')  # Encode to bytes before hashing
+    return hashlib.md5(data_str).hexdigest()  # Hash the data
