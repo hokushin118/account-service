@@ -146,10 +146,10 @@ class TestAccount(unittest.TestCase):
         self.assertEqual(same_account.id, account.id)
         self.assertEqual(same_account.name, account.name)
 
-    def test_serialize_an_account(self):
+    def test_to_dict_an_account(self):
         """It should Serialize an account."""
         account = AccountFactory()
-        serial_account = account.serialize()
+        serial_account = account.to_dict()
         self.assertEqual(serial_account['id'], account.id)
         self.assertEqual(serial_account['name'], account.name)
         self.assertEqual(serial_account['email'], account.email)
@@ -162,7 +162,7 @@ class TestAccount(unittest.TestCase):
         """It should Deserialize an account."""
         account = AccountFactory()
         account.create()
-        serial_account = account.serialize()
+        serial_account = account.to_dict()
         new_account = Account()
         new_account.deserialize(serial_account)
         self.assertEqual(new_account.name, account.name)

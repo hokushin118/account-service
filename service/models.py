@@ -5,9 +5,14 @@ All the models are stored in this module
 """
 import logging
 from datetime import date
+from typing import Any, Dict, List, Optional
 
+from dateutil import parser
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
+
+from service.common.utils import account_to_dict
 
 logger = logging.getLogger('account-service')
 
@@ -19,8 +24,15 @@ class DataValidationError(Exception):
     """Used for data validation errors during deserialization."""
 
 
-def init_db(app):
-    """Initializes the SQLAlchemy database."""
+def init_db(app: Flask) -> None:
+    """Initializes the SQLAlchemy database.
+
+    This function initializes the database by calling the init_db method of the
+    Account model.
+
+    Args:
+        app: The Flask application instance.
+    """
     Account.init_db(app)
 
 
@@ -31,10 +43,27 @@ class PersistentBase:
     """Base class for persistent models, providing common database methods."""
 
     def __init__(self):
+        """Initializes a new object.
+
+        The ID is initially set to None. It will be assigned by the database
+        when the object is persisted.
+        """
         self.id = None  # pylint: disable=invalid-name
 
-    def create(self):
-        """Creates a new record in the database."""
+    def create(self) -> 'PersistentBase':
+        """Creates a new record in the database.
+
+        This method adds the current object to the database session and attempts
+        to commit the changes.  If an integrity error occurs (e.g., duplicate key),
+        the session is rolled back, and a DataValidationError exception is raised.
+
+        Returns:
+            The created object (self).
+
+        Raises:
+            DataValidationError: If an error occurs during record creation, such as
+                               an integrity error.
+        """
         logger.info("Creating %s", self)
         db.session.add(self)
         try:
@@ -46,8 +75,23 @@ class PersistentBase:
             ) from error
         return self
 
-    def partial_update(self, data):
-        """Partially updates the Account object with the given data."""
+    def partial_update(self, data: Dict[str, Any]) -> None:
+        """Partially updates the object with the given data.
+
+        This method iterates through the provided data dictionary and updates
+        the corresponding attributes of the Account object.  It raises a
+        DataValidationError if the data is invalid (e.g., type mismatches,
+        invalid attributes, attempts to update the primary key).
+
+        Args:
+            data: A dictionary containing the data to update.
+
+        Returns:
+            The updated Account object (self).
+
+        Raises:
+            DataValidationError: If the data is invalid.
+        """
         logger.info("Partially updating %s", data)
         for key, value in data.items():
             # Check if attribute exists and is not the primary key
@@ -66,8 +110,20 @@ class PersistentBase:
                     f"Attribute '{key}' is not valid for Account"
                 )
 
-    def update(self):
-        """Updates an existing record in the database."""
+    def update(self) -> 'PersistentBase':
+        """Updates an existing record in the database.
+
+        This method attempts to commit changes to the database. If an integrity
+        error occurs (e.g., a foreign key constraint violation), the session is
+        rolled back, and a DataValidationError is raised.
+
+        Returns:
+            The updated object (self).
+
+        Raises:
+            DataValidationError: If an error occurs during the update, such as an
+                               integrity error.
+        """
         logger.info("Updating %s", self)
         try:
             db.session.commit()
@@ -78,8 +134,21 @@ class PersistentBase:
             ) from error
         return self
 
-    def delete(self):
-        """Removes a record from the data store."""
+    def delete(self) -> 'PersistentBase':
+        """Removes a record from the data store.
+
+        This method deletes the current object from the database session and
+        attempts to commit the change. If an integrity error occurs (e.g., a
+        foreign key constraint violation), the session is rolled back, and a
+        DataValidationError is raised.
+
+        Returns:
+            The deleted object (self).
+
+        Raises:
+            DataValidationError: If an error occurs during deletion, such as an
+                               integrity error.
+        """
         logger.info("Deleting %s", self)
         db.session.delete(self)
         try:
@@ -92,8 +161,15 @@ class PersistentBase:
         return self
 
     @classmethod
-    def init_db(cls, app):
-        """Initializes the database session."""
+    def init_db(cls, app: Flask) -> None:
+        """Initializes the database.
+
+        This class method initializes the SQLAlchemy database by associating it
+        with the Flask application and creating all necessary tables.
+
+        Args:
+            app: The Flask application instance.
+        """
         logger.info('Initializing database...')
         cls.app = app
         # This is where we initialize SQLAlchemy from the Flask app
@@ -103,14 +179,26 @@ class PersistentBase:
         logger.info('Database initialized...')  # More concise message
 
     @classmethod
-    def all(cls):
-        """Returns all the records from the database."""
+    def all(cls) -> List['PersistentBase']:
+        """Retrieves all records from the database.
+
+        Returns:
+            A list of all records of this model type. Returns an empty list if
+            no records are found.
+        """
         logger.info('Retrieving all records...')
         return cls.query.all()
 
     @classmethod
-    def find(cls, by_id):
-        """Finds a record by its ID."""
+    def find(cls, by_id: int) -> Optional['PersistentBase']:
+        """Finds and returns a record by its ID.
+
+        Args:
+            by_id: The ID of the record to find.
+
+        Returns:
+            The record object if found, otherwise None.
+        """
         logger.info("Finding record by ID: %s ...", by_id)
         return cls.query.get(by_id)
 
@@ -123,8 +211,6 @@ class Account(db.Model, PersistentBase):
     Class that represents a User Account.
     """
 
-    app = None
-
     # Table Schema
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), nullable=False)
@@ -133,35 +219,46 @@ class Account(db.Model, PersistentBase):
     phone_number = db.Column(db.String(32))
     date_joined = db.Column(db.Date(), nullable=False, default=date.today())
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Returns a string representation of the Account object.
+
+        This representation is intended for debugging and logging purposes.
+        It includes the account's name and ID.
+
+        Returns:
+            A string representation of the Account object.
+        """
         return f"<Account {self.name} id=[{self.id}]>"
 
-    def serialize(self):
-        """Serializes an Account into a dictionary."""
-        return {
-            'id': self.id,
-            'name': self.name,
-            'email': self.email,
-            'address': self.address,
-            'phone_number': self.phone_number,
-            'date_joined': self.date_joined.isoformat()
-        }
+    def to_dict(self) -> Dict[str, Any]:
+        """Serializes the Account object into a dictionary.
 
-    def deserialize(self, data):
+        This method uses the account_to_dict helper function to perform the
+        serialization.
+
+        Returns:
+            A dictionary representation of the Account object.
         """
-        Deserializes an Account from a dictionary.
+        return account_to_dict(self)
+
+    def deserialize(self, data: Dict[str, Any]) -> 'Account':
+        """Deserializes an Account object from a dictionary.
 
         Args:
-            data (dict): A dictionary containing the resource data
+            data: A dictionary containing the account data.
+
+        Returns:
+            The deserialized Account object (self).
+
+        Raises:
+            DataValidationError: If the data is invalid or missing required fields.
         """
         try:
             self.name = data['name']
             self.email = data['email']
             self.address = data.get('address')  # Address is optional
             self.phone_number = data.get('phone_number')
-            self.date_joined = date.fromisoformat(
-                data.get('date_joined', date.today().isoformat())
-            )
+            self.date_joined = parser.parse(str(data['date_joined'])).date()
         except KeyError as error:
             raise DataValidationError(
                 f"Invalid Account: missing {error.args[0]}"
@@ -173,11 +270,15 @@ class Account(db.Model, PersistentBase):
         return self
 
     @classmethod
-    def find_by_name(cls, name):
-        """Returns all Accounts with the given name.
+    def find_by_name(cls, name: str) -> List['Account']:
+        """Finds and returns all Accounts with the given name.
 
         Args:
-            name (string): the name of the Accounts you want to match
+            name: The name to search for.
+
+        Returns:
+            A list of Account objects matching the given name.  Returns an empty
+            list if no matching accounts are found.
         """
         logger.info("Finding accounts by name: %s ...", name)
-        return cls.query.filter(cls.name == name)
+        return cls.query.filter(cls.name == name).all()
