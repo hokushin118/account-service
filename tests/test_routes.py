@@ -27,7 +27,7 @@ HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
 ######################################################################
 #  T E S T   C A S E S
 ######################################################################
-class TestAccountService(TestCase):
+class TestAccountService(TestCase):  # pylint: disable=too-many-public-methods
     """Account Service Tests."""
 
     @classmethod
@@ -94,7 +94,7 @@ class TestAccountService(TestCase):
         data = resp.get_json()
         self.assertEqual(data['status'], 'UP')
 
-    def test_create_account(self):
+    def test_create(self):
         """It should Create a new Account."""
         account = AccountFactory()
         response = self.client.post(
@@ -133,15 +133,56 @@ class TestAccountService(TestCase):
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
         )
 
-    def test_get_account_list(self):
+    def test_list_accounts(self):
         """It should Get a list of Accounts."""
         self._create_accounts(5)
-        resp = self.client.get(ACCOUNT_ENDPOINT)
+        resp = self.client.get(
+            ACCOUNT_ENDPOINT,
+            content_type='application/json'
+        )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.get_json()
         self.assertEqual(len(data), 5)
 
-    def test_get_account_by_id(self):
+    def test_list_accounts_with_matching_if_none_match(self):
+        """It should return a 304 Not Modified if the ETag matches in list."""
+        self._create_accounts(5)
+        resp = self.client.get(
+            ACCOUNT_ENDPOINT,
+            content_type='application/json'
+        )
+        etag = resp.headers.get('ETag').replace('"', '')  # Extract ETag
+
+        # Make a second request with If-None-Match header
+        resp2 = self.client.get(
+            ACCOUNT_ENDPOINT,
+            content_type='application/json',
+            headers={'If-None-Match': etag}
+        )
+        self.assertEqual(resp2.status_code, status.HTTP_304_NOT_MODIFIED)
+        self.assertEqual(resp2.data, b'')  # Check for empty body
+
+    def test_list_accounts_with_non_matching_if_none_match(self):
+        """It should return a 200 OK if the ETag does not match in list."""
+        self._create_accounts(5)
+        resp = self.client.get(
+            ACCOUNT_ENDPOINT,
+            content_type='application/json'
+        )
+        _ = resp.headers.get('ETag').replace('"', '')
+
+        # Make a second request with a different If-None-Match header
+        resp2 = self.client.get(
+            ACCOUNT_ENDPOINT,
+            content_type='application/json',
+            headers={'If-None-Match': 'some-other-etag'}  # Different ETag
+        )
+        self.assertEqual(
+            resp2.status_code,
+            status.HTTP_200_OK
+        )  # Should return 200 OK
+
+    def test_find_by_id(self):
         """It should Read a single Account."""
         account = self._create_accounts(1)[0]
         resp = self.client.get(
@@ -152,12 +193,50 @@ class TestAccountService(TestCase):
         data = resp.get_json()
         self.assertEqual(data['name'], account.name)
 
-    def test_get_account_by_id_not_found(self):
+    def test_find_by_id_with_matching_if_none_match(self):
+        """It should return a 304 Not Modified if the ETag matches."""
+        account = self._create_accounts(1)[0]
+        resp = self.client.get(
+            f"{ACCOUNT_ENDPOINT}/{account.id}",
+            content_type='application/json'
+        )
+        etag = resp.headers.get('ETag').replace('"', '')  # Extract ETag
+
+        # Make a second request with If-None-Match header
+        resp2 = self.client.get(
+            f"{ACCOUNT_ENDPOINT}/{account.id}",
+            content_type='application/json',
+            headers={'If-None-Match': etag}
+        )
+        self.assertEqual(resp2.status_code, status.HTTP_304_NOT_MODIFIED)
+        self.assertEqual(resp2.data, b'')  # Check for empty body
+
+    def test_find_by_id_with_non_matching_if_none_match(self):
+        """It should return a 200 OK if the ETag does not match."""
+        account = self._create_accounts(1)[0]
+        resp = self.client.get(
+            f"{ACCOUNT_ENDPOINT}/{account.id}",
+            content_type='application/json'
+        )
+        _ = resp.headers.get('ETag').replace('"', '')
+
+        # Make a second request with a different If-None-Match header
+        resp2 = self.client.get(
+            f"{ACCOUNT_ENDPOINT}/{account.id}",
+            content_type='application/json',
+            headers={'If-None-Match': 'some-other-etag'}  # Different ETag
+        )
+        self.assertEqual(
+            resp2.status_code,
+            status.HTTP_200_OK
+        )  # Should return 200 OK
+
+    def test_find_by_id_not_found(self):
         """It should not Read an Account that is not found."""
         resp = self.client.get(f"{ACCOUNT_ENDPOINT}/0")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_update_account_by_id(self):
+    def test_update_by_id(self):
         """It should Update an existing Account."""
         # create an Account to update
         test_account = AccountFactory()
@@ -181,12 +260,12 @@ class TestAccountService(TestCase):
         updated_account = resp.get_json()
         self.assertEqual(updated_account['name'], 'Something Known')
 
-    def test_update_account_by_id_not_found(self):
+    def test_update_by_id_not_found(self):
         """It should not Read an Account that is not found."""
         resp = self.client.put(f"{ACCOUNT_ENDPOINT}/0")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_partial_update_account_by_id(self):
+    def test_partial_update_by_id(self):
         """It should Partially Update an existing Account."""
         # create an Account to update
         test_account = AccountFactory()
@@ -212,12 +291,12 @@ class TestAccountService(TestCase):
         self.assertEqual(updated_account['name'], 'Test Account')
         self.assertEqual(updated_account['email'], 'test@example.com')
 
-    def test_partial_update_account_by_id_not_found(self):
+    def test_partial_update_by_id_not_found(self):
         """It should not Read an Account that is not found."""
         resp = self.client.patch(f"{ACCOUNT_ENDPOINT}/0")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_delete_account_by_id(self):
+    def test_delete_by_id(self):
         """It should Delete an Account."""
         account = self._create_accounts(1)[0]
         resp = self.client.delete(f"{ACCOUNT_ENDPOINT}/{account.id}")
