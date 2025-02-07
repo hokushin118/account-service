@@ -1,0 +1,41 @@
+# Global configuration, like how often it will scrape its targets.
+global:
+  scrape_interval: 5s # By default, scrape targets every 5 seconds.
+  evaluation_interval: 5s # By default, scrape targets every 5 seconds.
+
+  # Attach these labels to any time series or alerts when communicating with external systems (federation, remote storage, Alertmanager).
+  external_labels:
+    monitor: 'cba-monitor'
+
+# We can declare rule files, so when we meet a certain condition, we get an alert.
+rule_files:
+# - "first.rules"
+# - "second.rules"
+
+# Which services it needs to monitor.
+scrape_configs:
+  # Here it's Prometheus itself.
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+    # Override the global default and scrape targets from this job every 5 seconds.
+    scrape_interval: 5s
+    # metrics_path defaults to '/metrics'
+    static_configs:
+      # scheme defaults to 'http'
+      - targets: [ 'prometheus:9090' ]
+        labels:
+          application: 'Prometheus Application'
+
+  # Here it's Account microservice.
+  - job_name: 'account-service'
+    # Override the global default and scrape targets from this job every 5 seconds.
+    scrape_interval: 5s
+    # Prometheus expects the data of our targets to be exposed on the /metrics endpoint.
+    metrics_path: '/metrics'
+    # scheme defaults to 'http'
+    scheme: http
+    # Target endpoint. We are using the docker, so localhost will not work.
+    static_configs:
+      - targets: [ 'account-service:5000' ]
+        labels:
+          application: 'Account microservice'

@@ -8,12 +8,60 @@ Test cases can be run with the following:
 import hashlib
 from unittest import TestCase
 
-from service.common.utils import generate_etag_hash
+from flask import Flask
+
+from service.common.utils import (
+    generate_etag_hash,
+    count_requests
+)
 
 
 ######################################################################
 #  U T I L S   T E S T   C A S E S
 ######################################################################
+class TestUtils(TestCase):
+    """The Decorated Function Tests."""
+
+    def setUp(self):
+        self.app = Flask(__name__)  # Create a test Flask app
+        self.app_context = self.app.app_context()
+        self.app_context.push()  # Push the context so request works
+
+    def tearDown(self):
+        self.app_context.pop()  # Pop the context
+
+    def test_count_requests_wraps(self):
+        """It should preserve function metadata."""
+
+        @count_requests
+        def test_route():
+            """Test route docstring"""
+            return 'Test Route'
+
+        self.assertEqual(
+            test_route.__name__,
+            'test_route'
+        )  # Check if name is preserved
+        self.assertEqual(
+            test_route.__doc__,
+            'Test route docstring'
+        )  # Check if docstring is preserved
+
+    def test_count_requests_no_request_context(self):
+        """It should raise an error when called outside of context."""
+
+        @count_requests
+        def test_route():
+            return "Test Route"
+
+        with self.assertRaises(RuntimeError) as context:
+            test_route()
+        self.assertIn(
+            'Working outside of request context',
+            str(context.exception)
+        )
+
+
 class TestGenerateETagHash(TestCase):
     """Generate ETag Hash Tests."""
 

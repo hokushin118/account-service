@@ -11,7 +11,8 @@ from flask import jsonify, request, make_response, abort, url_for  # noqa; F401
 
 from service import app, VERSION, NAME
 from service.common import status
-from service.common.utils import check_content_type, generate_etag_hash
+from service.common.utils import check_content_type, generate_etag_hash, \
+    count_requests
 from service.models import Account
 from service.schemas import AccountDTO
 
@@ -25,6 +26,7 @@ ACCOUNT_ENDPOINT = '/accounts'
 # GET INDEX
 ######################################################################
 @app.route(ROOT_ENDPOINT, methods=['GET'])
+@count_requests
 def index() -> Tuple[Dict[str, Any], int]:
     """Returns a welcome message for the Account API.
 
@@ -43,6 +45,7 @@ def index() -> Tuple[Dict[str, Any], int]:
 # GET HEALTH
 ############################################################
 @app.route(HEALTH_ENDPOINT, methods=['GET'])
+@count_requests
 def health() -> Tuple[Dict[str, Any], int]:
     """Returns the health status of the service.
 
@@ -62,6 +65,7 @@ def health() -> Tuple[Dict[str, Any], int]:
 # GET INFO
 ############################################################
 @app.route(INFO_ENDPOINT, methods=['GET'])
+@count_requests
 def info() -> Tuple[Dict[str, Any], int]:
     """Returns information about the service.
 
@@ -88,6 +92,7 @@ def info() -> Tuple[Dict[str, Any], int]:
 # CREATE A NEW ACCOUNT
 ######################################################################
 @app.route(ACCOUNT_ENDPOINT, methods=['POST'])
+@count_requests
 def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
     """Creates a new Account.
 
@@ -131,6 +136,7 @@ def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
 # LIST ALL ACCOUNTS
 ######################################################################
 @app.route(ACCOUNT_ENDPOINT, methods=['GET'])
+@count_requests
 def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
     """Lists all Accounts.
 
@@ -174,6 +180,7 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
 # READ AN ACCOUNT
 ######################################################################
 @app.route(f"{ACCOUNT_ENDPOINT}/<int:account_id>", methods=['GET'])
+@count_requests
 def find_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
     """Reads an Account by ID.
 
@@ -225,6 +232,7 @@ def find_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
 # UPDATE AN EXISTING ACCOUNT
 ######################################################################
 @app.route(f"{ACCOUNT_ENDPOINT}/<int:account_id>", methods=['PUT'])
+@count_requests
 def update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
     """Updates an Account.
 
@@ -267,6 +275,7 @@ def update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
 # PARTIAL UPDATE AN EXISTING ACCOUNT
 ######################################################################
 @app.route(f"{ACCOUNT_ENDPOINT}/<int:account_id>", methods=['PATCH'])
+@count_requests
 def partial_update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
     """Partially updates an Account.
 
@@ -322,6 +331,7 @@ def partial_update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
 # DELETE AN ACCOUNT
 ######################################################################
 @app.route(f"{ACCOUNT_ENDPOINT}/<int:account_id>", methods=['DELETE'])
+@count_requests
 def delete_by_id(account_id: int) -> Tuple[str, int]:
     """Deletes an Account.
 

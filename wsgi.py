@@ -8,8 +8,7 @@ from service import app  # Import Flask application
 # file directly (for development/testing), not when the application
 # is imported by a WSGI server.
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
-
+    app.run(debug=True, host='0.0.0.0', port=5000)
 # For WSGI servers: (This is what the WSGI server will use)
 # Important: The WSGI server expects a variable named 'application'
 application = app

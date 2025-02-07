@@ -37,10 +37,47 @@ services:
           cpus: '0.5'
           memory: '512M'
 
+  # Prometheus (metrics database) - http://<host-ip>:19090
+  # Example: http://localhost:19090/targets
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION}
+    container_name: ${PROMETHEUS_CONTAINER_NAME}
+    hostname: ${PROMETHEUS_HOSTNAME}
+    restart: on-failure
+    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
+      - ${PROMETHEUS_PORT}:9090 # external port / container port
+    env_file:
+      - .env
+    volumes: # prometheus configuration file
+      - ./.metrics/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/data # creating a volume to save Prometheus data locally
+    networks:
+      - ${BACKEND_NETWORK}
+    # Resource limits for production
+    healthcheck:
+      test: [ 'CMD-SHELL', 'wget --spider 
+      http://${PROMETHEUS_HOSTNAME}:${PROMETHEUS_PORT}/-/healthy 
+      || exit 1' ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      replicas: 1
+      # Resource limits for production
+      resources:
+        limits:
+          cpus: '1'  # Limit CPU usage
+          memory: '1G' # Limit memory usage
+        reservations: # Guarantees resources are available
+          cpus: '0.5'
+          memory: '512M'
+
   # The Account microservice provides REST API for the CB app.
   account-service:
     image: ${ACCOUNT_SRV_IMAGE}:${ACCOUNT_SRV_VERSION}
     container_name: ${ACCOUNT_SRV_CONTAINER_NAME}
+    hostname: ${ACCOUNT_SRV_HOSTNAME}
     build:
       context: .
       dockerfile: ./Dockerfile
@@ -51,13 +88,13 @@ services:
       collect_logs_with_filebeat: true
       decode_log_event_to_json: true
     ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
-      - ${ACCOUNT_SRV_PORT}:80 # external port / container port
+      - ${ACCOUNT_SRV_PORT}:5000 # external port / container port
     env_file:
       - .env.docker
     networks:
       - ${BACKEND_NETWORK}
     healthcheck: # # Healthcheck for better container management
-      test: [ 'CMD-SHELL', 'curl -f http://0.0.0.0:8080/health || exit 1' ]
+      test: [ 'CMD-SHELL', 'curl -f http://${ACCOUNT_SRV_HOSTNAME}:${ACCOUNT_SRV_PORT}/health || exit 1' ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -74,9 +111,13 @@ services:
           memory: '1G'
     depends_on:
       - postgres
+      - prometheus
+
 
 volumes:
   postgresql_data:
+    driver: local
+  prometheus_data:
     driver: local
 
 # networks

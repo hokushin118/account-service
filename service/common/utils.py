@@ -4,17 +4,59 @@ Utility functions.
 This module contains utility functions to REST API.
 """
 import hashlib
-from typing import Any, Union
+from functools import wraps
+from typing import Any, Union, Callable
 
 from flask import request, abort
+from prometheus_flask_exporter import Counter  # Make sure this import is here
 
 from service import app
 from service.common import status
 
-
 ######################################################################
 #  U T I L I T Y   F U N C T I O N S
 ######################################################################
+
+request_counter = Counter(
+    'http_requests_total', 'Total number of HTTP requests', ['method', 'path']
+)
+
+
+def count_requests(func: Callable[..., Any]) -> Callable[..., Any]:
+    """A decorator to increment the HTTP request counter for a given endpoint.
+
+    This decorator increments the 'http_requests_total' Prometheus counter
+    with labels for the HTTP method and path of the request.  It preserves
+    the original function's metadata (name, docstring, etc.) using @wraps.
+
+    Args:
+        func: The function to be decorated (a Flask route function).
+
+    Returns:
+        The decorated function.
+    """
+
+    @wraps(func)
+    def decorated_function(*args: Any, **kwargs: Any) -> Any:
+        """The decorated function that increments the counter and calls the original function.
+
+        This inner function is what actually gets called when the decorated route is accessed.
+        It increments the Prometheus counter using labels for the HTTP method and path, and
+        then calls the original route function (`f`).
+
+        Args:
+            *args:  Positional arguments passed to the original function.
+            **kwargs: Keyword arguments passed to the original function.
+
+        Returns:
+            The return value of the original function (`f`).
+        """
+        request_counter.labels(method=request.method, path=request.path).inc()
+        return func(*args, **kwargs)
+
+    return decorated_function
+
+
 def check_content_type(media_type: str) -> None:
     """Checks that the Content-Type header matches the expected media type.
 

@@ -14,6 +14,7 @@ from flask_talisman import Talisman
 
 # Load the correct .env file based on FLASK_ENV
 env = os.getenv('FLASK_ENV')
+# export FLASK_ENV=development  # Or docker, testing, etc.
 # end = 'testing'
 
 # Retrieving Information (Environment Variables Example):
@@ -30,8 +31,11 @@ elif env == 'docker':
 else:  # Production or default
     load_dotenv()  # Loads .env in the current directory
 
+FORCE_HTTPS = os.environ.get('FORCE_HTTPS', 'False').lower() == 'true'
+
 # pylint: disable=wrong-import-position
 from flask import Flask
+from prometheus_flask_exporter import PrometheusMetrics
 
 # pylint: disable=wrong-import-position
 from service.common import log_handlers
@@ -60,9 +64,12 @@ csp = {
     'connect-src': ['\'self\''],
 }
 
-talisman = Talisman(app, content_security_policy=csp)
+talisman = Talisman(app, content_security_policy=csp, force_https=FORCE_HTTPS)
 # Enable CORS for all routes and origins
 cors = CORS(app)
+# initialize PrometheusMetrics
+metrics = PrometheusMetrics.for_app_factory()
+metrics.init_app(app)
 
 
 @app.before_first_request
