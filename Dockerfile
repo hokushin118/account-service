@@ -14,8 +14,8 @@ COPY service/ ./service/
 RUN useradd --uid 1000 cbotee && chown -R cbotee /app
 USER cbotee
 
-# Run the service
-EXPOSE 8080
+# Expose service port
+EXPOSE 5000
 
 # Use gunicorn with a process manager (better for production)
-CMD ["gunicorn", "--bind=0.0.0.0:8080", "--log-level=info", "service:app", "--workers", "3", "--threads", "4", "--access-logfile", "-"]
+CMD ["gunicorn", "--bind=0.0.0.0:5000", "--log-level=info", "service:app", "--workers", "3", "--threads", "4", "--access-logfile", "-"]
