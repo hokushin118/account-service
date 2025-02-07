@@ -3,13 +3,13 @@ name: account-service
 
 services:
   # PostgreSQL object-relational database system is used as Account data storage.
-  postgresql:
+  postgres:
     image: bitnami/postgresql:${POSTGRES_VERSION}
     restart: on-failure
     ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
       - 15432:5432 # external port / container port
     env_file:
-      - .env
+      - .env.docker
     environment:
       # ALLOW_EMPTY_PASSWORD is recommended only for development
       - ALLOW_EMPTY_PASSWORD=yes
@@ -31,11 +31,49 @@ services:
       # Resource limits for production
       resources:
         limits:
-          cpus: '1'
-          memory: '1G'
-        reservations:
+          cpus: '1' # Example: Limit to 1 CPU
+          memory: '1G' # Example: Limit to 1GB memory
+        reservations: # Guarantees resources are available
           cpus: '0.5'
           memory: '512M'
+
+  # The Account microservice provides REST API for the CB app.
+  account-service:
+    image: ${ACCOUNT_SRV_IMAGE}:${ACCOUNT_SRV_VERSION}
+    container_name: ${ACCOUNT_SRV_CONTAINER_NAME}
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    restart: on-failure
+    environment:
+      - JVM_OPTS=-Xmx8g -Xms8g -XX:MaxPermSize=1024m
+    labels:
+      collect_logs_with_filebeat: true
+      decode_log_event_to_json: true
+    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
+      - ${ACCOUNT_SRV_PORT}:80 # external port / container port
+    env_file:
+      - .env.docker
+    networks:
+      - ${BACKEND_NETWORK}
+    healthcheck: # # Healthcheck for better container management
+      test: [ 'CMD-SHELL', 'curl -f http://0.0.0.0:8080/health || exit 1' ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      replicas: 1
+      # Resource limits for production
+      resources:
+        limits:
+          cpus: '2' # Example: Limit to 2 CPUs
+          memory: '2G' # Example: Limit to 2GB memory
+        reservations: # Guarantees resources are available
+          cpus: '1'
+          memory: '1G'
+    depends_on:
+      - postgres
 
 volumes:
   postgresql_data:

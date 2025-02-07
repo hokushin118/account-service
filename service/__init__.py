@@ -14,6 +14,7 @@ from flask_talisman import Talisman
 
 # Load the correct .env file based on FLASK_ENV
 env = os.getenv('FLASK_ENV')
+# end = 'testing'
 
 # Retrieving Information (Environment Variables Example):
 # This is a common way to manage configuration, especially in containerized environments.
@@ -24,6 +25,8 @@ if env == 'development':
     load_dotenv('.env.development')
 elif env == 'testing':
     load_dotenv('.env.testing')
+elif env == 'docker':
+    load_dotenv('.env.docker')
 else:  # Production or default
     load_dotenv()  # Loads .env in the current directory
 
