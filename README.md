@@ -214,17 +214,6 @@ at http://127.0.0.1:5000/apidocs.
 Swagger can be conditionally enabled or disabled using the **SWAGGER_ENABLED**
 environment variable.
 
-## API Rate Limiting
-
-The API is rate limited using the **Flask-Limiter** library. The rate limit is
-set to 100 requests per minute per IP address.
-
-## API Caching
-
-## API Security
-
-The API is secured using API keys
-
 ## Prometheus
 
 Prometheus endpoint is available at:
