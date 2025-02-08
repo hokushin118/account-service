@@ -8,7 +8,7 @@ from functools import wraps
 from typing import Any, Union, Callable
 
 from flask import request, abort
-from prometheus_flask_exporter import Counter  # Make sure this import is here
+from prometheus_flask_exporter import Counter
 
 from service import app
 from service.common import status

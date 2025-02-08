@@ -13,6 +13,44 @@ account, and deleting an account.
 **Python 3.9**: The programming language used to implement the microservice.  
 **Flask**: The web framework used to create the REST API.
 
+## Prerequisites
+
+- [Python 3.9](https://www.python.org/downloads/release/python-390/)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop)
+
+## Project version
+
+The project uses **semantic** versioning for its versioning scheme. The
+versioning scheme is defined in the **VERSION** file located in the root
+directory of the project. The version number is in the format **X.Y.Z**, where
+**X** is the major version, **Y** is the minor version, and **Z** is the patch
+version.
+
+## Profiles
+
+The microservice has three launching profiles:
+
+**development** - (default, used for launching the microservice in a
+development environment)
+**docker** - (used for launching the microservice in a docker container)  
+**production** - (used for launching the microservice in a production
+environment)
+
+The environment variables specific to profile are defined in the *
+*.env.<pofile>** file located in the root directory of the microservice.
+
+.env - - default (development) profile
+
+.env.docker - docker profile
+
+.env.production - production profile, never commit it to the repository
+
+The profile is set using the **FLASK_ENV** environment variable.
+
+```
+export FLASK_ENV=docker 
+```
+
 ## Local Development
 
 To run the microservice locally, follow these steps:
@@ -143,18 +181,49 @@ pylint service/
 
 You can set the environment variables for the profile in the **.env** files.
 
+## Swagger
+
+You can access the Swagger documentation at http://127.0.0.1:5000/apidocs.
+
 ## Endpoints
 
-/ (GET): The root endpoint. Returns a welcome message.
-/health (GET): Returns the health status of the service (currently always
-"UP").
-/info (GET): Returns information about the service (name, version, uptime).
-/accounts (POST): Creates a new account.
-/accounts (GET): Lists all accounts.
-/accounts/<int:account_id> (GET): Retrieves a specific account by ID.
-/accounts/<int:account_id> (PUT): Updates an existing account.
-/accounts/<int:account_id> (PATCH): Partially updates an existing account.
-/accounts/<int:account_id> (DELETE): Deletes an account.
+/api (GET): The root endpoint. Returns a welcome message.  
+/api/health (GET): Returns the health status of the service (currently always
+"UP").  
+/api/info (GET): Returns information about the service (name, version,
+uptime).  
+/api/v1/accounts (POST): Creates a new account.  
+/api/v1/accounts (GET): Lists all accounts.  
+/api/v1/accounts/<int:account_id> (GET): Retrieves a specific account by ID.  
+/api/v1/accounts/<int:account_id> (PUT): Updates an existing account.  
+/api/v1/accounts/<int:account_id> (PATCH): Partially updates an existing
+account.  
+/api/v1/accounts/<int:account_id> (DELETE): Deletes an account.
+
+## API Versioning
+
+The API is versioned using the path prefix **/api/v1**. When the API is
+updated, the version number will be incremented to **/api/v2**, and the
+previous version will be deprecated.
+
+## API Documentation
+
+The API is documented using Swagger. You can access the Swagger documentation
+at http://127.0.0.1:5000/apidocs.
+
+Swagger can be conditionally enabled or disabled using the **SWAGGER_ENABLED**
+environment variable.
+
+## API Rate Limiting
+
+The API is rate limited using the **Flask-Limiter** library. The rate limit is
+set to 100 requests per minute per IP address.
+
+## API Caching
+
+## API Security
+
+The API is secured using API keys
 
 ## Prometheus
 

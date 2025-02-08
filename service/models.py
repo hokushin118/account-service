@@ -12,6 +12,12 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
 
+from service.common.constants import (
+    NAME_MAX_LENGTH,
+    ADDRESS_MAX_LENGTH,
+    EMAIL_MAX_LENGTH,
+    PHONE_MAX_LENGTH
+)
 from service.common.utils import account_to_dict
 
 logger = logging.getLogger('account-service')
@@ -213,10 +219,10 @@ class Account(db.Model, PersistentBase):
 
     # Table Schema
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(64), nullable=False)
-    email = db.Column(db.String(64), nullable=False, unique=True)
-    address = db.Column(db.String(256))
-    phone_number = db.Column(db.String(32))
+    name = db.Column(db.String(NAME_MAX_LENGTH), nullable=False)
+    email = db.Column(db.String(EMAIL_MAX_LENGTH), nullable=False, unique=True)
+    address = db.Column(db.String(ADDRESS_MAX_LENGTH))
+    phone_number = db.Column(db.String(PHONE_MAX_LENGTH))
     date_joined = db.Column(db.Date(), nullable=False, default=date.today())
 
     def __repr__(self) -> str:
