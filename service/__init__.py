@@ -18,7 +18,7 @@ logger = logging.getLogger('account-service')
 
 # Load the correct .env file based on FLASK_ENV
 # export FLASK_ENV=docker  # Or production, etc.
-env = os.environ.get('FLASK_ENV').strip()
+env = os.environ.get('FLASK_ENV')
 
 if not env:
     dotenv_path = os.path.join(
