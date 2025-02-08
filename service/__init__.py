@@ -64,7 +64,10 @@ csp = {
     'connect-src': ['\'self\''],
 }
 
-talisman = Talisman(app, content_security_policy=csp, force_https=FORCE_HTTPS)
+# Enable Talisman
+talisman = Talisman(
+    app, content_security_policy=csp, force_https=FORCE_HTTPS
+)
 # Enable CORS for all routes and origins
 cors = CORS(app)
 # initialize PrometheusMetrics

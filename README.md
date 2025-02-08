@@ -49,6 +49,29 @@ python3.9 -m pip install -r requirements.txt
 python3.9 wsgi.py
 ```
 
+## Database
+
+The microservice uses a **PostgreSQL** database to store account data. Make
+sure you have **PostgreSQL** running locally on port **5432** with a database
+named **account_db** and a user named **cba** with password **pa$$wOrd123!**.
+
+The database schema is defined in the **init.sql** file located in the
+**.infrastructure/postgres** directory.
+
+Note that the **PostgreSQL** database is used bitnami docker image. This image
+initializes the database using the **init.sql** file located in the
+**docker-entrypoint-initdb.d** directory.
+
+The following lines in the docker-compose file initialize the **init.sql**
+file:
+
+```
+environment:
+  - POSTGRESQL_INIT_FILE=/docker-entrypoint-initdb.d/init.sql  # Bitnami specific
+volumes:
+  - ./.infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+```
+
 ## Run on Docker
 
 To run the microservice using **Docker**, follow these steps:
@@ -90,6 +113,12 @@ running, or run:
 docker compose down
 ```
 
+or
+
+```bash
+docker compose down -v
+```
+
 ## Run tests
 
 To run the tests for the microservice, use the following command:
@@ -100,7 +129,7 @@ nosetests -v --with-spec --spec-color
 
 Make sure you have **PostgreSQL** running locally on port **5432** with a
 database named **postgres** and a user named **postgres** with password
-**postgres**.
+**account_db**.
 
 ## Lint
 

@@ -22,10 +22,10 @@ def get_database_uri() -> str:
     if uri:
         return uri
 
-    user = os.getenv('DATABASE_USER', 'postgres')
-    password = os.getenv('DATABASE_PASSWORD', 'postgres')
-    name = os.getenv('DATABASE_NAME', 'postgres')
-    host = os.getenv('DATABASE_HOST', 'localhost')
+    user = os.getenv('DATABASE_USER', 'cba')
+    password = os.getenv('DATABASE_PASSWORD')
+    name = os.getenv('DATABASE_NAME', 'account_db')
+    host = os.getenv('DATABASE_HOST', 'postgres')
     port = os.getenv('DATABASE_PORT', '5432')
 
     return f"postgresql://{user}:{password}@{host}:{port}/{name}"
