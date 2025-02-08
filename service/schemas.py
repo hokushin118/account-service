@@ -8,16 +8,25 @@ from typing import Optional
 
 from pydantic import BaseModel, validator, EmailStr, constr
 
+from service.common.constants import (
+    NAME_MIN_LENGTH,
+    NAME_MAX_LENGTH,
+    ADDRESS_MAX_LENGTH,
+    PHONE_MAX_LENGTH
+)
 from service.common.utils import account_to_dict
 
 
 class AccountDTO(BaseModel):
     """Account DTO."""
     id: int
-    name: constr(min_length=3, max_length=64)  # Constrained name
+    name: constr(
+        min_length=NAME_MIN_LENGTH,
+        max_length=NAME_MAX_LENGTH
+    )  # Constrained name
     email: EmailStr  # Validated email
-    address: Optional[constr(max_length=256)] = None
-    phone_number: Optional[constr(max_length=32)] = None
+    address: Optional[constr(max_length=ADDRESS_MAX_LENGTH)] = None
+    phone_number: Optional[constr(max_length=PHONE_MAX_LENGTH)] = None
     date_joined: date
 
     @validator('name')

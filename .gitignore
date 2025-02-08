@@ -98,9 +98,9 @@ target/
 celerybeat-schedule
 
 # dotenv
-.env
-.env.development
-.env.testing
+#.env
+#.env.docker
+.env.production
 
 # virtualenv
 .venv

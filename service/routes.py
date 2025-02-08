@@ -6,6 +6,7 @@ This microservice handles the lifecycle of Accounts
 import datetime
 from typing import Dict, Tuple, Any, List
 
+from flasgger import swag_from
 # pylint: disable=unused-import
 from flask import jsonify, request, make_response, abort, url_for  # noqa; F401
 
@@ -16,26 +17,32 @@ from service.common.utils import check_content_type, generate_etag_hash, \
 from service.models import Account
 from service.schemas import AccountDTO
 
-ROOT_ENDPOINT = '/'
-HEALTH_ENDPOINT = '/health'
-INFO_ENDPOINT = '/info'
-ACCOUNT_ENDPOINT = '/accounts'
+IF_NONE_MATCH_HEADER = 'If-None-Match'
+
+ROOT_PATH = '/api'
+HEALTH_PATH = f"{ROOT_PATH}/health"
+INFO_PATH = f"{ROOT_PATH}/info"
+ACCOUNTS_PATH_V1 = f"{ROOT_PATH}/v1/accounts"
 
 
 ######################################################################
 # GET INDEX
 ######################################################################
-@app.route(ROOT_ENDPOINT, methods=['GET'])
+@swag_from({
+    'operationId': 'getIndex',
+    'tags': ['General'],
+    'summary': 'Returns a welcome message for the Account API',
+    'description': 'Provides a basic welcome message for the Account API.',
+    'responses': {
+        200: {'description': 'OK'},
+        # For any other internal errors
+        500: {'description': 'Internal Server Error'}
+    }
+})
+@app.route(ROOT_PATH, methods=['GET'])
 @count_requests
 def index() -> Tuple[Dict[str, Any], int]:
-    """Returns a welcome message for the Account API.
-
-    This endpoint provides a basic welcome message for the Account API.
-
-    Returns:
-        A tuple containing a JSON response (a dictionary) and the HTTP
-        status code (200 OK).
-    """
+    """Returns a welcome message for the Account API"""
     return jsonify(
         {'message': 'Welcome to the Account API!'}
     ), status.HTTP_200_OK
@@ -44,38 +51,51 @@ def index() -> Tuple[Dict[str, Any], int]:
 ############################################################
 # GET HEALTH
 ############################################################
-@app.route(HEALTH_ENDPOINT, methods=['GET'])
+@swag_from({
+    'operationId': 'getHealth',
+    'tags': ['General'],
+    'summary': 'Returns the health status of the service',
+    'description': 'Checks the overall health of the service. Currently, '
+                   'it always returns a 200 OK status with a "status: UP" message.',
+    'responses': {
+        200: {'description': 'OK',
+              'content': {
+                  'application/json': {
+                      'schema': {
+                          '$ref': '#/components/schemas/HealthDTO'}
+                  }
+              }
+              },
+        # For any other internal errors
+        500: {'description': 'Internal Server Error'}
+    }
+})
+@app.route(HEALTH_PATH, methods=['GET'])
 @count_requests
 def health() -> Tuple[Dict[str, Any], int]:
-    """Returns the health status of the service.
-
-    This endpoint checks the overall health of the service. Currently,
-    it always returns a 200 OK status with a "status: UP" message.  In a
-    more complex application, this endpoint could perform more extensive
-    health checks (e.g., database connectivity, dependent services).
-
-    Returns:
-        A tuple containing a JSON response (a dictionary) and the HTTP
-        status code (200 OK).
-    """
+    """Returns the health status of the service"""
     return jsonify({'status': 'UP'}), status.HTTP_200_OK
 
 
 ############################################################
 # GET INFO
 ############################################################
-@app.route(INFO_ENDPOINT, methods=['GET'])
+@swag_from({
+    'operationId': 'getInfo',
+    'tags': ['General'],
+    'summary': 'Returns information about the service',
+    'description': 'Provides information about the service, including its '
+                   'name, version, and uptime.',
+    'responses': {
+        200: {'description': 'OK'},
+        # For any other internal errors
+        500: {'description': 'Internal Server Error'}
+    }
+})
+@app.route(INFO_PATH, methods=['GET'])
 @count_requests
 def info() -> Tuple[Dict[str, Any], int]:
-    """Returns information about the service.
-
-    This endpoint provides information about the service, including its
-    name, version, and uptime.
-
-    Returns:
-        A tuple containing a JSON response (a dictionary) and the HTTP
-        status code (200 OK).
-    """
+    """Returns information about the service"""
     uptime = 'Not yet started'
     if hasattr(app, 'start_time'):
         uptime = str(datetime.datetime.now() - app.start_time)
@@ -91,24 +111,47 @@ def info() -> Tuple[Dict[str, Any], int]:
 ######################################################################
 # CREATE A NEW ACCOUNT
 ######################################################################
-@app.route(ACCOUNT_ENDPOINT, methods=['POST'])
+@swag_from({
+    'operationId': 'createAccountV1',
+    'tags': ['Accounts V1'],
+    'summary': 'Create a New Account',
+    'description': 'Creates a new account based on the provided JSON data.',
+    'security': [{"bearerAuth": []}],
+    'requestBody': {
+        'content': {
+            'application/json': {
+                'schema': {
+                    '$ref': '#/components/schemas/CreateUpdateAccountDTO'}
+            }
+        }
+    },
+    'responses': {
+        201: {
+            'description': 'Created',
+            'content': {
+                'application/json': {
+                    'schema': {'$ref': '#/components/schemas/AccountDTO'}
+                }
+            },
+            'headers': {
+                'Location': {
+                    'type': 'string',
+                    'description': 'URL of the newly created account'
+                }
+            }
+        },
+        # For DataValidationError/IntegrityError
+        400: {'description': 'Bad Request'},
+        # For UnsupportedMediaType
+        415: {'description': 'Unsupported Media Type'},
+        # For any other internal errors
+        500: {'description': 'Internal Server Error'}
+    }
+})
+@app.route(ACCOUNTS_PATH_V1, methods=['POST'])
 @count_requests
 def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
-    """Creates a new Account.
-
-    This endpoint creates a new Account based on the JSON data provided
-    in the request body.
-
-    Returns:
-        A tuple containing the JSON response (a dictionary representing
-        the created account), the HTTP status code (201 Created), and a
-        dictionary containing the "Location" header URL.
-
-    Raises:
-      werkzeug.exceptions.UnsupportedMediaType: If the Content-Type is not 'application/json'
-      DataValidationError: If the data is invalid.
-      IntegrityError: If a database integrity error occurs.
-    """
+    """Create a New Account"""
     app.logger.info('Request to create an Account...')
 
     check_content_type('application/json')
@@ -135,18 +178,32 @@ def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
 ######################################################################
 # LIST ALL ACCOUNTS
 ######################################################################
-@app.route(ACCOUNT_ENDPOINT, methods=['GET'])
+@swag_from({
+    'operationId': 'getAccountsV1',
+    'tags': ['Accounts V1'],
+    'summary': 'Lists all Accounts',
+    'description': 'Retrieves a list of all Account objects from the '
+                   'database and returns them as a JSON array.',
+    'security': [{"bearerAuth": []}],
+    'responses': {
+        200: {'description': 'OK',
+              'content': {
+                  'application/json': {
+                      'schema': {
+                          '$ref': '#/components/schemas/ListOfAccountDTO'}
+                  }
+              }
+              },
+        # For DataValidationError/IntegrityError
+        400: {'description': 'Bad Request'},
+        # For any other internal errors
+        500: {'description': 'Internal Server Error'}
+    }
+})
+@app.route(ACCOUNTS_PATH_V1, methods=['GET'])
 @count_requests
 def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
-    """Lists all Accounts.
-
-    This endpoint retrieves a list of all Account objects from the database
-    and returns them as a JSON array of dictionaries.
-
-    Returns:
-        A tuple containing a JSON array of dictionaries representing the
-        accounts and the HTTP status code (200 OK).
-    """
+    """Lists all Accounts"""
     app.logger.info('Request to list Accounts')
 
     accounts = Account.all()
@@ -166,7 +223,7 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
     etag_hash = generate_etag_hash(account_list)
 
     # 2. Check If-None-Match:
-    if_none_match = request.headers.get('If-None-Match')
+    if_none_match = request.headers.get(IF_NONE_MATCH_HEADER)
     if if_none_match and if_none_match == etag_hash:
         return make_response('', status.HTTP_304_NOT_MODIFIED)
 
@@ -179,25 +236,43 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
 ######################################################################
 # READ AN ACCOUNT
 ######################################################################
-@app.route(f"{ACCOUNT_ENDPOINT}/<int:account_id>", methods=['GET'])
+@swag_from({
+    'operationId': 'getAccountByIdV1',
+    'tags': ['Accounts V1'],
+    'summary': 'Retrieve Account by ID',
+    'description': 'Retrieves an account based on its unique identifier.',
+    'security': [{"bearerAuth": []}],
+    'responses': {
+        200: {'description': 'OK',
+              'content': {
+                  'application/json': {
+                      'schema': {'$ref': '#/components/schemas/AccountDTO'}
+                  }
+              }
+              },
+        # For DataValidationError/IntegrityError
+        400: {'description': 'Bad Request'},
+        # Account not found
+        404: {'description': 'Not Found'},
+        415: {'description': 'Unsupported Media Type'},
+        # For any other internal errors
+        500: {'description': 'Internal Server Error'}
+    },
+    'parameters': [
+        {
+            'in': 'path',
+            'name': 'account_id',
+            'type': 'integer',
+            'required': True,
+            'description': 'ID of the account to retrieve',
+            'example': 1
+        }
+    ]
+})
+@app.route(f"{ACCOUNTS_PATH_V1}/<int:account_id>", methods=['GET'])
 @count_requests
 def find_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
-    """Reads an Account by ID.
-
-    This endpoint retrieves an Account object by its ID and returns it
-    as a JSON dictionary.
-
-    Args:
-        account_id: The ID of the Account to retrieve.
-
-    Returns:
-        A tuple containing the JSON representation of the Account (a
-        dictionary) and the HTTP status code (200 OK).
-
-    Raises:
-        werkzeug.exceptions.NotFound: If the Account with the given ID is
-                                       not found.
-    """
+    """Retrieve Account by ID"""
     app.logger.info("Request to read an Account with id: %s", account_id)
 
     account = Account.find(account_id)
@@ -218,7 +293,7 @@ def find_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
     etag_hash = generate_etag_hash(data)
 
     # 2. Check for If-None-Match header:
-    if_none_match = request.headers.get('If-None-Match')
+    if_none_match = request.headers.get(IF_NONE_MATCH_HEADER)
     if if_none_match and if_none_match == etag_hash:
         return make_response('', status.HTTP_304_NOT_MODIFIED)
 
@@ -231,28 +306,52 @@ def find_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
 ######################################################################
 # UPDATE AN EXISTING ACCOUNT
 ######################################################################
-@app.route(f"{ACCOUNT_ENDPOINT}/<int:account_id>", methods=['PUT'])
+@swag_from({
+    'operationId': 'updateAccountByIdV1',
+    'tags': ['Accounts V1'],
+    'summary': 'Update Account by ID',
+    'description': 'Updates an existing account with the provided JSON data.',
+    'security': [{"bearerAuth": []}],
+    'parameters': [
+        {
+            'in': 'path',
+            'name': 'account_id',
+            'type': 'integer',
+            'required': True,
+            'description': 'ID of the account to update',
+            'example': 1
+        }
+    ],
+    'requestBody': {
+        'content': {
+            'application/json': {
+                'schema': {
+                    '$ref': '#/components/schemas/CreateUpdateAccountDTO'}
+            }
+        }
+    },
+    'responses': {
+        200: {'description': 'OK',
+              'content': {
+                  'application/json': {
+                      'schema': {'$ref': '#/components/schemas/AccountDTO'}
+                  }
+              }
+              },
+        # For DataValidationError/IntegrityError
+        400: {'description': 'Bad Request'},
+        # 404 Not Found
+        404: {'description': 'Not Found'},
+        # For UnsupportedMediaType
+        415: {'description': 'Unsupported Media Type'},
+        # For any other internal errors
+        500: {'description': 'Internal Server Error'}
+    }
+})
+@app.route(f"{ACCOUNTS_PATH_V1}/<int:account_id>", methods=['PUT'])
 @count_requests
 def update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
-    """Updates an Account.
-
-    This endpoint updates an existing Account object with the data provided
-    in the request body.
-
-    Args:
-        account_id: The ID of the Account to update.
-
-    Returns:
-        A tuple containing the JSON representation of the updated Account
-        (a dictionary) and the HTTP status code (200 OK).
-
-    Raises:
-        werkzeug.exceptions.NotFound: If the Account with the given ID is
-                                       not found.
-        werkzeug.exceptions.UnsupportedMediaType: If the Content-Type is not 'application/json'
-        DataValidationError: If the data is invalid.
-        IntegrityError: If a database integrity error occurs.
-    """
+    """Update Account by ID"""
     app.logger.info("Request to update an Account with id: %s", account_id)
 
     account = Account.find(account_id)
@@ -274,30 +373,52 @@ def update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
 ######################################################################
 # PARTIAL UPDATE AN EXISTING ACCOUNT
 ######################################################################
-@app.route(f"{ACCOUNT_ENDPOINT}/<int:account_id>", methods=['PATCH'])
+@swag_from({
+    'operationId': 'partialUpdateAccountByIdV1',
+    'tags': ['Accounts V1'],
+    'summary': 'Partial Update Account by ID',
+    'description': 'Partially updates an existing account with the provided JSON data.',
+    'security': [{"bearerAuth": []}],
+    'parameters': [
+        {
+            'in': 'path',
+            'name': 'account_id',
+            'type': 'integer',
+            'required': True,
+            'description': 'ID of the account to update',
+            'example': 1
+        }
+    ],
+    'requestBody': {
+        'content': {
+            'application/json': {
+                'schema': {
+                    '$ref': '#/components/schemas/CreateUpdateAccountDTO'}
+            }
+        }
+    },
+    'responses': {
+        200: {'description': 'OK',
+              'content': {
+                  'application/json': {
+                      'schema': {'$ref': '#/components/schemas/AccountDTO'}
+                  }
+              }
+              },
+        # For DataValidationError/IntegrityError
+        400: {'description': 'Bad Request'},
+        # 404 Not Found
+        404: {'description': 'Not Found'},
+        # For UnsupportedMediaType
+        415: {'description': 'Unsupported Media Type'},
+        # For any other internal errors
+        500: {'description': 'Internal Server Error'}
+    }
+})
+@app.route(f"{ACCOUNTS_PATH_V1}/<int:account_id>", methods=['PATCH'])
 @count_requests
 def partial_update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
-    """Partially updates an Account.
-
-    This endpoint partially updates an existing Account object with the
-    data provided in the request body.
-
-    Args:
-        account_id: The ID of the Account to update.
-
-    Returns:
-        A tuple containing the JSON representation of the updated Account
-        (a dictionary) and the HTTP status code (200 OK).
-
-    Raises:
-        werkzeug.exceptions.NotFound: If the Account with the given ID is
-                                       not found.
-        werkzeug.exceptions.BadRequest: If no data is provided in the
-                                       request body.
-        DataValidationError: If the data is invalid.
-        IntegrityError: If a database integrity error occurs.
-        werkzeug.exceptions.UnsupportedMediaType: If the Content-Type is not 'application/json'
-    """
+    """Partial Update Account by ID"""
     app.logger.info(
         "Request to partially update an Account with id: %s",
         account_id
@@ -330,26 +451,34 @@ def partial_update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
 ######################################################################
 # DELETE AN ACCOUNT
 ######################################################################
-@app.route(f"{ACCOUNT_ENDPOINT}/<int:account_id>", methods=['DELETE'])
+@swag_from({
+    'operationId': 'deleteAccountByIdV1',
+    'tags': ['Accounts V1'],
+    'summary': 'Delete Account by ID',
+    'description': 'Deletes an account based on its unique identifier.',
+    'security': [{"bearerAuth": []}],
+    'parameters': [
+        {
+            'in': 'path',
+            'name': 'account_id',
+            'type': 'integer',
+            'required': True,
+            'description': 'ID of the account to delete',
+            'example': 1
+        }
+    ],
+    'responses': {
+        204: {'description': 'No Content'},
+        # For DataValidationError/IntegrityError
+        400: {'description': 'Bad Request'},
+        # For any other internal errors
+        500: {'description': 'Internal Server Error'}
+    }
+})
+@app.route(f"{ACCOUNTS_PATH_V1}/<int:account_id>", methods=['DELETE'])
 @count_requests
 def delete_by_id(account_id: int) -> Tuple[str, int]:
-    """Deletes an Account.
-
-    This endpoint deletes an Account object with the specified ID.
-
-    Args:
-        account_id: The ID of the Account to delete.
-
-    Returns:
-        A tuple containing an empty string (as the response body) and the
-        HTTP status code (204 No Content).
-
-    Raises:
-        werkzeug.exceptions.NotFound: If the Account with the given ID is
-                                       not found.
-        DataValidationError: If an error occurs during the deletion.
-        IntegrityError: If a database integrity error occurs.
-    """
+    """Delete Account By ID"""
     app.logger.info("Request to delete an Account with id: %s", account_id)
 
     account = Account.find(account_id)
