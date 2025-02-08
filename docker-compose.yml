@@ -11,6 +11,8 @@ services:
     env_file:
       - .env.docker
     environment:
+      # ALLOW_EMPTY_PASSWORD is recommended only for development
+      - ALLOW_EMPTY_PASSWORD=yes
       - POSTGRES_USER=${DATABASE_USER}
       - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
       - POSTGRESQL_INIT_FILE=/docker-entrypoint-initdb.d/init.sql  # Bitnami specific
@@ -73,44 +75,44 @@ services:
           memory: '512M'
 
   # The Account microservice provides REST API for the CB app.
-#  account-service:
-#    image: ${ACCOUNT_SRV_IMAGE}:${ACCOUNT_SRV_VERSION}
-#    container_name: ${ACCOUNT_SRV_CONTAINER_NAME}
-#    hostname: ${ACCOUNT_SRV_HOSTNAME}
-#    build:
-#      context: .
-#      dockerfile: ./Dockerfile
-#    restart: on-failure
-#    environment:
-#      - JVM_OPTS=-Xmx8g -Xms8g -XX:MaxPermSize=1024m
-#    labels:
-#      collect_logs_with_filebeat: true
-#      decode_log_event_to_json: true
-#    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
-#      - ${ACCOUNT_SRV_PORT}:5000 # external port / container port
-#    env_file:
-#      - .env.docker
-#    networks:
-#      - ${BACKEND_NETWORK}
-#    healthcheck: # # Healthcheck for better container management
-#      test: [ 'CMD-SHELL', 'curl -f http://${ACCOUNT_SRV_HOSTNAME}:${ACCOUNT_SRV_PORT}/health || exit 1' ]
-#      interval: 30s
-#      timeout: 10s
-#      retries: 5
-#      start_period: 60s
-#    deploy:
-#      replicas: 1
-#      # Resource limits for production
-#      resources:
-#        limits:
-#          cpus: '2' # Example: Limit to 2 CPUs
-#          memory: '2G' # Example: Limit to 2GB memory
-#        reservations: # Guarantees resources are available
-#          cpus: '1'
-#          memory: '1G'
-#    depends_on:
-#      - postgres
-#      - prometheus
+  account-service:
+    image: ${ACCOUNT_SRV_IMAGE}:${ACCOUNT_SRV_VERSION}
+    container_name: ${ACCOUNT_SRV_CONTAINER_NAME}
+    hostname: ${ACCOUNT_SRV_HOSTNAME}
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    restart: on-failure
+    environment:
+      - JVM_OPTS=-Xmx8g -Xms8g -XX:MaxPermSize=1024m
+    labels:
+      collect_logs_with_filebeat: true
+      decode_log_event_to_json: true
+    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
+      - ${ACCOUNT_SRV_PORT}:5000 # external port / container port
+    env_file:
+      - .env.docker
+    networks:
+      - ${BACKEND_NETWORK}
+    healthcheck: # # Healthcheck for better container management
+      test: [ 'CMD-SHELL', 'curl -f http://${ACCOUNT_SRV_HOSTNAME}:${ACCOUNT_SRV_PORT}/health || exit 1' ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      replicas: 1
+      # Resource limits for production
+      resources:
+        limits:
+          cpus: '2' # Example: Limit to 2 CPUs
+          memory: '2G' # Example: Limit to 2GB memory
+        reservations: # Guarantees resources are available
+          cpus: '1'
+          memory: '1G'
+    depends_on:
+      - postgres
+      - prometheus
 
 
 volumes:
