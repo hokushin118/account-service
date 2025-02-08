@@ -18,7 +18,7 @@ from service.schemas import AccountDTO
 from tests.factories import AccountFactory
 
 DATABASE_URI = os.getenv(
-    'DATABASE_URI', 'postgresql://postgres:postgres@localhost:15432/postgres'
+    'DATABASE_URI', 'postgresql://cba:pa$$wOrd123!@postgres:15432/account_db'
 )
 
 HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
