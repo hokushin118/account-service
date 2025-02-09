@@ -1,10 +1,18 @@
 # Account microservice
 
+![Build Status](https://github.com/hokushin118/account-service/actions/workflows/ci-build.yaml/badge.svg)
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python 3.9](https://img.shields.io/badge/Python-3.9-green.svg)](https://shields.io/)
+
+This repository contains the code for the **account-service**, a cloud-native 
+microservice.
+
 ## Microservice Purpose
 
-The core purpose of the **Account** cloud-native microservice is to handle the
-**CRUD** (Create, Read, Update, Delete) operations for **Account** objects.
-It provides endpoints for creating new accounts, listing all accounts,
+The core purpose of the **account-service** cloud-native microservice is to 
+handle the **CRUD** (Create, Read, Update, Delete) operations for 
+**Account** objects. It provides endpoints for creating new accounts, listing all accounts,
 retrieving a specific account by ID, updating an account, partially updating an
 account, and deleting an account.
 
