@@ -1,0 +1,136 @@
+# Account microservice deployment configuration
+apiVersion: apps/v1 # K8S API version
+kind: Deployment
+metadata:
+  name: account-service-deployment
+  namespace: cba-dev # The name of the namespace
+  labels:
+    app: account-service
+    tier: backend
+    environment: development
+spec:
+  replicas: 3 # Number of replicas that will be created for this deployment
+  selector:
+    matchLabels:
+      app: account-service
+      tier: backend
+      environment: development
+  strategy:
+    type: RollingUpdate # It replaces the existing version of pods with a new version, updating pods slowly one by one, without cluster downtime
+    rollingUpdate:
+      maxSurge: 1 # Specifies the maximum number of pods the Deployment is allowed to create at one time
+      maxUnavailable: 1 # Specifies the maximum number of pods that are allowed to be unavailable during the rollout
+  template: # A blueprint for pods
+    metadata:
+      labels:
+        app: account-service
+        tier: backend
+        environment: development
+    spec:
+      terminationGracePeriodSeconds: 10 # It gives microservice 10 seconds to shut down gracefully upon receiving a SIGTERM signal
+      containers:
+        - name: account-service
+        - image: hokushin/account-service:latest
+          imagePullPolicy: Always # Or IfNotPresent for local development
+          ports: # Expose the container port
+            - name: http-8080 # Name the port
+              protocol: TCP
+              containerPort: 8080 # Should match the service's targetPort
+          limits:
+            cpu: 1000m
+            memory: 512Mi # memory limit
+          requests:
+            cpu: 400m
+            memory: 256Mi # memory request
+          env: # Setting environmental variables
+            - name: FLASK_ENV
+              valueFrom:
+                configMapKeyRef: # Using ConfigMap
+                  name: account-service-configmap
+                  key: FLASK_ENV
+            - name: VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: account-service-configmap
+                  key: VERSION
+            - name: NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: account-service-configmap
+                  key: NAME
+            - name: API_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: account-service-configmap
+                  key: API_VERSION
+            - name: FORCE_HTTPS
+              valueFrom:
+                configMapKeyRef:
+                  name: account-service-configmap
+                  key: FORCE_HTTPS
+            - name: SWAGGER_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: account-service-configmap
+                  key: SWAGGER_ENABLED
+            - name: PROMETHEUS_HOSTNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: account-service-configmap
+                  key: PROMETHEUS_HOSTNAME
+            - name: PROMETHEUS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: account-service-configmap
+                  key: PROMETHEUS_PORT
+            - name: DATABASE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: account-service-configmap
+                  key: DATABASE_HOST
+            - name: DATABASE_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: account-service-configmap
+                  key: DATABASE_NAME
+            - name: DATABASE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: account-service-configmap
+                  key: DATABASE_PORT
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef: # Using Secret
+                  name: account-service-secret
+                  key: database-user
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: account-service-secret
+                  key: database-password
+          volumeMounts: # Mount volumes
+            - name: config-volume
+              mountPath: /etc/config # Mount path for the config
+              readOnly: true
+            - name: secrets-volume
+              mountPath: /etc/secrets # Mount path for the secrets
+              readOnly: true
+          livenessProbe: # Liveness probe
+            httpGet:
+              path: /api/health # Health check endpoint
+              port: http-8080 # Named port
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe: # Readiness probe
+            httpGet:
+              path: /api/health # Health check endpoint
+              port: http-8080 # Named port
+            initialDelaySeconds: 15
+            periodSeconds: 5
+      volumes: # Define volumes
+        - name: config-volume
+          configMap:
+            name: account-service-configmap
+        - name: secrets-volume
+          secret:
+            secretName: account-service-secret

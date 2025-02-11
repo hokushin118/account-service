@@ -1,0 +1,39 @@
+# HPA takes place at the pod level and adjusts the number of replicas of the
+# Account microservice. HPA takes place at the pod level and adjusts the number of replicas of the Account microservice.
+# https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+# Scale the number of replicas up if the average CPU utilization exceeds 50% or the average memory utilization exceeds 70%.
+apiVersion: autoscaling/v2 # K8S API version
+kind: HorizontalPodAutoscaler
+metadata:
+  name: account-service-hpa
+  namespace: cba-dev # The name of the namespace
+  labels:
+    app: account-service
+    tier: backend
+    environment: development
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: account-service-deployment
+  minReplicas: 3 # The minimum number of Pod replicas that the Deployment should have
+  maxReplicas: 5 # The maximum number of Pod replicas that the Deployment can scale up to
+  # The CPU and memory utilization metrics.
+  metrics:
+    - type: Resource # HPA will attempt to ensure that each pod is consuming roughly 50% of its requested CPU.
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+    - type: Resource # Memory scaling
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior: # Control scaling behavior
+    scaleUp:
+      stabilizationWindowSeconds: 30 # How long to wait before scaling up again
+    scaleDown:
+      stabilizationWindowSeconds: 60 # How long to wait before scaling down again

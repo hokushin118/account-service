@@ -1,0 +1,21 @@
+# Account microservice ClusterIP service
+apiVersion: v1 # K8S API version
+kind: Service
+metadata:
+  name: account-service
+  namespace: cba-dev # The name of the namespace
+  labels:
+    app: account-service
+    tier: backend  # Tier label
+    environment: development # Or production, staging, etc.
+spec:
+  selector:
+    app: account-service
+    tier: backend
+    environment: development
+  ports:
+    - name: http-8080  # Name of the port
+      protocol: TCP
+      port: 8080  # The port the service exposes
+      targetPort: 8080 # The port the pods are listening on
+  type: ClusterIP  # Type of the service, here our application is only accessible in the K8S private network and can’t be accessed from the outside world
