@@ -29,7 +29,7 @@ jobs:
         with:
           registry: docker.io  # Default Docker Hub registry
           username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          password: ${{ secrets.DOCKER_PASSWORD_OR_PAT }}
 
       - name: Build and push Docker image
         id: build-push
@@ -49,13 +49,3 @@ jobs:
         with:
           github_token: ${{ secrets.REPO_TOKEN }}
           tags: v${{ github.run_number }}
-
-#      - name: Create GitHub Release (Recommended)
-#        if: steps.build-push.outcome == 'success'
-#        uses: actions/create-release@v1
-#        with:
-#          tag_name: v${{ github.run_number }}
-#          release_name: Release v${{ github.run_number }}
-#          body: |
-#            Automated release from GitHub Actions.
-#            Commit SHA: ${{ github.sha }}
