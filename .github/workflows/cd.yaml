@@ -45,15 +45,10 @@ jobs:
 
       - name: Create Git tag
         if: steps.build-push.outcome == 'success'
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          if git tag -l v${{ github.run_number }}; then
-            echo "Tag v${{ github.run_number }} already exists. Skipping."
-          else
-            git tag v${{ github.run_number }} -a -m "Release v${{ github.run_number }} - Built from commit ${{ github.sha }}"
-            git push origin v${{ github.run_number }}
-          fi
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.REPO_TOKEN }}
+          tags: v${{ github.run_number }}
 
 #      - name: Create GitHub Release (Recommended)
 #        if: steps.build-push.outcome == 'success'
