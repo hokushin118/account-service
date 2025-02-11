@@ -94,12 +94,12 @@ services:
       - .env.docker
     networks:
       - ${BACKEND_NETWORK}
-    healthcheck: # # Healthcheck for better container management
-      test: [ 'CMD-SHELL', 'curl -f http://${ACCOUNT_SRV_HOSTNAME}:${ACCOUNT_SRV_PORT}/health || exit 1' ]
-      interval: 30s
+    healthcheck: # Healthcheck for better container management
+      test: [ 'CMD-SHELL', 'curl -f http://${ACCOUNT_SRV_HOSTNAME}:${ACCOUNT_SRV_PORT}/api/health || exit 1' ]
+      interval: 15s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 15s
     deploy:
       replicas: 1
       # Resource limits for production

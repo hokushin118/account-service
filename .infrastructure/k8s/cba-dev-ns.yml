@@ -1,0 +1,9 @@
+# Creating a namespace for microservices (dev environment)
+apiVersion: v1 # K8S API version
+kind: Namespace
+metadata:
+  name: cba-dev
+  labels:
+    name: cba-dev
+    environment: development  # Environment label
+    purpose: microservices  # Purpose label

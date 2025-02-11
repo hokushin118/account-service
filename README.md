@@ -1,18 +1,19 @@
-# Account microservice
+Account microservice
 
 ![Build Status](https://github.com/hokushin118/account-service/actions/workflows/ci-build.yaml/badge.svg)
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.9](https://img.shields.io/badge/Python-3.9-green.svg)](https://shields.io/)
 
-This repository contains the code for the **account-service**, a cloud-native 
+This repository contains the code for the **account-service**, a cloud-native
 microservice.
 
 ## Microservice Purpose
 
-The core purpose of the **account-service** cloud-native microservice is to 
-handle the **CRUD** (Create, Read, Update, Delete) operations for 
-**Account** objects. It provides endpoints for creating new accounts, listing all accounts,
+The core purpose of the **account-service** cloud-native microservice is to
+handle the **CRUD** (Create, Read, Update, Delete) operations for
+**Account** objects. It provides endpoints for creating new accounts, listing
+all accounts,
 retrieving a specific account by ID, updating an account, partially updating an
 account, and deleting an account.
 
@@ -189,10 +190,6 @@ pylint service/
 
 You can set the environment variables for the profile in the **.env** files.
 
-## Swagger
-
-You can access the Swagger documentation at http://127.0.0.1:5000/apidocs.
-
 ## Endpoints
 
 /api (GET): The root endpoint. Returns a welcome message.  
@@ -216,16 +213,81 @@ previous version will be deprecated.
 
 ## API Documentation
 
-The API is documented using Swagger. You can access the Swagger documentation
-at http://127.0.0.1:5000/apidocs.
+The API is documented using Swagger. You can access the **Swagger**
+documentation at http://127.0.0.1:5000/apidocs.
 
-Swagger can be conditionally enabled or disabled using the **SWAGGER_ENABLED**
-environment variable.
+**Swagger** can be conditionally enabled or disabled using the
+**SWAGGER_ENABLED** environment variable.
 
 ## Prometheus
 
-Prometheus endpoint is available at:
+**Prometheus** endpoint is available at:
 
 http://localhost:19090/metrics
 
 http://localhost:19090/targets
+
+## Deployment on Kubernetes
+
+Kubernetes deployment files are located in the **.infrastructure/k8s**
+directory.
+
+To deploy the **Account** microservice to **Kubernetes**, use the following
+commands:
+
+1. **Namespace**: Apply the namespace yaml first. All other resources will be
+   created within this namespace (**cba-dev**).
+
+```bash
+kubectl apply -f ./.infrastructure/k8s/cba-dev-ns.yml
+```
+
+2. **ConfigMap**: Apply the ConfigMap yaml next. The Deployment depends on it.
+
+```bash
+kubectl apply -n cba-dev -f ./.infrastructure/k8s/account-srv-cm.yml
+```
+
+3. **Secret**: Apply the Secret yaml. The Deployment also depends on it.
+
+```bash
+kubectl apply -n cba-dev -f ./.infrastructure/k8s/account-srv-secret.yml
+```
+
+4. **Deployment**: Apply the Deployment yaml last. It depends on the Namespace,
+   ConfigMap, and Secret.
+
+```bash
+kubectl apply -n cba-dev -f ./.infrastructure/k8s/account-srv-deployment.yml
+```
+
+5. **Service**: Apply the Service yaml. It depends on the Pods created by the
+   Deployment.
+
+```bash
+kubectl apply -n cba-dev -f ./.infrastructure/k8s/account-srv-service.yml
+```
+
+6. **HPA**: Apply the HPA yaml. It depends on the Deployment.
+
+```bash
+kubectl apply -n cba-dev -f ./.infrastructure/k8s/account-srv-hpa.yml
+```
+
+Check the pods are running with:
+
+```bash
+kubectl get pods -n cba-dev
+```
+
+Check the Service is created with:
+
+```bash
+kubectl get services -n cba-dev
+```
+
+Check the HPA is created with:
+
+```bash
+kubectl get hpa -n cba-dev
+```
