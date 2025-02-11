@@ -12,6 +12,7 @@ COPY service/ ./service/
 
 # Switch to a non-root user
 RUN useradd --uid 1000 cbotee && chown -R cbotee /app
+
 USER cbotee
 
 # Expose service port
