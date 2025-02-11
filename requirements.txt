@@ -16,6 +16,7 @@ flasgger==0.9.7.1
 pydantic==2.10.6
 pydantic[email]==2.10.6
 prometheus_flask_exporter==0.23.1
+python-dateutil==2.9.0.post0
 
 # Runtime dependencies
 gunicorn==20.1.0
