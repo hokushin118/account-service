@@ -43,9 +43,33 @@ jobs:
           build-args: |
             VERSION=${{ github.sha }}
 
-      - name: Create Git tag
+      - name: Create Git tag and push via Pull Request
         if: steps.build-push.outcome == 'success'
-        uses: ad-m/github-push-action@master
+        uses: peter-murray/create-pull-request@v3
         with:
           github_token: ${{ secrets.REPO_TOKEN }}
-          tags: v${{ github.run_number }}
+          branch: create-tag-${{ github.run_number }} # New branch for the PR
+          title: "Automated Tag v${{ github.run_number }}"
+          body: "This PR adds tag v${{ github.run_number }} after a successful build."
+
+      - name: Merge Pull Request (Automated - Optional)
+        if: steps.build-push.outcome == 'success'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.REPO_TOKEN }}
+          script: |
+            const pulls = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `create-tag-${{ github.run_number }}`
+            });
+            if (pulls.data.length > 0) {
+              const pull_number = pulls.data[0].number;
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pull_number,
+                merge_method: 'squash' # or 'merge' or 'rebase'
+              });
+            }
