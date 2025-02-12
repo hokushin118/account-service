@@ -49,11 +49,15 @@ jobs:
       - name: Create Tag Branch
         if: steps.build-push.outcome == 'success'
         run: |
-          git checkout -b create-tag-${{ github.run_number }} main
+          if git show-ref refs/heads/create-tag-${{ github.run_number }}; then
+            git checkout create-tag-${{ github.run_number }}
+          else
+            git checkout -b create-tag-${{ github.run_number }} main
+          fi
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a v${{ github.run_number }} -m "Release v${{ github.run_number }} - Built from commit ${{ github.sha }}"
-          git push origin create-tag-${{ github.run_number }}
+          git push origin create-tag-${{ github.run_number }} --force
 
       - name: Create Pull Request
         if: steps.build-push.outcome == 'success'
