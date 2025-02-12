@@ -40,7 +40,9 @@ jobs:
           context: .  # Build context is the root of the repo
           file: Dockerfile # Path to Dockerfile
           push: true
-          tags: ${{ secrets.ACCOUNT_DOCKER_REPO_NAME }}:v${{ github.run_number }}
+          tags: |
+            ${{ secrets.ACCOUNT_DOCKER_REPO_NAME }}:latest 
+            ${{ secrets.ACCOUNT_DOCKER_REPO_NAME }}:v${{ github.run_number }}
           build-args: |
             VERSION=${{ github.sha }}
 
