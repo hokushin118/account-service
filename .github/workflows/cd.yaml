@@ -52,7 +52,7 @@ jobs:
           git checkout -b create-tag-${{ github.run_number }} main
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git tag v${{ github.run_number }} -a -m "Release v${{ github.run_number }} - Built from commit ${{ github.sha }}"
+          git tag -a v${{ github.run_number }} -m "Release v${{ github.run_number }} - Built from commit ${{ github.sha }}"
           git push origin create-tag-${{ github.run_number }}
 
       - name: Create Pull Request
