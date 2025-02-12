@@ -19,7 +19,7 @@ prometheus_flask_exporter==0.23.1
 python-dateutil==2.9.0.post0
 
 # Runtime dependencies
-gunicorn==20.1.0
+gunicorn==22.0.0
 honcho==1.1.0
 
 # Code quality
