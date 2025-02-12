@@ -49,7 +49,7 @@ jobs:
       - name: Create Tag Branch
         if: steps.build-push.outcome == 'success'
         run: |
-          git checkout -b create-tag-${{ github.run_number }}
+          git checkout -b create-tag-${{ github.run_number }} main
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git tag v${{ github.run_number }} -a -m "Release v${{ github.run_number }} - Built from commit ${{ github.sha }}"
