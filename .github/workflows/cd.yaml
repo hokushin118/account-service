@@ -45,9 +45,9 @@ jobs:
 
       - name: Create Git tag and push via Pull Request
         if: steps.build-push.outcome == 'success'
-        uses: peter-murray/create-pull-request@v3
+        uses: actions/create-pull-request@v3  # Correct action name
         with:
-          github_token: ${{ secrets.REPO_TOKEN }}
+          token: ${{ secrets.REPO_TOKEN }} # Use 'token', not 'github_token'
           branch: create-tag-${{ github.run_number }} # New branch for the PR
           title: "Automated Tag v${{ github.run_number }}"
           body: "This PR adds tag v${{ github.run_number }} after a successful build."
