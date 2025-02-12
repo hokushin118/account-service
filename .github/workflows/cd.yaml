@@ -44,13 +44,22 @@ jobs:
           build-args: |
             VERSION=${{ github.sha }}
 
-      - name: Create Git tag and push via Pull Request
+      - name: Create Tag Branch
+        if: steps.build-push.outcome == 'success'
+        run: |
+          git checkout -b create-tag-${{ github.run_number }}
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git tag v${{ github.run_number }} -a -m "Release v${{ github.run_number }} - Built from commit ${{ github.sha }}"
+          git push origin create-tag-${{ github.run_number }}
+
+      - name: Create Pull Request
         if: steps.build-push.outcome == 'success'
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.REPO_TOKEN }}
-          commit-message: update changelog
-          branch: create-tag-${{ github.run_number }} # New branch for the PR
+          commit-message: "Release v${{ github.run_number }}"
+          branch: create-tag-${{ github.run_number }}
           title: "Automated Tag v${{ github.run_number }}"
           body: "This PR adds tag v${{ github.run_number }} after a successful build."
           base: main
