@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write  # Required for pushing tags
+      pull-requests: write # Required for pull request
 
     steps:
       - name: Checkout
@@ -45,12 +46,14 @@ jobs:
 
       - name: Create Git tag and push via Pull Request
         if: steps.build-push.outcome == 'success'
-        uses: actions/create-pull-request@v3  # Correct action name
+        uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.REPO_TOKEN }} # Use 'token', not 'github_token'
+          token: ${{ secrets.REPO_TOKEN }}
+          commit-message: update changelog
           branch: create-tag-${{ github.run_number }} # New branch for the PR
           title: "Automated Tag v${{ github.run_number }}"
           body: "This PR adds tag v${{ github.run_number }} after a successful build."
+          base: main
 
       - name: Merge Pull Request (Automated - Optional)
         if: steps.build-push.outcome == 'success'
