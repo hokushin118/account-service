@@ -55,7 +55,7 @@ jobs:
           body: "This PR adds tag v${{ github.run_number }} after a successful build."
           base: main
 
-      - name: Merge Pull Request (Automated - Optional)
+      - name: Merge Pull Request
         if: steps.build-push.outcome == 'success'
         uses: actions/github-script@v6
         with:
@@ -73,6 +73,6 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: pull_number,
-                merge_method: 'squash' # or 'merge' or 'rebase'
+                merge_method: 'merge'
               });
             }
