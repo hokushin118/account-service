@@ -43,11 +43,11 @@ spec:
             cpu: 400m
             memory: 256Mi # memory request
           env: # Setting environmental variables
-            - name: FLASK_ENV
+            - name: FLASK_DEBUG
               valueFrom:
                 configMapKeyRef: # Using ConfigMap
                   name: account-service-configmap
-                  key: FLASK_ENV
+                  key: FLASK_DEBUG
             - name: VERSION
               valueFrom:
                 configMapKeyRef:

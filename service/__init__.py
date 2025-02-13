@@ -16,9 +16,9 @@ from flask_talisman import Talisman
 
 logger = logging.getLogger('account-service')
 
-# Load the correct .env file based on FLASK_ENV
-# export FLASK_ENV=docker  # Or production, etc.
-env = os.environ.get('FLASK_ENV')
+# Load the correct .env file based on FLASK_DEBUG
+# export FLASK_DEBUG=docker  # Or production, etc.
+env = os.environ.get('FLASK_DEBUG')
 
 if not env:
     dotenv_path = os.path.join(
@@ -30,6 +30,8 @@ else:
         os.path.dirname(__file__),
         f'.env.{env}'
     )  # Path to .env.{env}
+
+logging.warning("Loading environment variables from: %s", dotenv_path)
 
 try:
     if os.path.exists(dotenv_path):

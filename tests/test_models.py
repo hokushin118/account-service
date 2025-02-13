@@ -6,16 +6,12 @@ Test cases can be run with the following:
   coverage report -m
 """
 import logging
-import os
 import unittest
 
 from service import app
 from service.models import Account, DataValidationError, db
+from tests import DATABASE_URI
 from tests.factories import AccountFactory
-
-DATABASE_URI = os.getenv(
-    'DATABASE_URI', 'postgresql://cba:pa$$wOrd123!@localhost:15432/account_db'
-)
 
 
 ######################################################################
