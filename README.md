@@ -1,4 +1,4 @@
-Account microservice
+ccount microservice
 
 ![Build Status](https://github.com/hokushin118/account-service/actions/workflows/ci-build.yaml/badge.svg)
 
@@ -54,10 +54,10 @@ The environment variables specific to profile are defined in the *
 
 .env.production - production profile, never commit it to the repository
 
-The profile is set using the **FLASK_ENV** environment variable.
+The profile is set using the **FLASK_DEBUG** environment variable.
 
 ```
-export FLASK_ENV=docker 
+export FLASK_DEBUG=docker 
 ```
 
 ## Local Development

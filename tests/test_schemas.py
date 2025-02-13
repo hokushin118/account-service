@@ -102,7 +102,6 @@ class TestAccountDTO(TestCase):
     def test_from_orm(self):
         """It should return valid AccountDTO."""
         account = AccountFactory()
-        account.create()
         account_dto = AccountDTO.from_orm(account)
         self.assertEqual(account_dto.id, account.id)
         self.assertEqual(account_dto.name, account.name)

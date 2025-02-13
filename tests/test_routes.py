@@ -6,20 +6,21 @@ Test cases can be run with the following:
   coverage report -m
 """
 import logging
-import os
 from unittest import TestCase
 
 from service import talisman
 from service.common import status  # HTTP Status Codes
-from service.models import Account, init_db, db
-from service.routes import app, HEALTH_PATH, ROOT_PATH, \
-    ACCOUNTS_PATH_V1, IF_NONE_MATCH_HEADER
-from service.schemas import AccountDTO
-from tests.factories import AccountFactory
-
-DATABASE_URI = os.getenv(
-    'DATABASE_URI', 'postgresql://cba:pa$$wOrd123!@postgres:15432/account_db'
+from service.models import init_db, db, Account
+from service.routes import (
+    app,
+    HEALTH_PATH,
+    ROOT_PATH,
+    ACCOUNTS_PATH_V1,
+    IF_NONE_MATCH_HEADER
 )
+from service.schemas import AccountDTO
+from tests import DATABASE_URI
+from tests.factories import AccountFactory
 
 HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
 
@@ -46,6 +47,9 @@ class TestAccountService(TestCase):  # pylint: disable=too-many-public-methods
 
     def setUp(self):
         """Runs before each test."""
+        self.app_context = app.app_context()  # Create application context
+        self.app_context.push()  # Push the context - VERY IMPORTANT
+
         db.session.query(Account).delete()  # clean up the last tests
         db.session.commit()
 
@@ -53,7 +57,10 @@ class TestAccountService(TestCase):  # pylint: disable=too-many-public-methods
 
     def tearDown(self):
         """Runs once after each test case."""
-        db.session.remove()
+        db.session.remove()  # Remove the session
+
+        self.app_context.pop()  # Pop the application context - VERY IMPORTANT
+        self.app_context = None  # Reset the app context
 
     ######################################################################
     #  H E L P E R   M E T H O D S
