@@ -1,4 +1,4 @@
-# Common
+# This is the base Docker Compose file containing infrastructure services.
 # Project name
 name: account-service
 

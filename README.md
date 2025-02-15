@@ -90,7 +90,7 @@ source .venv/bin/activate
 python3.9 -m pip install -r requirements.txt
 ```
 
-5. Launch test infrastructure with **Docker Compose**:
+5. Deploy infrastructure services with **Docker Compose**:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.test.yml up
@@ -191,7 +191,7 @@ For more details on extending **Docker Compose** configuration, see:
 
 ## Run tests
 
-1. Make sure you launch test infrastructure with **Docker Compose**:
+1. Make sure you have deployed infrastructure services with **Docker Compose**:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.test.yml up
