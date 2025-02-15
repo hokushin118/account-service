@@ -1,18 +1,39 @@
-FROM python:3.9-slim-bullseye
+# Builder stage
+FROM python:3.9-slim-bullseye AS builder
 
-# Create working folder
+# Create working directory
 WORKDIR /app
 
-# Install dependencies
+# Copy requirements first to leverage Docker cache
 COPY requirements.txt .
+
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application contents
 COPY service/ ./service/
 
-# Switch to a non-root user
+# Create a non-root user and change ownership
 RUN useradd --uid 1000 cbotee && chown -R cbotee /app
 
+# Final image stage
+FROM python:3.9-slim-bullseye
+
+# Create working directory
+WORKDIR /app
+
+# Install dependencies in final stage
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy only the necessary artifacts from builder stage
+COPY --from=builder /app /app
+
+# Create a non-root user and change ownership in final stage
+RUN useradd --uid 1000 cbotee && chown -R cbotee /app
+
+# Switch to non-root user
 USER cbotee
 
 # Expose service port
