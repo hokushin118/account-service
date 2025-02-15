@@ -1,0 +1,47 @@
+# Development profile
+# docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml up --build
+# You only need to include the services you are changing in the override file.
+# All other settings will be inherited from the original docker-compose.yml file.
+services:
+  postgres:
+    extends:
+      file: docker-compose.yml
+      service: postgres
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
+      - 15432:5432 # external port / container port
+    env_file:
+      - .env.docker
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes # is recommended only for development
+      - POSTGRES_HOST_AUTH_METHOD=trust
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_DB=${DATABASE_NAME}
+
+  prometheus:
+    extends:
+      file: docker-compose.yml
+      service: prometheus
+    container_name: ${PROMETHEUS_CONTAINER_NAME}
+    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
+      - ${PROMETHEUS_PORT}:9090 # external port / container port
+    env_file:
+      - .env.docker
+
+  account-service:
+    extends:
+      file: docker-compose-account.yml
+      service: account-service
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: ${ACCOUNT_SRV_CONTAINER_NAME}
+    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
+      - ${ACCOUNT_SRV_PORT}:5000 # external port / container port
+    env_file:
+      - .env.docker
+
+volumes:
+  postgresql_data:
+    driver: local

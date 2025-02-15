@@ -1,0 +1,43 @@
+# Production profile
+# docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.prod.yml up
+# You only need to include the services you are changing in the override file.
+# All other settings will be inherited from the original docker-compose.yml file.
+services:
+  postgres:
+    extends:
+      file: docker-compose.yml
+      service: postgres
+    pull_policy: always # Always pulls the latest image
+    restart: always
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+    env_file:
+      - .env.production
+    environment:
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=${DATABASE_NAME}
+
+  prometheus:
+    extends:
+      file: docker-compose.yml
+      service: prometheus
+    pull_policy: always
+    restart: always
+    env_file:
+      - .env.production
+
+  account-service:
+    extends:
+      file: docker-compose-account.yml
+      service: account-service
+    pull_policy: always
+    restart: always
+    env_file:
+      - .env.production
+    deploy:
+      replicas: 3
+
+volumes:
+  postgresql_data:
+    driver: local
