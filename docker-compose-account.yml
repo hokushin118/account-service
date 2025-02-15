@@ -1,0 +1,57 @@
+# Project name
+name: account-service
+
+services:
+  # The Account microservice provides REST API for the CB app.
+  account-service:
+    image: ${ACCOUNT_SRV_IMAGE}:${ACCOUNT_SRV_VERSION}
+    hostname: ${ACCOUNT_SRV_HOSTNAME}
+    restart: on-failure
+    environment:
+      - JVM_OPTS=-Xmx8g -Xms8g -XX:MaxPermSize=1024m
+    labels:
+      collect_logs_with_filebeat: true
+      decode_log_event_to_json: true
+    networks:
+      - ${BACKEND_NETWORK}
+    healthcheck: # Healthcheck for better container management
+      test: [ 'CMD-SHELL', 'curl -f http://${ACCOUNT_SRV_HOSTNAME}:${ACCOUNT_SRV_PORT}/api/health || exit 1' ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1 # Update one replica at a time
+        delay: 10s      # Wait between updates
+        order: stop-first  # Stop old containers before starting new ones
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+      restart_policy:
+        condition: on-failure # Only restart on failure
+        delay: 5s # Wait 5 seconds before restarting
+        max_attempts: 3 # Retry up to 3 times
+      # Resource limits for production
+      resources:
+        limits:
+          cpus: '2' # Example: Limit to 2 CPUs
+          memory: '2G' # Example: Limit to 2GB memory
+        reservations: # Guarantees resources are available
+          cpus: '1'
+          memory: '1G'
+    depends_on:
+      - postgres
+      - prometheus
+    logging: # Common logging config
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: 5
+
+# networks
+networks:
+  cba_net:
+    name: ${BACKEND_NETWORK}

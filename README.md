@@ -90,7 +90,13 @@ source .venv/bin/activate
 python3.9 -m pip install -r requirements.txt
 ```
 
-5. Run the microservice
+5. Launch test infrastructure with **Docker Compose**:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.test.yml up
+```
+
+6. Run the microservice
 
 ```bash
 python3.9 wsgi.py
@@ -142,13 +148,20 @@ To run the microservice using **Docker Compose**, follow these steps:
 1. Build and run the **Docker Compose** services:
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.<profile>.yml up --build
+```
+
+For example, to run the services with the  **dev** profile, use the following
+command:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml up --build
 ```
 
 or
 
 ```bash
-docker compose up --build -d
+docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml up --build -d
 ```
 
 You can access the microservice at http://127.0.0.1:5000.
@@ -157,26 +170,38 @@ To stop the services, press **Ctrl+C** in the terminal where the services are
 running, or run:
 
 ```bash
-docker compose down
+docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.<profile>.yml down
+```
+
+For example, to stop the services running with the  **dev** profile, use the
+following command:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml down
 ```
 
 or
 
 ```bash
-docker compose down -v
+docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml -v
 ```
+
+For more details on extending **Docker Compose** configuration, see:
+[Extend your Compose files](https://docs.docker.com/compose/how-tos/multiple-compose-files/extends)
 
 ## Run tests
 
-To run the tests for the microservice, use the following command:
+1. Make sure you launch test infrastructure with **Docker Compose**:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.test.yml up
+```
+
+2. To run the tests for the microservice, use the following command:
 
 ```bash
 nosetests -v --with-spec --spec-color
 ```
-
-Make sure you have **PostgreSQL** running locally on port **5432** with a
-database named **postgres** and a user named **postgres** with password
-**account_db**.
 
 ## Lint
 

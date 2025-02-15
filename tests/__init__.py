@@ -2,7 +2,6 @@
 Package: tests
 Package for the application tests.
 """
-
 import os
 
 DATABASE_URI = os.getenv(
