@@ -27,6 +27,16 @@ account, and deleting an account.
 - [Python 3.9](https://www.python.org/downloads/release/python-390/)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
 
+I've been
+using [Red Hat Enterprise Linux for Workstations](https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/workstations)
+as my development machine, but the project should run on any operating system.
+The project uses [Gunicorn](https://gunicorn.org) for local
+development. [Gunicorn](https://gunicorn.org) is a WSGI HTTP server designed
+specifically for Unix-like systems (Linux, macOS, etc.) and you cannot
+directly use [Gunicorn](https://gunicorn.org) on Windows. You can use
+[Docker](https://docs.docker.com/desktop/setup/install/windows-install/) to
+run the application locally on Windows platform.
+
 ## Project version
 
 The project uses **semantic** versioning for its versioning scheme. The
@@ -315,4 +325,155 @@ Check the HPA is created with:
 
 ```bash
 kubectl get hpa -n cba-dev
+```
+
+## Deployment on OpenShift using Tekton
+
+[Tekton](https://tekton.dev) is a cloud-native solution for building CI/CD
+systems. It consists of [Tekton](https://tekton.dev) Pipelines, which provides
+the building blocks, and of supporting components, such as Tekton CLI and
+Tekton Catalog, that make Tekton a complete ecosystem. For more information,
+see the [Tekton documentation](https://tekton.dev/docs/).
+
+You would need to have **OpenShift CLI** (oc) installed on your machine. You
+can download it
+from [here](https://access.redhat.com/downloads/content/290/ver=4.17/rhel---9/4.17.16/x86_64/product-software).
+
+Verify the availability of the OpenShift CLI using the following command:
+
+```bash
+oc version
+```
+
+The [Tekton](https://tekton.dev) pipeline deployment files for **OpenShift**
+are located in the **.infrastructure/openshift/tekton** directory.
+
+1. Login to **OpenShift** cluster, using the following command:
+
+```bash
+oc login --token=<token> --server=https://api.,,.p1.openshiftapps.com:6443
+```
+
+2. Install [Tekton Pipeline](https://github.com/tektoncd/pipeline/releases)
+   on **OpenShift** using the following command:
+
+```bash
+oc apply -f https://storage.googleapis.com/tekton-releases/pipeline/previous/v0.68.0/release.yaml
+```
+
+3. [Download](https://github.com/tektoncd/cli/releases) and install [Tekton
+   CLI](https://tekton.dev/docs/cli) on your machine. For example, to download
+   and install **Tekton CLI** on **RHEL 9**, use the following commands:
+
+```bash
+rpm -Uvh https://github.com/tektoncd/cli/releases/download/v0.37.1/tektoncd-cli-0.37.1_Linux-64bit.rpm
+```
+
+or
+
+```bash
+curl -LO https://github.com/tektoncd/cli/releases/download/v0.37.1/tkn_0.37.1_Linux_x86_64.tar.gz
+sudo tar xvzf tkn_0.37.1_Linux_x86_64.tar.gz -C /usr/local/bin/ tkn
+```
+
+After installation (using either method), verify that Tekton is installed
+correctly, using the following command:
+
+```bash
+tkn version
+```
+
+4. To create a workspace for pipeline on **OpenShift**, use the following
+   commands:
+
+```bash
+oc create -f .infrastructure/openshift/cba-pipeline-pvc.yml
+```
+
+5. To create custom [Tekton](https://tekton.dev) tasks for pipeline on *
+   *OpenShift**, use the following commands:
+
+```bash
+oc apply -f .infrastructure/openshift/tekton/tasks/run-cleanup-workspace.yml 
+oc apply -f .infrastructure/openshift/tekton/tasks/run-flake8-lint.yml 
+oc apply -f .infrastructure/openshift/tekton/tasks/run-nose-tests.yml 
+```
+
+To verify the created custom tasks, using the following command:
+
+```bash
+oc get tasks
+```
+
+6. The **clone** task requires the **git-clone**, the **build** task
+   requires **buildah** and the **deploy** task requires the
+   ""openshift-client"" tasks from the **Tekton Hub**, use the following
+   commands to install them:
+
+```bash
+tkn hub install task git-clone
+tkn hub install task buildah
+tkn hub install task openshift-client
+```
+
+Make sure that the **git-clone**, **buildah** and **openshift-client** tasks
+are available in the **OpenShift** using the following command:
+
+```bash
+oc get clustertask
+```
+
+7. To create [Tekton](https://tekton.dev) pipeline on **OpenShift**, use the
+   following command:
+
+```bash
+oc apply -f .infrastructure/openshift/tekton/cba-pipeline.yml
+```
+
+8. To start pipeline on **OpenShift**, use the following command:
+
+```bash
+tkn pipeline start cba-pipeline \
+            -p repo-url=<GITHUB_REPO_URL> \
+            -p branch=<BRANCH> \
+            -p build-image=<DOCKER_IMAGE> \
+            -p deploy-enabled=<DEPLOY_ENABLED> \
+            -w name=<WORKSPAVCE_NAME>,claimName=<PVC_CLAIM_NAME> \
+            -s pipeline \
+            --showlog
+```
+
+- **GITHUB_REPO_URL** - URL of the GitHub repository
+- **BRANCH** - name of the branch
+- **DOCKER_IMAGE** - docker image with tag and registry, for example: `quay.
+  io/username/cba:latest`
+- **DEPLOY_ENABLED** - Enable/disable deployment step, for example: `true`
+- **WORKSPACE_NAME** - name of the workspace specified in the pipeline yaml
+  file, for example: `cba-pipeline-pvc`
+- **PVC_CLAIM_NAME** - name of the PVC claim created for pipeline, for
+  example: `cba-pipeline-pvc`
+
+For example:
+
+```bash
+tkn pipeline start cba-pipeline \
+            -p repo-url="https://github.com/hokushin118/account-service.git" \
+            -p branch="main" \
+            -p build-image=hokushin/account-service:latest \
+            -p deploy-enabled=false \
+            -w name=cba-pipeline-workspace,claimName=cba-pipeline-pvc \
+            -s pipeline \
+            --showlog
+```
+
+To make the pipeline ran successfully, run the following command:
+
+```bash
+tkn pipelinerun ls
+```
+
+You can check the logs of the last pipeline run with:
+
+```bash
+tkn pipelinerun logs --last
 ```
