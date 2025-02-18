@@ -3,6 +3,10 @@ apiVersion: v1 # K8S API version
 kind: PersistentVolumeClaim
 metadata:
   name: cba-pipeline-pvc # Name of the PVC
+  labels:
+    app: cba-pipeline
+    environment: development
+    team: devops
 spec:
   accessModes:
     - ReadWriteMany # Allow multiple nodes to read/write from/to the volume simultaneously

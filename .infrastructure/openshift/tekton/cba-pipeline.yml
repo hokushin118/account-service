@@ -7,6 +7,10 @@ apiVersion: tekton.dev/v1beta1 # Tekton API version
 kind: Pipeline
 metadata:
   name: cba-pipeline # Name of the pipeline
+  labels:
+    app: cba-pipeline
+    environment: development
+    team: devops
 spec:
   workspaces:
     - name: cba-pipeline-workspace
