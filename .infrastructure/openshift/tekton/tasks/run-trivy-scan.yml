@@ -1,0 +1,58 @@
+# This task scans an application for vulnerabilities using Trivy.
+apiVersion: tekton.dev/v1beta1 # Tekton API version
+kind: Task
+metadata:
+  name: run-trivy-scan # Name of the task
+  labels:
+    app: cba-pipeline
+    environment: development
+    team: devops
+spec:
+  description: This task will scan an application for vulnerabilities using Trivy.
+  workspaces:
+    - name: source
+      description: The workspace containing the source code to scan.
+      mountPath: /workspace
+  params:
+    - name: docker-image
+      description: The Docker image to use for scanning.
+      type: string
+      default: "aquasec/trivy:latest"
+    - name: trivy-severity
+      description: The severity level to filter vulnerabilities.
+      type: string
+      default: "HIGH,CRITICAL"  # Comma-separated list
+    - name: trivy-output
+      description: The output format for Trivy results.
+      type: string
+      default: "table" # Or "json", "template", etc
+  steps:
+    - name: trivy-scan
+      image: $(params.docker-image)
+      workingDir: $(workspaces.source.path)
+      resources: # Resource requests and limits
+        requests:
+          cpu: "200m" # 200 millicores
+          memory: "128Mi" # 128 MB of memory
+        limits:
+          cpu: "1" # 1 CPU
+          memory: "512Mi" # 512 MB of memory
+      script: |
+        #!/bin/bash
+        set -euo pipefail # Ensure that a pipeline fails if any command in the pipeline fails
+        
+        echo "Starting Trivy scan..."
+
+        # Check if Trivy is installed, and install it if not
+        trivyRootless=$(command -v trivy)
+
+        if [[ -z "$trivyRootless" ]]; then
+          echo "Installing Trivy..."
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        fi
+
+        echo "Running Trivy scan..."
+        
+        trivy image --severity $(params.trivy-severity) --output $(params.trivy-output) .
+        
+        echo "Trivy scan completed."

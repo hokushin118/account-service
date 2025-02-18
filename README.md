@@ -275,39 +275,39 @@ commands:
    created within this namespace (**cba-dev**).
 
 ```bash
-kubectl apply -f ./.infrastructure/k8s/cba-dev-ns.yml
+kubectl apply -f .infrastructure/k8s/cba-dev-ns.yml
 ```
 
 2. **ConfigMap**: Apply the ConfigMap yaml next. The Deployment depends on it.
 
 ```bash
-kubectl apply -n cba-dev -f ./.infrastructure/k8s/account-srv-cm.yml
+kubectl apply -n cba-dev -f .infrastructure/k8s/account-srv-cm.yml
 ```
 
 3. **Secret**: Apply the Secret yaml. The Deployment also depends on it.
 
 ```bash
-kubectl apply -n cba-dev -f ./.infrastructure/k8s/account-srv-secret.yml
+kubectl apply -n cba-dev -f .infrastructure/k8s/account-srv-secret.yml
 ```
 
 4. **Deployment**: Apply the Deployment yaml last. It depends on the Namespace,
    ConfigMap, and Secret.
 
 ```bash
-kubectl apply -n cba-dev -f ./.infrastructure/k8s/account-srv-deployment.yml
+kubectl apply -n cba-dev -f .infrastructure/k8s/account-srv-deployment.yml
 ```
 
 5. **Service**: Apply the Service yaml. It depends on the Pods created by the
    Deployment.
 
 ```bash
-kubectl apply -n cba-dev -f ./.infrastructure/k8s/account-srv-service.yml
+kubectl apply -n cba-dev -f .infrastructure/k8s/account-srv-service.yml
 ```
 
 6. **HPA**: Apply the HPA yaml. It depends on the Deployment.
 
 ```bash
-kubectl apply -n cba-dev -f ./.infrastructure/k8s/account-srv-hpa.yml
+kubectl apply -n cba-dev -f .infrastructure/k8s/account-srv-hpa.yml
 ```
 
 Check the pods are running with:
@@ -404,6 +404,7 @@ oc apply -f .infrastructure/openshift/cba-pipeline-secret.yml
 oc apply -f .infrastructure/openshift/tekton/tasks/run-cleanup-workspace.yml 
 oc apply -f .infrastructure/openshift/tekton/tasks/run-flake8-lint.yml 
 oc apply -f .infrastructure/openshift/tekton/tasks/run-nose-tests.yml 
+oc apply -f .infrastructure/openshift/tekton/tasks/run-trivy-scan.yml 
 ```
 
 Apply the run-github-clone-w-token.yml if you are using a private repository.

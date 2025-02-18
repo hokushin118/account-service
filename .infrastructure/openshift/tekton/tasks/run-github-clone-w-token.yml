@@ -29,6 +29,13 @@ spec:
             secretKeyRef: # Using Secret
               name: cba-pipeline-secret
               key: token
+      resources: # Resource requests and limits
+        requests:
+          cpu: "100m" # 100 millicores
+          memory: "64Mi" # 64 MB of memory
+        limits:
+          cpu: "500m" # 500 millicores
+          memory: "128Mi" # 128 MB of memory
       script: |
         #!/bin/bash
         

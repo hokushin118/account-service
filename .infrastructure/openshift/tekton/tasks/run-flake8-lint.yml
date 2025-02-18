@@ -18,14 +18,25 @@ spec:
       description: The workspace containing the source code to lint.
       mountPath: /workspace
   params:
+    - name: docker-image
+      description: The Docker image to use for task.
+      type: string
+      default: "python:3.9-slim-bullseye:latest"
     - name: args
       description: Arguments to pass to Flake8 (optional).
       type: array
       default: [ "--count", "--max-complexity=10", "--max-line-length=127", "--statistics" ]
   steps:
     - name: lint
-      image: python:3.9-slim-bullseye
+      image: $(params.docker-image)
       workingDir: $(workspaces.source.path)
+      resources: # Resource requests and limits
+        requests:
+          cpu: "200m" # 200 millicores
+          memory: "128Mi" # 128 MB of memory
+        limits:
+          cpu: "1" # 1 CPU
+          memory: "512Mi" # 512 MB of memory
       script: |
         #!/bin/bash
         set -euo pipefail # Ensure that a pipeline fails if any command in the pipeline fails
