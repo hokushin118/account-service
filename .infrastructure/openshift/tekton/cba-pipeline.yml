@@ -96,6 +96,21 @@ spec:
         - tests
         - lint
 
+    - name: trivy-scan
+      workspaces:
+        - name: source
+          workspace: cba-pipeline-workspace
+      taskRef:
+        name: run-trivy-scan
+        kind: Task # Custom task
+      params:
+        - name: trivy-severity
+          value: "HIGH,CRITICAL"
+        - name: trivy-output
+          value: "table"
+      runAfter:
+        - build
+
     - name: deploy
       workspaces:
         - name: manifest-dir
@@ -113,7 +128,7 @@ spec:
             oc apply -f deploy/
             oc get pods -l app=account-srv
       runAfter:
-        - build
+        - trivy-scan
       when:
         - input: "$(params.deploy-enabled)"
           operator: in

@@ -13,9 +13,14 @@ spec:
   workspaces:
     - name: source
       description: The workspace to be cleaned.
+  params:
+    - name: docker-image
+      description: The Docker image to use for task.
+      type: string
+      default: "alpine:3"
   steps:
     - name: remove
-      image: alpine:3
+      image: $(params.docker-image)
       workingDir: $(workspaces.source.path)
       env:
         - name: WORKSPACE_SOURCE_PATH
@@ -23,6 +28,13 @@ spec:
       securityContext:
         runAsNonRoot: false
         runAsUser: 0
+      resources: # Resource requests and limits
+        requests:
+          cpu: "100m" # 100 millicores
+          memory: "64Mi" # 64 MB of memory
+        limits:
+          cpu: "500m" # 500 millicores (half a CPU)
+          memory: "128Mi" # 128 MB of memory
       script: |
         #!/bin/bash
         set -euo pipefail # Ensure that a pipeline fails if any command in the pipeline fails
