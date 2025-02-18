@@ -1,6 +1,6 @@
 ccount microservice
 
-![Build Status](https://github.com/hokushin118/account-service/actions/workflows/ci-build.yaml/badge.svg)
+![Build Status](https://github.com/hokushin118/account-service/actions/workflows/ci.yml/badge.svg)
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.9](https://img.shields.io/badge/Python-3.9-green.svg)](https://shields.io/)
@@ -33,9 +33,10 @@ as my development machine, but the project should run on any operating system.
 The project uses [Gunicorn](https://gunicorn.org) for local
 development. [Gunicorn](https://gunicorn.org) is a WSGI HTTP server designed
 specifically for Unix-like systems (Linux, macOS, etc.) and you cannot
-directly use [Gunicorn](https://gunicorn.org) on Windows. You can use
-[Docker](https://docs.docker.com/desktop/setup/install/windows-install/) to
-run the application locally on Windows platform.
+directly use [Gunicorn](https://gunicorn.org) on Windows. Therefore, you'll
+need to
+use [Docker](https://docs.docker.com/desktop/setup/install/windows-install/) to
+run the application locally on Windows.
 
 ## Project version
 
