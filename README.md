@@ -391,7 +391,13 @@ tkn version
 oc create -f .infrastructure/openshift/cba-pipeline-pvc.yml
 ```
 
-5. To create custom [Tekton](https://tekton.dev) tasks for pipeline on *
+5. Apply the Secret yaml if you are using a private repository.
+
+```bash
+oc apply -f .infrastructure/openshift/cba-pipeline-secret.yml
+```
+
+6. To create custom [Tekton](https://tekton.dev) tasks for pipeline on *
    *OpenShift**, use the following commands:
 
 ```bash
@@ -400,13 +406,19 @@ oc apply -f .infrastructure/openshift/tekton/tasks/run-flake8-lint.yml
 oc apply -f .infrastructure/openshift/tekton/tasks/run-nose-tests.yml 
 ```
 
+Apply the run-github-clone-w-token.yml if you are using a private repository.
+
+```bash
+oc apply -f .infrastructure/openshift/tekton/tasks/run-github-clone-w-token.yml 
+```
+
 To verify the created custom tasks, using the following command:
 
 ```bash
 oc get tasks
 ```
 
-6. The **clone** task requires the **git-clone**, the **build** task
+7. The **clone** task requires the **git-clone**, the **build** task
    requires **buildah** and the **deploy** task requires the
    ""openshift-client"" tasks from the **Tekton Hub**, use the following
    commands to install them:
@@ -424,14 +436,14 @@ are available in the **OpenShift** using the following command:
 oc get clustertask
 ```
 
-7. To create [Tekton](https://tekton.dev) pipeline on **OpenShift**, use the
+8. To create [Tekton](https://tekton.dev) pipeline on **OpenShift**, use the
    following command:
 
 ```bash
 oc apply -f .infrastructure/openshift/tekton/cba-pipeline.yml
 ```
 
-8. To start pipeline on **OpenShift**, use the following command:
+9. To start pipeline on **OpenShift**, use the following command:
 
 ```bash
 tkn pipeline start cba-pipeline \

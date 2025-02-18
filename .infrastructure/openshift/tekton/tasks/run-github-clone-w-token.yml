@@ -1,0 +1,41 @@
+# This task clones a GitHub repository using a Personal Access Token (PAT).
+apiVersion: tekton.dev/v1beta1 # Tekton API version
+kind: Task
+metadata:
+  name: run-github-clone-w-token # Name of the task
+  labels:
+    app: cba-pipeline
+    environment: development
+    team: devops
+spec:
+  description: Clones a GitHub repository using a Personal Access Token (PAT).
+  params:
+    - name: repo-url
+      description: URL of the Git repository
+      type: string
+    - name: branch
+      description: Branch to clone
+      type: string
+      default: main
+  workspaces:
+    - name: source
+      description: The workspace to clone the repository into.
+  steps:
+    - name: clone
+      image: alpine/git
+      env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef: # Using Secret
+              name: cba-pipeline-secret
+              key: token
+      script: |
+        #!/bin/bash
+        
+        set -euo pipefail # Ensure that a pipeline fails if any command in the pipeline fails
+        
+        echo "Cloning repository from $(params.repo-url) on branch $(params.branch)..."
+        
+        git clone --branch $(params.branch) https://$GITHUB_TOKEN@$(params.repo-url) $(workspaces.output.path)
+
+        echo "Cloning completed successfully."

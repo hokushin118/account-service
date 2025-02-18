@@ -4,6 +4,10 @@ apiVersion: tekton.dev/v1beta1 # Tekton API version
 kind: Task
 metadata:
   name: run-cleanup-workspace # Name of the task
+  labels:
+    app: cba-pipeline
+    environment: development
+    team: devops
 spec:
   description: Cleans up a workspace by deleting all files and subdirectories.
   workspaces:
@@ -20,7 +24,7 @@ spec:
         runAsNonRoot: false
         runAsUser: 0
       script: |
-        #!/usr/bin/env sh
+        #!/bin/bash
         set -euo pipefail # Ensure that a pipeline fails if any command in the pipeline fails
         
         echo "Removing all files from ${WORKSPACE_SOURCE_PATH} ..."

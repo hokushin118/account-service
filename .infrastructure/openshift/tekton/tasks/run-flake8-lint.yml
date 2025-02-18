@@ -7,6 +7,10 @@ apiVersion: tekton.dev/v1beta1 # Tekton API version
 kind: Task
 metadata:
   name: run-flake8-lint # Name of the task
+  labels:
+    app: cba-pipeline
+    environment: development
+    team: devops
 spec:
   description: This task will run Flake8 linting on the provided source code.
   workspaces:
