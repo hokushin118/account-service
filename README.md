@@ -1,4 +1,4 @@
-ccount microservice
+# Account microservice
 
 ![Build Status](https://github.com/hokushin118/account-service/actions/workflows/ci.yml/badge.svg)
 
