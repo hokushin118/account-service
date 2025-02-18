@@ -1,0 +1,116 @@
+# This pipeline needs the following tasks from Tekton Hub
+#   - git-clone
+#   - buildah
+#   - openshift-client
+#
+apiVersion: tekton.dev/v1beta1 # Tekton API version
+kind: Pipeline
+metadata:
+  name: cba-pipeline # Name of the pipeline
+spec:
+  workspaces:
+    - name: cba-pipeline-workspace
+      description: The workspace shared between tasks.
+  params:
+    - name: repo-url
+      description: URL of the Git repository
+      type: string
+    - name: branch
+      description: Branch to clone
+      default: main # Default value fro branch
+      type: string
+    - name: build-image
+      description: Docker image name (including registry)
+      type: string
+    - name: deploy-enabled
+      description: Enable/disable deployment (true/false)
+      type: string
+      default: "false" # Default to disable deployment
+  tasks:
+    - name: init
+      workspaces:
+        - name: source
+          workspace: cba-pipeline-workspace
+      taskRef:
+        name: run-cleanup-workspace
+        kind: Task # Custom task
+
+    - name: clone
+      workspaces:
+        - name: output
+          workspace: cba-pipeline-workspace
+      taskRef:
+        name: git-clone
+        kind: ClusterTask # Task from Tekton Hub
+      params:
+        - name: url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.branch)
+      runAfter:
+        - init
+
+    - name: lint
+      workspaces:
+        - name: source
+          workspace: cba-pipeline-workspace
+      taskRef:
+        name: run-flake8-lint
+        kind: Task # Custom task
+      params:
+        - name: args
+          value: [ "--count","--max-complexity=10","--max-line-length=127","--statistics" ]
+      runAfter:
+        - clone
+
+    - name: tests
+      workspaces:
+        - name: source
+          workspace: cba-pipeline-workspace
+      taskRef:
+        name: run-nose-tests
+        kind: Task # Custom task
+      params:
+        - name: database-uri
+          value: "sqlite:///test.db"
+        - name: args
+          value: "-v --with-spec --spec-color"
+      runAfter:
+        - clone
+
+    - name: build
+      workspaces:
+        - name: source
+          workspace: cba-pipeline-workspace
+      taskRef:
+        name: buildah
+        kind: ClusterTask # Task from Tekton Hub
+      params:
+        - name: IMAGE
+          value: "$(params.build-image)"
+      runAfter:
+        - tests
+        - lint
+
+    - name: deploy
+      workspaces:
+        - name: manifest-dir
+          workspace: cba-pipeline-workspace
+      taskRef:
+        name: openshift-client
+        kind: ClusterTask # Task from Tekton Hub
+      params:
+        - name: SCRIPT
+          value: |
+            echo "Updating manifest..."
+            sed -i "s|IMAGE_NAME_HERE|$(params.build-image)|g" deploy/deployment.yml
+            cat deploy/deployment.yml
+            echo "Deploying to OpenShift..."
+            oc apply -f deploy/
+            oc get pods -l app=account-srv
+      runAfter:
+        - build
+      when:
+        - input: "$(params.deploy-enabled)"
+          operator: in
+          values: [ "true" ]
