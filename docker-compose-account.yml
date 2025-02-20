@@ -1,5 +1,5 @@
 # Project name
-name: account-service
+name: cba
 
 services:
   # The Account microservice provides REST API for the CB app.
@@ -21,7 +21,6 @@ services:
       retries: 5
       start_period: 15s
     deploy:
-      replicas: 1
       update_config:
         parallelism: 1 # Update one replica at a time
         delay: 10s      # Wait between updates
@@ -34,17 +33,10 @@ services:
         condition: on-failure # Only restart on failure
         delay: 5s # Wait 5 seconds before restarting
         max_attempts: 3 # Retry up to 3 times
-      # Resource limits for production
-      resources:
-        limits:
-          cpus: '2' # Example: Limit to 2 CPUs
-          memory: '2G' # Example: Limit to 2GB memory
-        reservations: # Guarantees resources are available
-          cpus: '1'
-          memory: '1G'
     depends_on:
       - postgres
       - prometheus
+      - keycloak
     logging: # Common logging config
       driver: json-file
       options:

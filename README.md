@@ -65,10 +65,10 @@ The environment variables specific to profile are defined in the *
 
 .env.production - production profile, never commit it to the repository
 
-The profile is set using the **FLASK_DEBUG** environment variable.
+The profile is set using the **APP_SETTINGS** environment variable.
 
 ```
-export FLASK_DEBUG=docker 
+export APP_SETTINGS=docker 
 ```
 
 ## Local Development
@@ -194,7 +194,7 @@ docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-com
 or
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml -v
+docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml down -v
 ```
 
 For more details on extending **Docker Compose** configuration, see:
@@ -491,3 +491,31 @@ You can check the logs of the last pipeline run with:
 ```bash
 tkn pipelinerun logs --last
 ```
+
+## Keycloak
+
+The microservice uses [Keycloak](https://www.keycloak.org) for authentication
+and authorization. The [Keycloak](https://www.keycloak.org) configuration is
+stored in the
+`.infrastructure/keycloak/cba-dev-realm.json` file. The [Keycloak](https://www.
+keycloak.org) dev - **cba-dev** - realm configuration is automatically
+imported when Keycloak is deployed using Docker Compose.
+
+[Keycloak](https://www.keycloak.org) OpenID configuration url:
+
+```
+http://localhost:28080/realms/cba-dev/.well-known/openid-configuration
+```
+
+[Keycloak](https://www.keycloak.org) Admin Console url:
+
+```
+http://localhost:28080
+```
+
+[Keycloak](https://www.keycloak.org) Admin Console credentials (super user
+account):
+
+| **user name** | **password** |
+|---------------|--------------|
+| admin         | admin        |
