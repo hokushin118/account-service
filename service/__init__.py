@@ -24,12 +24,12 @@ logging.warning("Environment variables: %s", env)
 
 if not env:
     dotenv_path = os.path.join(
-        os.path.dirname(__file__),
+        os.path.dirname(os.path.dirname(__file__)),
         '.env'
     )  # Path to .env
 else:
     dotenv_path = os.path.join(
-        os.path.dirname(__file__),
+        os.path.dirname(os.path.dirname(__file__)),
         f'.env.{env}'
     )  # Path to .env.{env}
 
