@@ -16,9 +16,11 @@ from flask_talisman import Talisman
 
 logger = logging.getLogger('account-service')
 
-# Load the correct .env file based on FLASK_DEBUG
-# export FLASK_DEBUG=docker  # Or production, etc.
-env = os.environ.get('FLASK_DEBUG')
+# Load the correct .env file based on APP_SETTINGS
+# export APP_SETTINGS=docker  # Or production, etc.
+env = os.environ.get('APP_SETTINGS')
+
+logging.warning("Environment variables: %s", env)
 
 if not env:
     dotenv_path = os.path.join(

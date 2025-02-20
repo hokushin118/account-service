@@ -26,6 +26,18 @@ scrape_configs:
         labels:
           application: 'Prometheus Application'
 
+  # Here it's Keycloak IAM.
+  - job_name: 'keycloak'
+    # Override the global default and scrape targets from this job every 5 seconds.
+    scrape_interval: 5s
+    # Prometheus expects the data of our targets to be exposed on the /metrics endpoint.
+    metrics_path: '/realms/cba-dev/metrics'
+    static_configs:
+      # scheme defaults to 'http'
+      - targets: [ 'keycloak:8080' ]
+        labels:
+          application: 'Keycloak'
+
   # Here it's Account microservice.
   - job_name: 'account-service'
     # Override the global default and scrape targets from this job every 5 seconds.
