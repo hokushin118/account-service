@@ -43,9 +43,9 @@ jobs:
           flake8 service --count --max-complexity=10 --max-line-length=127 --statistics
 
       - name: Run Migrations
-        run: |
-          cd migrations
-          alembic upgrade head
+        run: flask db-upgrade
+        env:
+          DATABASE_URI: 'postgresql://postgres:pa$$wOrd123!@postgres:5432/account_db'
 
       - name: Run unit tests with nose
         run: nosetests

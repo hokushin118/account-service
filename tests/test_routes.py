@@ -81,7 +81,7 @@ class TestAccountService(TestCase):  # pylint: disable=too-many-public-methods
                 'Could not create test Account',
             )
             new_account = response.get_json()
-            account.id = new_account['id']  # pylint: disable=invalid-name
+            account.id = new_account['id']  # pylint: disable=C0103
             accounts.append(account)
         return accounts
 

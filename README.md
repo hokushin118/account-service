@@ -110,7 +110,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml up
 6. Apply the database migration, using the following command:
 
 ```bash
-flask db upgrade
+flask db-upgrade
 ```
 
 7. Run the microservice
@@ -167,7 +167,7 @@ docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-com
 2. Apply the database migration, using the following command:
 
 ```bash
-flask db upgrade
+flask db-upgrade
 ```
 
 You can access the microservice at http://127.0.0.1:5000.
@@ -206,7 +206,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml up
 2. Apply the database migration, using the following command:
 
 ```bash
-flask db upgrade
+flask db-upgrade
 ```
 
 3. To run the tests for the microservice, use the following command:
@@ -527,51 +527,48 @@ The microservice uses [Flask-Migrate](https://flask-migrate.readthedocs.io) for
 database migrations. The database
 migrations are stored in the `migrations` folder.
 
+To initialize the database migrations, use the following command:
+
+```bash
+flask db-init
+```
+
 To generate an initial migration, use the following command:
 
 ```bash
-flask db migrate -m 'Initial migration.'
+flask db-migrate -m 'Initial migration.'
 ```
 
 To apply the database migration, run the following command:
 
 ```bash
-flask db upgrade
+flask db-upgrade
 ```
-
-or
-
-```bash
-flask db upgrade head
-```
-
-**head** refers to the latest revision.
 
 To create a new database migration, use the following command:
 
 ```bash
-flask db revision -m "<database migration version>_<database migration description>" 
---autogenerate
+flask db-revision -m "<database migration version>_<database migration description>" --autogenerate
 ```
 
-Fore example:
+For example:
 
 ```bash
-flask db revision -m "20250224 - initial" --autogenerate
+flask db-revision -m "20250224 - initial" --autogenerate
 ```
 
 To apply the database migrations, use the following command:
 
 ```bash
-flask db upgrade
+flask db-upgrade
 ```
 
 To rollback the database migrations, run the following command2:
 
 ```bash
-flask db downgrade
-flask db downgrade <number_of_steps>
-flask db migrate --version <revision_id>
+flask db-downgrade
+flask db-downgrade <number_of_steps>
+flask db-migrate --version <revision_id>
 ```
 
 ### Database Migration Versioning
