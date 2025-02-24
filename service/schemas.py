@@ -5,6 +5,7 @@ All schemas are stored in this module.
 """
 from datetime import date
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, validator, EmailStr, constr
 
@@ -19,7 +20,7 @@ from service.common.utils import account_to_dict
 
 class AccountDTO(BaseModel):
     """Account DTO."""
-    id: int
+    id: UUID  # UUID
     name: constr(
         min_length=NAME_MIN_LENGTH,
         max_length=NAME_MAX_LENGTH

@@ -107,7 +107,13 @@ python3.9 -m pip install -r requirements.txt
 docker compose -f docker-compose.yml -f docker-compose.test.yml up
 ```
 
-6. Run the microservice
+6. Apply the database migration, using the following command:
+
+```bash
+flask db upgrade
+```
+
+7. Run the microservice
 
 ```bash
 python3.9 wsgi.py
@@ -118,23 +124,6 @@ python3.9 wsgi.py
 The microservice uses a **PostgreSQL** database to store account data. Make
 sure you have **PostgreSQL** running locally on port **5432** with a database
 named **account_db** and a user named **cba** with password **pa$$wOrd123!**.
-
-The database schema is defined in the **init.sql** file located in the
-**.infrastructure/postgres** directory.
-
-Note that the **PostgreSQL** database is used bitnami docker image. This image
-initializes the database using the **init.sql** file located in the
-**docker-entrypoint-initdb.d** directory.
-
-The following lines in the docker-compose file initialize the **init.sql**
-file:
-
-```
-environment:
-  - POSTGRESQL_INIT_FILE=/docker-entrypoint-initdb.d/init.sql  # Bitnami specific
-volumes:
-  - ./.infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-```
 
 ## Run on Docker
 
@@ -175,6 +164,12 @@ or
 docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml up --build -d
 ```
 
+2. Apply the database migration, using the following command:
+
+```bash
+flask db upgrade
+```
+
 You can access the microservice at http://127.0.0.1:5000.
 
 To stop the services, press **Ctrl+C** in the terminal where the services are
@@ -208,7 +203,13 @@ For more details on extending **Docker Compose** configuration, see:
 docker compose -f docker-compose.yml -f docker-compose.test.yml up
 ```
 
-2. To run the tests for the microservice, use the following command:
+2. Apply the database migration, using the following command:
+
+```bash
+flask db upgrade
+```
+
+3. To run the tests for the microservice, use the following command:
 
 ```bash
 nosetests -v --with-spec --spec-color
@@ -235,11 +236,11 @@ You can set the environment variables for the profile in the **.env** files.
 uptime).  
 /api/v1/accounts (POST): Creates a new account.  
 /api/v1/accounts (GET): Lists all accounts.  
-/api/v1/accounts/<int:account_id> (GET): Retrieves a specific account by ID.  
-/api/v1/accounts/<int:account_id> (PUT): Updates an existing account.  
-/api/v1/accounts/<int:account_id> (PATCH): Partially updates an existing
+/api/v1/accounts/<uuid:account_id> (GET): Retrieves a specific account by ID.  
+/api/v1/accounts/<uuid:account_id> (PUT): Updates an existing account.  
+/api/v1/accounts/<uuid:account_id> (PATCH): Partially updates an existing
 account.  
-/api/v1/accounts/<int:account_id> (DELETE): Deletes an account.
+/api/v1/accounts/<uuid:account_id> (DELETE): Deletes an account.
 
 ## API Versioning
 
@@ -519,3 +520,68 @@ account):
 | **user name** | **password** |
 |---------------|--------------|
 | admin         | admin        |
+
+## Database Migrations
+
+The microservice uses [Flask-Migrate](https://flask-migrate.readthedocs.io) for
+database migrations. The database
+migrations are stored in the `migrations` folder.
+
+To generate an initial migration, use the following command:
+
+```bash
+flask db migrate -m 'Initial migration.'
+```
+
+To apply the database migration, run the following command:
+
+```bash
+flask db upgrade
+```
+
+or
+
+```bash
+flask db upgrade head
+```
+
+**head** refers to the latest revision.
+
+To create a new database migration, use the following command:
+
+```bash
+flask db revision -m "<database migration version>_<database migration description>" 
+--autogenerate
+```
+
+Fore example:
+
+```bash
+flask db revision -m "20250224 - initial" --autogenerate
+```
+
+To apply the database migrations, use the following command:
+
+```bash
+flask db upgrade
+```
+
+To rollback the database migrations, run the following command2:
+
+```bash
+flask db downgrade
+flask db downgrade <number_of_steps>
+flask db migrate --version <revision_id>
+```
+
+### Database Migration Versioning
+
+The database migration versioning is based on the date of the migration. The
+date format is `YYYYMMDD`. The date is followed by a underscore and a short
+description of the migration.
+
+For example:
+
+```
+20250224_<short description of the migration>
+```

@@ -112,3 +112,7 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# Ignore Alembic migration cache
+alembic/__pycache__/
+alembic/versions/__pycache__/

@@ -5,6 +5,7 @@ This microservice handles the lifecycle of Accounts
 """
 import datetime
 from typing import Dict, Tuple, Any, List
+from uuid import UUID
 
 from flasgger import swag_from
 # pylint: disable=unused-import
@@ -262,16 +263,17 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
         {
             'in': 'path',
             'name': 'account_id',
-            'type': 'integer',
+            'type': 'string',
+            'format': 'uuid',
             'required': True,
             'description': 'ID of the account to retrieve',
-            'example': 1
+            'example': '51cb6dfd-c8fc-4ef0-b35c-8c76a216d274'
         }
     ]
 })
-@app.route(f"{ACCOUNTS_PATH_V1}/<int:account_id>", methods=['GET'])
+@app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['GET'])
 @count_requests
-def find_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
+def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     """Retrieve Account by ID"""
     app.logger.info("Request to read an Account with id: %s", account_id)
 
@@ -316,10 +318,11 @@ def find_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
         {
             'in': 'path',
             'name': 'account_id',
-            'type': 'integer',
+            'type': 'string',
+            'format': 'uuid',
             'required': True,
             'description': 'ID of the account to update',
-            'example': 1
+            'example': '51cb6dfd-c8fc-4ef0-b35c-8c76a216d274'
         }
     ],
     'requestBody': {
@@ -348,9 +351,9 @@ def find_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
         500: {'description': 'Internal Server Error'}
     }
 })
-@app.route(f"{ACCOUNTS_PATH_V1}/<int:account_id>", methods=['PUT'])
+@app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['PUT'])
 @count_requests
-def update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
+def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     """Update Account by ID"""
     app.logger.info("Request to update an Account with id: %s", account_id)
 
@@ -383,10 +386,11 @@ def update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
         {
             'in': 'path',
             'name': 'account_id',
-            'type': 'integer',
+            'type': 'string',
+            'format': 'uuid',
             'required': True,
             'description': 'ID of the account to update',
-            'example': 1
+            'example': '51cb6dfd-c8fc-4ef0-b35c-8c76a216d274'
         }
     ],
     'requestBody': {
@@ -415,9 +419,9 @@ def update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
         500: {'description': 'Internal Server Error'}
     }
 })
-@app.route(f"{ACCOUNTS_PATH_V1}/<int:account_id>", methods=['PATCH'])
+@app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['PATCH'])
 @count_requests
-def partial_update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
+def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     """Partial Update Account by ID"""
     app.logger.info(
         "Request to partially update an Account with id: %s",
@@ -461,10 +465,11 @@ def partial_update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
         {
             'in': 'path',
             'name': 'account_id',
-            'type': 'integer',
+            'type': 'string',
+            'format': 'uuid',
             'required': True,
             'description': 'ID of the account to delete',
-            'example': 1
+            'example': '51cb6dfd-c8fc-4ef0-b35c-8c76a216d274'
         }
     ],
     'responses': {
@@ -475,9 +480,9 @@ def partial_update_by_id(account_id: int) -> Tuple[Dict[str, Any], int]:
         500: {'description': 'Internal Server Error'}
     }
 })
-@app.route(f"{ACCOUNTS_PATH_V1}/<int:account_id>", methods=['DELETE'])
+@app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['DELETE'])
 @count_requests
-def delete_by_id(account_id: int) -> Tuple[str, int]:
+def delete_by_id(account_id: UUID) -> Tuple[str, int]:
     """Delete Account By ID"""
     app.logger.info("Request to delete an Account with id: %s", account_id)
 

@@ -158,7 +158,8 @@ swagger_config = {
                 'type': 'object',
                 'properties': {
                     'id': {
-                        'type': 'integer',
+                        'type': 'string',
+                        'format': 'uuid',
                         'description': 'The account ID'
                     },
                     'name': {

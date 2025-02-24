@@ -9,6 +9,7 @@ psycopg2-binary==2.9.3
 python-dotenv==0.20.0
 Flask-Talisman==1.1.0
 Flask-Cors==5.0.0
+Flask-Migrate==4.1.0
 flask_oidc
 requests
 keycloak
@@ -17,6 +18,7 @@ pydantic==2.10.6
 pydantic[email]==2.10.6
 prometheus_flask_exporter==0.23.1
 python-dateutil==2.9.0.post0
+alembic==1.14.1
 
 # Runtime dependencies
 gunicorn==20.1.0

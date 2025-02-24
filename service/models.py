@@ -9,8 +9,13 @@ from typing import Any, Dict, List, Optional
 
 from dateutil import parser
 from flask import Flask
+from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.sql.expression import text
+from sqlalchemy.sql.sqltypes import TIMESTAMP
 
 from service.common.constants import (
     NAME_MAX_LENGTH,
@@ -24,6 +29,10 @@ logger = logging.getLogger('account-service')
 
 # Create the SQLAlchemy object to be initialized later in init_db()
 db = SQLAlchemy()
+
+# Flask-Migrate exposes one class called Migrate.
+# This class contains all the functionality of the extension
+migrate = Migrate()
 
 
 class DataValidationError(Exception):
@@ -181,7 +190,9 @@ class PersistentBase:
         # This is where we initialize SQLAlchemy from the Flask app
         db.init_app(app)
         app.app_context().push()
-        db.create_all()  # make our sqlalchemy tables
+        # db.create_all()  # make our sqlalchemy tables (use only if NOT using migrations)
+        # initializes the extension with the standard Flask command-line interface
+        migrate.init_app(app, db)
         logger.info('Database initialized...')  # More concise message
 
     @classmethod
@@ -196,7 +207,7 @@ class PersistentBase:
         return cls.query.all()
 
     @classmethod
-    def find(cls, by_id: int) -> Optional['PersistentBase']:
+    def find(cls, by_id: UUID) -> Optional['PersistentBase']:
         """Finds and returns a record by its ID.
 
         Args:
@@ -216,14 +227,46 @@ class Account(db.Model, PersistentBase):
     """
     Class that represents a User Account.
     """
+    __tablename__ = 'accounts'  # Explicitly set the table name
 
     # Table Schema
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(NAME_MAX_LENGTH), nullable=False)
-    email = db.Column(db.String(EMAIL_MAX_LENGTH), nullable=False, unique=True)
-    address = db.Column(db.String(ADDRESS_MAX_LENGTH))
-    phone_number = db.Column(db.String(PHONE_MAX_LENGTH))
-    date_joined = db.Column(db.Date(), nullable=False, default=date.today())
+    id = db.Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        index=True,  # we are indexing for search optimization
+        nullable=False,
+        server_default=text('gen_random_uuid()')
+    )
+    created_at = db.Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now()  # pylint: disable=not-callable
+    )
+    updated_at = db.Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now()  # pylint: disable=not-callable
+    )
+    name = db.Column(
+        db.String(NAME_MAX_LENGTH),
+        nullable=False
+    )
+    email = db.Column(
+        db.String(EMAIL_MAX_LENGTH),
+        nullable=False,
+        unique=True
+    )
+    address = db.Column(
+        db.String(ADDRESS_MAX_LENGTH)
+    )
+    phone_number = db.Column(
+        db.String(PHONE_MAX_LENGTH)
+    )
+    date_joined = db.Column(
+        db.Date(),
+        nullable=False,
+        default=date.today()
+    )
 
     def __repr__(self) -> str:
         """Returns a string representation of the Account object.
