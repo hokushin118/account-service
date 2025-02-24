@@ -6,9 +6,15 @@ This module contains utility functions to REST API.
 import hashlib
 from functools import wraps
 from typing import Any, Union, Callable
+from typing import Tuple
 
 from flask import request, abort
 from prometheus_flask_exporter import Counter
+from sqlalchemy import (
+    Column,
+    TIMESTAMP,
+    func
+)
 
 from service import app
 from service.common import status
@@ -22,7 +28,7 @@ request_counter = Counter(
 )
 
 
-def count_requests(func: Callable[..., Any]) -> Callable[..., Any]:
+def count_requests(function: Callable[..., Any]) -> Callable[..., Any]:
     """A decorator to increment the HTTP request counter for a given endpoint.
 
     This decorator increments the 'http_requests_total' Prometheus counter
@@ -30,13 +36,13 @@ def count_requests(func: Callable[..., Any]) -> Callable[..., Any]:
     the original function's metadata (name, docstring, etc.) using @wraps.
 
     Args:
-        func: The function to be decorated (a Flask route function).
+        function: The function to be decorated (a Flask route function).
 
     Returns:
         The decorated function.
     """
 
-    @wraps(func)
+    @wraps(function)
     def decorated_function(*args: Any, **kwargs: Any) -> Any:
         """The decorated function that increments the counter and calls the original function.
 
@@ -52,7 +58,7 @@ def count_requests(func: Callable[..., Any]) -> Callable[..., Any]:
             The return value of the original function (`f`).
         """
         request_counter.labels(method=request.method, path=request.path).inc()
-        return func(*args, **kwargs)
+        return function(*args, **kwargs)
 
     return decorated_function
 
@@ -116,3 +122,33 @@ def generate_etag_hash(data: dict) -> str:
     """
     data_str = str(data).encode('utf-8')  # Encode to bytes before hashing
     return hashlib.md5(data_str).hexdigest()  # Hash the data
+
+
+def timestamps(
+        is_indexed: bool = False
+) -> Tuple[Column, Column]:
+    """Creating auditing fields for an entity.
+
+    Args:
+        is_indexed (bool): A flag indicating whether the field
+        should be indexed.
+
+    Returns:
+        A tuple of auditing fields for the entity.
+    """
+    return (
+        Column(
+            'created_at',
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),  # pylint: disable=not-callable
+            nullable=False,
+            index=is_indexed,
+        ),
+        Column(
+            'updated_at',
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),  # pylint: disable=not-callable
+            nullable=False,
+            index=is_indexed,
+        ),
+    )

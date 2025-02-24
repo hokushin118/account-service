@@ -2,6 +2,7 @@
 Test Factory to make fake objects for testing
 """
 from datetime import date
+from uuid import uuid4
 
 import factory
 from factory.fuzzy import FuzzyDate
@@ -17,7 +18,7 @@ class AccountFactory(factory.Factory):
         """Persistent class for factory."""
         model = Account
 
-    id = factory.Sequence(lambda n: n)
+    id = factory.LazyAttribute(lambda o: uuid4())
     name = factory.Faker('name')
     email = factory.Faker('email')
     address = factory.Faker('address')

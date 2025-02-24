@@ -22,7 +22,7 @@ class TestAccountDTO(TestCase):
     def test_valid_account_dto(self):
         """It should return valid AccountDTO."""
         data = {
-            'id': 1,
+            'id': '51cb6dfd-c8fc-4ef0-b35c-8c76a216d274',
             'name': 'John Doe',
             'email': 'john.doe@example.com',
             'address': '123 Main St',
