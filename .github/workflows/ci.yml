@@ -44,6 +44,7 @@ jobs:
 
       - name: Run Migrations
         run: |
+          cd migrations
           alembic upgrade head
 
       - name: Run unit tests with nose
