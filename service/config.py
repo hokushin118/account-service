@@ -4,7 +4,7 @@ Global Configuration for Application
 import logging
 import os
 
-logger = logging.getLogger('account-service')
+logger = logging.getLogger(__name__)
 
 
 def get_database_uri() -> str:

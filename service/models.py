@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional
 
 from dateutil import parser
 from flask import Flask
-from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import UUID
@@ -25,14 +24,10 @@ from service.common.constants import (
 )
 from service.common.utils import account_to_dict
 
-logger = logging.getLogger('account-service')
+logger = logging.getLogger(__name__)
 
 # Create the SQLAlchemy object to be initialized later in init_db()
 db = SQLAlchemy()
-
-# Flask-Migrate exposes one class called Migrate.
-# This class contains all the functionality of the extension
-migrate = Migrate()
 
 
 class DataValidationError(Exception):
@@ -191,8 +186,6 @@ class PersistentBase:
         db.init_app(app)
         app.app_context().push()
         # db.create_all()  # make our sqlalchemy tables (use only if NOT using migrations)
-        # initializes the extension with the standard Flask command-line interface
-        migrate.init_app(app, db)
         logger.info('Database initialized...')  # More concise message
 
     @classmethod

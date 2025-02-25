@@ -1,8 +1,8 @@
-"""20250224 - initial
+"""20250224 - Initial migration
 
-Revision ID: 8703e9e4b972
-Revises: e1b33b1cbf6b
-Create Date: 2025-02-24 13:17:02.968517
+Revision ID: 0747d1ee9835
+Revises: 
+Create Date: 2025-02-25 13:24:10.776596
 
 """
 from datetime import date
@@ -27,7 +27,7 @@ from service.common.constants import (
 from service.common.utils import timestamps
 
 # revision identifiers, used by Alembic.
-revision = '8703e9e4b972'
+revision = '0747d1ee9835'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -127,3 +127,4 @@ def downgrade() -> None:
     """
     op.drop_table('accounts')
     op.execute('DROP FUNCTION update_updated_at_column')
+

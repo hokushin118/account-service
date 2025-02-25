@@ -6,7 +6,7 @@ Test cases can be run with the following:
   coverage report -m
 """
 import logging
-import unittest
+from unittest import TestCase
 
 from service import app
 from service.models import Account, DataValidationError, db
@@ -17,7 +17,7 @@ from tests.factories import AccountFactory
 ######################################################################
 #  Account   M O D E L   T E S T   C A S E S
 ######################################################################
-class TestAccount(unittest.TestCase):
+class TestAccount(TestCase):
     """Test Cases for Account Model."""
 
     @classmethod

@@ -14,7 +14,7 @@ from flasgger import Swagger, LazyString, LazyJSONEncoder, MK_SANITIZER
 from flask_cors import CORS
 from flask_talisman import Talisman
 
-logger = logging.getLogger('account-service')
+logger = logging.getLogger(__name__)
 
 # Load the correct .env file based on APP_SETTINGS
 # export APP_SETTINGS=docker  # Or production, etc.
