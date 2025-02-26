@@ -392,7 +392,7 @@ tkn version
 oc create -f .infrastructure/openshift/cba-pipeline-pvc.yml
 ```
 
-5. Apply the Secret yaml if you are using a private repository.
+5. Apply the Secret yaml.
 
 ```bash
 oc apply -f .infrastructure/openshift/cba-pipeline-secret.yml
@@ -407,6 +407,7 @@ oc apply -f .infrastructure/openshift/tekton/tasks/run-flake8-lint.yml
 oc apply -f .infrastructure/openshift/tekton/tasks/run-nose-tests.yml 
 oc apply -f .infrastructure/openshift/tekton/tasks/run-trivy-scan.yml 
 oc apply -f .infrastructure/openshift/tekton/tasks/run-database-migration.yml 
+oc apply -f .infrastructure/openshift/tekton/tasks/run-revert-database-migration.yml 
 ```
 
 Apply the run-github-clone-w-token.yml if you are using a private repository.
@@ -439,14 +440,15 @@ are available in the **OpenShift** using the following command:
 oc get clustertask
 ```
 
-8. To create [Tekton](https://tekton.dev) pipeline on **OpenShift**, use the
-   following command:
+8. To create [Tekton](https://tekton.dev) pipelines on **OpenShift**, use
+   the following commands:
 
 ```bash
-oc apply -f .infrastructure/openshift/tekton/cba-pipeline.yml
+oc apply -f .infrastructure/openshift/tekton/pipelines/cba-pipeline.yml
+oc apply -f .infrastructure/openshift/tekton/pipelines/cba-db-migration-revert-pipeline.yml
 ```
 
-9. To start pipeline on **OpenShift**, use the following command:
+9. To start CI/CD pipeline on **OpenShift**, use the following command:
 
 ```bash
 tkn pipeline start cba-pipeline \
@@ -477,6 +479,39 @@ tkn pipeline start cba-pipeline \
             -p branch="main" \
             -p build-image=hokushin/account-service:latest \
             -p deploy-enabled=false \
+            -w name=cba-pipeline-workspace,claimName=cba-pipeline-pvc \
+            -s pipeline \
+            --showlog
+```
+
+10. To start the database migration revert pipeline on **OpenShift**, use the
+    following command:
+
+```bash
+tkn pipeline start cba-pipeline \
+            -p repo-url=<GITHUB_REPO_URL> \
+            -p branch=<BRANCH> \
+            -p revision=<REVISION> \
+            -w name=<WORKSPAVCE_NAME>,claimName=<PVC_CLAIM_NAME> \
+            -s pipeline \
+            --showlog
+```
+
+- **GITHUB_REPO_URL** - URL of the GitHub repository
+- **BRANCH** - name of the branch
+- **REVISION** - database migration revision id, for example: `1234abcd'
+- **WORKSPACE_NAME** - name of the workspace specified in the pipeline yaml
+  file, for example: `cba-pipeline-pvc`
+- **PVC_CLAIM_NAME** - name of the PVC claim created for pipeline, for
+  example: `cba-pipeline-pvc`
+
+For example:
+
+```bash
+tkn pipeline start cba-pipeline \
+            -p repo-url="https://github.com/hokushin118/account-service.git" \
+            -p branch="main" \
+            -p revision="1234abcd" \
             -w name=cba-pipeline-workspace,claimName=cba-pipeline-pvc \
             -s pipeline \
             --showlog
@@ -564,12 +599,21 @@ To apply the database migrations, use the following command:
 flask db-upgrade
 ```
 
-To rollback the database migrations, run the following command2:
+To get the database migration history, use the following commands:
+
+```bash
+flask db-history
+flask db-history -v
+flask db-history --verbose
+flask db-history --rev-range 1234abcd:5678efgh
+```
+
+To rollback the database migrations, run the following commands:
 
 ```bash
 flask db-downgrade
 flask db-downgrade <number_of_steps>
-flask db-migrate --version <revision_id>
+flask db-downgrade <revision_id>
 ```
 
 ### Database Migration Versioning

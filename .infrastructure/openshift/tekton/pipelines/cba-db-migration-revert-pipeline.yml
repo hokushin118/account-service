@@ -1,0 +1,64 @@
+# Database Migration Revert Pipeline
+apiVersion: tekton.dev/v1beta1 # Tekton API version
+kind: Pipeline
+metadata:
+  name: cba-pipeline # Name of the pipeline
+  labels:
+    app: cba-pipeline
+    environment: development
+    team: devops
+spec:
+  workspaces:
+    - name: cba-pipeline-workspace
+      description: The workspace shared between tasks.
+  params:
+    - name: repo-url
+      description: URL of the Git repository
+      type: string
+    - name: branch
+      description: Branch to clone
+      default: main # Default value fro branch
+      type: string
+    - name: revision
+      description: The specific revision to downgrade to.
+      type: string
+      default: "-1"
+  tasks:
+    - name: init
+      workspaces:
+        - name: source
+          workspace: cba-pipeline-workspace
+      taskRef:
+        name: run-cleanup-workspace
+        kind: Task # Custom task
+
+    - name: clone
+      workspaces:
+        - name: output
+          workspace: cba-pipeline-workspace
+      taskRef:
+        name: git-clone
+        kind: ClusterTask # Task from Tekton Hub
+      params:
+        - name: url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.branch)
+      runAfter:
+        - init
+
+    - name: revert-migration
+      workspaces:
+        - name: source
+          workspace: cba-pipeline-workspace
+      taskRef:
+        name: run-database-migration-revert
+        kind: Task # Custom task
+      params:
+        - name: database-uri
+          valueFrom:
+            secretKeyRef: # Using Secret
+              name: cba-database-secret
+              key: database_uri
+      runAfter:
+        - clone

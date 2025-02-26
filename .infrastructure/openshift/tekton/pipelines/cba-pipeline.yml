@@ -1,4 +1,5 @@
-# This pipeline needs the following tasks from Tekton Hub
+# CI/CD Pipeline
+# This pipeline needs the following tasks from Tekton Hub:
 #   - git-clone
 #   - buildah
 #   - openshift-client
