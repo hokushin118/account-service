@@ -67,6 +67,22 @@ spec:
       runAfter:
         - clone
 
+    - name: db-migrate
+      workspaces:
+        - name: source
+          workspace: cba-pipeline-workspace
+      taskRef:
+        name: run-database-migration
+        kind: Task # Custom task
+      params:
+        - name: database-uri
+          valueFrom:
+            secretKeyRef: # Using Secret
+              name: cba-database-secret
+              key: database_uri
+      runAfter:
+        - lint
+
     - name: tests
       workspaces:
         - name: source
@@ -76,11 +92,14 @@ spec:
         kind: Task # Custom task
       params:
         - name: database-uri
-          value: "sqlite:///test.db"
+          valueFrom:
+            secretKeyRef: # Using Secret
+              name: cba-database-secret
+              key: database_uri
         - name: args
           value: "-v --with-spec --spec-color"
       runAfter:
-        - clone
+        - db-migrate
 
     - name: build
       workspaces:
@@ -94,7 +113,6 @@ spec:
           value: "$(params.build-image)"
       runAfter:
         - tests
-        - lint
 
     - name: trivy-scan
       workspaces:
