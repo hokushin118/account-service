@@ -1,0 +1,59 @@
+# This task reverts database migrations using Flask-Migrate.
+apiVersion: tekton.dev/v1beta1 # Tekton API version
+kind: Task
+metadata:
+  name: run-database-migration-revert # Name of the task
+  labels:
+    app: cba-pipeline
+    environment: development
+    team: devops
+spec:
+  description: This task reverts database migrations using Flask-Migrate.
+  workspaces:
+    - name: source
+      description: The workspace containing the application source code.
+      mountPath: /workspace
+  params:
+    - name: docker-image
+      description: The Docker image to use for task.
+      type: string
+      default: "python:3.9-slim-bullseye:latest"
+    - name: database-uri
+      description: Database connection string.
+      type: string
+    - name: revision
+      description: The specific revision to downgrade to.
+      type: string
+      default: '-1'
+  steps:
+    - name: db-migration-revert
+      image: $(params.docker-image)
+      workingDir: $(workspaces.source.path)
+      env:
+        - name: DATABASE_URI
+          value: $(params.database-uri)
+      resources: # Resource requests and limits
+        requests:
+          cpu: "200m" # 200 millicores
+          memory: "128Mi" # 128 MB of memory
+        limits:
+          cpu: "1" # 1 CPU
+          memory: "512Mi" # 512 MB of memory
+      script: |
+        #!/bin/bash
+        set -euo pipefail # Ensure that a pipeline fails if any command in the pipeline fails
+
+        echo "Installing dependencies..." 
+        
+        python -m pip install --upgrade pip wheel
+        pip install --no-cache-dir -qr requirements.txt
+        
+        echo "Displaying migration history..."
+        
+        flask db-history -v
+        
+        echo "Reverting database migration..."
+
+        flask db-downgrade $(params.revision)
+
+        echo "Database migration revert completed."
