@@ -406,6 +406,7 @@ oc apply -f .infrastructure/openshift/tekton/tasks/run-cleanup-workspace.yml
 oc apply -f .infrastructure/openshift/tekton/tasks/run-flake8-lint.yml 
 oc apply -f .infrastructure/openshift/tekton/tasks/run-nose-tests.yml 
 oc apply -f .infrastructure/openshift/tekton/tasks/run-trivy-scan.yml 
+oc apply -f .infrastructure/openshift/tekton/tasks/run-database-migration.yml 
 ```
 
 Apply the run-github-clone-w-token.yml if you are using a private repository.
