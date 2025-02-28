@@ -8,7 +8,6 @@ Test cases can be run with the following:
 import logging
 from unittest import TestCase
 
-from service import talisman
 from service.common import status  # HTTP Status Codes
 from service.models import init_db, db, Account
 from service.routes import (
@@ -39,7 +38,6 @@ class TestAccountService(TestCase):  # pylint: disable=too-many-public-methods
         app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
         app.logger.setLevel(logging.CRITICAL)
         init_db(app)
-        talisman.force_https = False
 
     @classmethod
     def tearDownClass(cls):

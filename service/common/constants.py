@@ -8,3 +8,8 @@ NAME_MAX_LENGTH = 64
 EMAIL_MAX_LENGTH = 64
 PHONE_MAX_LENGTH = 32
 ADDRESS_MAX_LENGTH = 256
+# Authorization header
+AUTHORIZATION_HEADER = 'Authorization'
+# An authentication scheme name used to transmit security tokens,
+# most commonly JSON Web Tokens (JWTs)
+BEARER_HEADER = 'Bearer'
