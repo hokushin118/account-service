@@ -26,6 +26,9 @@ account, and deleting an account.
 
 - [Python 3.9](https://www.python.org/downloads/release/python-390/)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
+- [PyCharm](https://www.jetbrains.com/pycharm)
+  or [Visual Studio Code](https://code.visualstudio.com) - Optional for
+  development
 
 I've been
 using [Red Hat Enterprise Linux for Workstations](https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/workstations)

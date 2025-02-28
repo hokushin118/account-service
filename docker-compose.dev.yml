@@ -79,6 +79,12 @@ services:
       - KC_HEALTH_ENABLED=true # https://www.keycloak.org/server/health
     deploy:
       replicas: 1
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --spider http://keycloak:28080/auth/realms/master || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   account-service:
     extends:
