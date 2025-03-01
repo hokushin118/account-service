@@ -17,7 +17,7 @@ from service.common.utils import (
 
 
 ######################################################################
-#  U T I L S   T E S T   C A S E S
+#  UTILS TEST CASES
 ######################################################################
 class TestUtils(TestCase):
     """The Decorated Function Tests."""
