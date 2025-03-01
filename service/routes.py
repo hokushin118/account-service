@@ -208,7 +208,7 @@ def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
 @jwt_required()
 @count_requests
 def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
-    """Lists all Accounts"""
+    """Lists all Accounts."""
     app.logger.info('Request to list Accounts')
 
     current_user = get_jwt_identity()
@@ -260,6 +260,8 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
               },
         # For DataValidationError/IntegrityError
         400: {'description': 'Bad Request'},
+        # For unauthorized requests
+        401: {'description': 'Unauthorized'},
         # Account not found
         404: {'description': 'Not Found'},
         415: {'description': 'Unsupported Media Type'},
@@ -279,10 +281,14 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
     ]
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['GET'])
+@jwt_required()
 @count_requests
 def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
-    """Retrieve Account by ID"""
+    """Retrieve Account by ID."""
     app.logger.info("Request to read an Account with id: %s", account_id)
+
+    current_user = get_jwt_identity()
+    app.logger.debug('Current user: %s', current_user)
 
     account = Account.find(account_id)
 

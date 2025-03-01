@@ -38,6 +38,7 @@ HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
 JWT_ALGORITHM = 'RS256'
 PRIVATE_KEY_PATH = './tests/keys/private.pem'
 PUBLIC_KEY_PATH = './tests/keys/public.pem'
+INVALID_ETAG = 'invalid-etag'
 
 
 ######################################################################
@@ -55,6 +56,10 @@ class TestAccountRoute(TestCase):
         db.session.commit()
 
         self.client = app.test_client()
+
+        # Generating a private/public key pair
+        # openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:2048
+        # openssl rsa -pubout -in private.pem -out public.pem
 
         # Load private key
         with open(PRIVATE_KEY_PATH, 'rb') as f:
@@ -298,7 +303,7 @@ class TestAccountRoute(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        headers[IF_NONE_MATCH_HEADER] = 'invalid-etag'
+        headers[IF_NONE_MATCH_HEADER] = INVALID_ETAG
 
         # Make a second request with If-None-Match header
         response = self.client.get(
@@ -326,57 +331,88 @@ class TestAccountRoute(TestCase):
     ######################################################################
     #  READ AN ACCOUNTS TEST CASES
     ######################################################################
-    def test_find_by_id_success(self):
-        """It should read a single Account."""
+    @patch('requests.get')
+    def test_find_by_id_success(self, mock_get):
+        """It should return a single account with a valid JWT."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
         account = self._create_accounts(1)[0]
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
 
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
-            content_type='application/json'
+            content_type='application/json',
+            headers=headers
         )
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.get_json()
         self.assertEqual(data['name'], account.name)
 
-    def test_find_by_id_etag_match(self):
-        """It should return 304 if ETag matches If-None-Match."""
+    def test_find_by_id_unauthorized(self):
+        """It should return 401 if no JWT is provided."""
         account = self._create_accounts(1)[0]
 
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             content_type='application/json'
         )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch('requests.get')
+    def test_find_by_id_etag_match(self, mock_get):
+        """It should return 304 if ETag matches If-None-Match."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        account = self._create_accounts(1)[0]
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+        response = self.client.get(
+            f"{ACCOUNTS_PATH_V1}/{account.id}",
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
         etag = response.headers.get('ETag').replace('"', '')  # Extract ETag
+        headers[IF_NONE_MATCH_HEADER] = etag
 
         # Make a second request with If-None-Match header
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             content_type='application/json',
-            headers={IF_NONE_MATCH_HEADER: etag}
+            headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_304_NOT_MODIFIED)
         self.assertEqual(response.data, b'')  # Check for empty body
 
-    def test_find_by_id_etag_mismatch(self):
+    @patch('requests.get')
+    def test_find_by_id_etag_mismatch(self, mock_get):
         """It should return 200 if ETag does not match If-None-Match."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
         account = self._create_accounts(1)[0]
 
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
-            content_type='application/json'
+            content_type='application/json',
+            headers=headers
         )
-        _ = response.headers.get('ETag').replace('"', '')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        headers[IF_NONE_MATCH_HEADER] = INVALID_ETAG
 
         # Make a second request with a different If-None-Match header
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             content_type='application/json',
-            headers={IF_NONE_MATCH_HEADER: 'some-other-etag'}  # Different ETag
+            headers=headers
         )
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_200_OK
-        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_find_by_id_not_found(self):
         """It should not read an Account that is not found."""
