@@ -14,7 +14,7 @@ from tests.factories import AccountFactory
 
 
 ######################################################################
-#  Account   S C H E M A   T E S T   C A S E S
+#  ACCOUNT SCHEMA TEST CASES
 ######################################################################
 class TestAccountDTO(TestCase):
     """Account Schema Tests."""

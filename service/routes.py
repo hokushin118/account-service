@@ -10,6 +10,7 @@ from uuid import UUID
 from flasgger import swag_from
 # pylint: disable=unused-import
 from flask import jsonify, request, make_response, abort, url_for  # noqa; F401
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from service import app, VERSION, NAME
 from service.common import status
@@ -197,15 +198,21 @@ def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
               },
         # For DataValidationError/IntegrityError
         400: {'description': 'Bad Request'},
+        # For unauthorized requests
+        401: {'description': 'Unauthorized'},
         # For any other internal errors
         500: {'description': 'Internal Server Error'}
     }
 })
 @app.route(ACCOUNTS_PATH_V1, methods=['GET'])
+@jwt_required()
 @count_requests
 def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
     """Lists all Accounts"""
     app.logger.info('Request to list Accounts')
+
+    current_user = get_jwt_identity()
+    app.logger.debug('Current user: %s', current_user)
 
     accounts = Account.all()
     account_list = [

@@ -27,15 +27,20 @@ from service.common.keycloak_utils import (
     get_keycloak_certificate,
     get_keycloak_certificate_with_retry
 )
+from tests.test_constants import (
+    TEST_USER,
+    TEST_ROLE,
+    TEST_OTHER_ROLE
+)
 
 TEST_CERTIFICATE = 'test_certificate'
 TEST_PATH = '/test'
 TEST_NO_JWT_PATH = '/test_no_jwt'
-TEST_ROLE = 'ROLE_TEST'
-TEST_OTHER_ROLE = 'ROLE_OTHER'
-TEST_USER = 'test_user'
 
 
+######################################################################
+#  KEYCLOAK UTILS TEST CASES
+######################################################################
 class TestGetKeycloakCertificate(TestCase):
     """Tests for the get_keycloak_certificate function."""
 

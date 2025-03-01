@@ -15,6 +15,9 @@ from service import app
 from service.common.cli_commands import db_create, db_init
 
 
+######################################################################
+#  ACCOUNT CLI TEST CASES
+######################################################################
 class TestFlaskCLI(TestCase):
     """Test Flask CLI Commands."""
 
