@@ -14,17 +14,58 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from service import app, VERSION, NAME
 from service.common import status
-from service.common.utils import check_content_type, generate_etag_hash, \
+from service.common.constants import ROLE_USER
+from service.common.keycloak_utils import has_role
+from service.common.utils import (
+    check_content_type,
+    generate_etag_hash,
     count_requests
+)
 from service.models import Account
 from service.schemas import AccountDTO
 
+FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE = 'You are not authorized to update this resource.'
+ACCOUNT_NOT_FOUND_MESSAGE = "Account with id [{account_id}] could not be found."
 IF_NONE_MATCH_HEADER = 'If-None-Match'
-
 ROOT_PATH = '/api'
 HEALTH_PATH = f"{ROOT_PATH}/health"
 INFO_PATH = f"{ROOT_PATH}/info"
 ACCOUNTS_PATH_V1 = f"{ROOT_PATH}/v1/accounts"
+
+
+######################################################################
+# HELPER METHODS
+######################################################################
+def get_account_or_404(account_id: UUID) -> Account:
+    """Helper function to find an account or return a 404 error.
+
+        Args:
+            account_id: The UUID of the account to check.
+
+        Returns:
+            Found user profile.
+    """
+    account = Account.find(account_id)
+    if not account:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            ACCOUNT_NOT_FOUND_MESSAGE.format(account_id=account_id)
+        )
+    return account
+
+
+def check_if_user_is_owner(user: str, account_id: UUID) -> bool:
+    """Checks if the logged-in user is the owner of the specified account.
+
+    Args:
+        user: The username of the logged-in user.
+        account_id: The UUID of the account to check.
+
+    Returns:
+        True if the user is the owner, False otherwise.
+    """
+    users = Account.find_by_name(user)
+    return bool(users and str(users[0].id) == str(account_id))
 
 
 ######################################################################
@@ -185,7 +226,8 @@ def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
     'tags': ['Accounts V1'],
     'summary': 'Lists all Accounts',
     'description': 'Retrieves a list of all Account objects from the '
-                   'database and returns them as a JSON array.',
+                   'database and returns them as a JSON array.</br></br>'
+                   'Only authenticated users can access this endpoint.',
     'security': [{"bearerAuth": []}],
     'responses': {
         200: {'description': 'OK',
@@ -211,6 +253,7 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
     """Lists all Accounts."""
     app.logger.info('Request to list Accounts')
 
+    # Get the user identity from the JWT token
     current_user = get_jwt_identity()
     app.logger.debug('Current user: %s', current_user)
 
@@ -248,7 +291,8 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
     'operationId': 'getAccountByIdV1',
     'tags': ['Accounts V1'],
     'summary': 'Retrieve Account by ID',
-    'description': 'Retrieves an account based on its unique identifier.',
+    'description': 'Retrieves an account based on its unique identifier.</br></br>'
+                   'Only authenticated users can access this endpoint.',
     'security': [{"bearerAuth": []}],
     'responses': {
         200: {'description': 'OK',
@@ -287,16 +331,11 @@ def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     """Retrieve Account by ID."""
     app.logger.info("Request to read an Account with id: %s", account_id)
 
+    # Get the user identity from the JWT token
     current_user = get_jwt_identity()
     app.logger.debug('Current user: %s', current_user)
 
-    account = Account.find(account_id)
-
-    if not account:
-        abort(
-            status.HTTP_404_NOT_FOUND,
-            f"Account with id [{account_id}] could not be found."
-        )
+    account = get_account_or_404(account_id)
 
     # Convert SQLAlchemy model to DTO
     account_dto = AccountDTO.from_orm(account)
@@ -325,7 +364,8 @@ def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     'operationId': 'updateAccountByIdV1',
     'tags': ['Accounts V1'],
     'summary': 'Update Account by ID',
-    'description': 'Updates an existing account with the provided JSON data.',
+    'description': 'Updates an existing account with the provided JSON data.</br></br>'
+                   'Only authenticated users can access this endpoint.',
     'security': [{"bearerAuth": []}],
     'parameters': [
         {
@@ -356,6 +396,9 @@ def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
               },
         # For DataValidationError/IntegrityError
         400: {'description': 'Bad Request'},
+        # For unauthorized requests
+        401: {'description': 'Unauthorized'},
+        403: {'description': 'Forbidden'},
         # 404 Not Found
         404: {'description': 'Not Found'},
         # For UnsupportedMediaType
@@ -365,19 +408,24 @@ def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     }
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['PUT'])
+@has_role(ROLE_USER)
 @count_requests
 def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
-    """Update Account by ID"""
+    """Update Account by ID."""
     app.logger.info("Request to update an Account with id: %s", account_id)
 
-    account = Account.find(account_id)
+    # Get the user identity from the JWT token
+    current_user = get_jwt_identity()
+    app.logger.debug('Current user: %s', current_user)
 
-    if not account:
+    # Check if the logged-in user is the owner of the resource
+    if not check_if_user_is_owner(current_user, account_id):
         abort(
-            status.HTTP_404_NOT_FOUND,
-            f"Account with id [{account_id}] could not be found."
+            status.HTTP_403_FORBIDDEN,
+            FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
         )
 
+    account = get_account_or_404(account_id)
     account.deserialize(request.get_json())
     account.update()
 
@@ -441,13 +489,7 @@ def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
         account_id
     )
 
-    account = Account.find(account_id)
-
-    if not account:
-        abort(
-            status.HTTP_404_NOT_FOUND,
-            f"Account with id [{account_id}] could not be found."
-        )
+    account = get_account_or_404(account_id)
 
     data = request.get_json()
 
@@ -500,6 +542,7 @@ def delete_by_id(account_id: UUID) -> Tuple[str, int]:
     app.logger.info("Request to delete an Account with id: %s", account_id)
 
     account = Account.find(account_id)
+
     if account:
         account.delete()
 

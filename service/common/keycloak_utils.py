@@ -155,18 +155,7 @@ def has_role(required_role: str):
 
         @jwt_required()
         def decorated_function(*args, **kwargs) -> Any:
-            """
-            Decorated function that retrieves JWT claims and checks roles.
-
-            Args:
-                *args: Positional arguments passed to the wrapped function.
-                **kwargs: Keyword arguments passed to the wrapped function.
-
-            Returns:
-                Any: The result of the wrapped function if the user has the
-                     required role, or a JSON response with a 403 Forbidden
-                     status if not.
-            """
+            """"""
             claims = get_jwt()
             roles = claims.get(RESOURCE_ACCESS, {}).get(
                 KEYCLOAK_CLIENT_ID,
