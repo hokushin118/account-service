@@ -18,6 +18,7 @@ from jose import jwt
 
 from service import AUTHORIZATION_HEADER, BEARER_HEADER
 from service.common import status  # HTTP Status Codes
+from service.common.constants import ROLE_USER
 from service.common.keycloak_utils import KEYS, REALM_ACCESS_CLAIM, ROLES_CLAIM
 from service.models import db, Account
 from service.routes import (
@@ -44,7 +45,7 @@ INVALID_ETAG = 'invalid-etag'
 ######################################################################
 #  ROUTE TEST CASES
 ######################################################################
-class TestAccountRoute(TestCase):
+class TestAccountRoute(TestCase): # pylint:disable=R0904
     """Account Route Tests."""
 
     def setUp(self):
@@ -62,9 +63,9 @@ class TestAccountRoute(TestCase):
         # openssl rsa -pubout -in private.pem -out public.pem
 
         # Load private key
-        with open(PRIVATE_KEY_PATH, 'rb') as f:
+        with open(PRIVATE_KEY_PATH, 'rb') as private_key_file:
             private_key_object = serialization.load_pem_private_key(
-                f.read(),
+                private_key_file.read(),
                 password=None
             )
             self.private_key = private_key_object.private_bytes(
@@ -74,8 +75,10 @@ class TestAccountRoute(TestCase):
             )
 
         # Load public key
-        with open(PUBLIC_KEY_PATH, 'rb') as f:
-            self.public_key = serialization.load_pem_public_key(f.read())
+        with open(PUBLIC_KEY_PATH, 'rb') as public_key_file:
+            self.public_key = serialization.load_pem_public_key(
+                public_key_file.read()
+            )
 
         # Mock Keycloak public key retrieval
         self.mock_certs = {
@@ -101,9 +104,10 @@ class TestAccountRoute(TestCase):
             headers={'kid': 'test-kid'}
         )
 
-        app.config['JWT_PUBLIC_KEY'] = serialization.load_pem_public_key(
-            open(PUBLIC_KEY_PATH, 'rb').read()
-        )
+        with open(PUBLIC_KEY_PATH, 'rb') as public_key_file:
+            app.config['JWT_PUBLIC_KEY'] = serialization.load_pem_public_key(
+                public_key_file.read()
+            )
 
         app.config['JWT_ALGORITHM'] = JWT_ALGORITHM
         app.config['JWT_TOKEN_LOCATION'] = ['headers']
@@ -425,16 +429,37 @@ class TestAccountRoute(TestCase):
     ######################################################################
     #  UPDATE AN EXISTING ACCOUNT TEST CASES
     ######################################################################
-    def test_update_by_id_success(self):
+    @patch('requests.get')
+    def test_update_by_id_success(self, mock_get):
         """It should update an existing Account."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
         # create an Account to update
         test_account = AccountFactory()
 
         test_account_dto = AccountDTO.from_orm(test_account)
 
+        # Generate test JWT using RS256 with right account id and role
+        test_jwt = jwt.encode(
+            {
+                'sub': test_account.name,
+                REALM_ACCESS_CLAIM: {
+                    ROLES_CLAIM: [ROLE_USER]
+                }
+            },
+            self.private_key,
+            algorithm=JWT_ALGORITHM,
+            headers={'kid': 'test-kid'}
+        )
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
+
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict()
+            json=test_account_dto.dict(),
+            content_type='application/json',
+            headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -444,11 +469,89 @@ class TestAccountRoute(TestCase):
         response = self.client.put(
             f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
             content_type='application/json',
-            json=new_account
+            json=new_account,
+            headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         updated_account = response.get_json()
         self.assertEqual(updated_account['name'], 'Something Known')
+
+    @patch('requests.get')
+    def test_update_by_id_wrong_role(self, mock_get):
+        """It should not update an existing Account with a JWT belonging to a different role."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to update
+        test_account = AccountFactory()
+
+        test_account_dto = AccountDTO.from_orm(test_account)
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # update the account
+        new_account = response.get_json()
+        new_account['name'] = 'Something Known'
+        response = self.client.put(
+            f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
+            content_type='application/json',
+            json=new_account,
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch('requests.get')
+    def test_update_by_id_wrong_account_id(self, mock_get):
+        """It should not update an existing Account with a JWT belonging to a different user."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to update
+        test_account = AccountFactory()
+
+        test_account_dto = AccountDTO.from_orm(test_account)
+
+        # Generate test JWT using RS256 (different account name)
+        test_jwt = jwt.encode(
+            {
+                'sub': TEST_USER,
+                REALM_ACCESS_CLAIM: {
+                    ROLES_CLAIM: [ROLE_USER]
+                }
+            },
+            self.private_key,
+            algorithm=JWT_ALGORITHM,
+            headers={'kid': 'test-kid'}
+        )
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
+
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # update the account
+        new_account = response.get_json()
+        new_account['name'] = 'Something Known'
+        response = self.client.put(
+            f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
+            content_type='application/json',
+            json=new_account,
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_update_by_id_not_found(self):
         """It should not update an Account that is not found."""
