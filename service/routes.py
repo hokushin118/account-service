@@ -441,7 +441,8 @@ def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     'operationId': 'partialUpdateAccountByIdV1',
     'tags': ['Accounts V1'],
     'summary': 'Partial Update Account by ID',
-    'description': 'Partially updates an existing account with the provided JSON data.',
+    'description': 'Partially updates an existing account with the provided JSON data.</br></br>'
+                   'Only authenticated users can access this endpoint.',
     'security': [{"bearerAuth": []}],
     'parameters': [
         {
@@ -472,6 +473,9 @@ def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
               },
         # For DataValidationError/IntegrityError
         400: {'description': 'Bad Request'},
+        # For unauthorized requests
+        401: {'description': 'Unauthorized'},
+        403: {'description': 'Forbidden'},
         # 404 Not Found
         404: {'description': 'Not Found'},
         # For UnsupportedMediaType
@@ -481,16 +485,27 @@ def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     }
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['PATCH'])
+@has_role(ROLE_USER)
 @count_requests
 def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
-    """Partial Update Account by ID"""
+    """Partial Update Account by ID."""
     app.logger.info(
         "Request to partially update an Account with id: %s",
         account_id
     )
 
-    account = get_account_or_404(account_id)
+    # Get the user identity from the JWT token
+    current_user = get_jwt_identity()
+    app.logger.debug('Current user: %s', current_user)
 
+    # Check if the logged-in user is the owner of the resource
+    if not check_if_user_is_owner(current_user, account_id):
+        abort(
+            status.HTTP_403_FORBIDDEN,
+            FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
+        )
+
+    account = get_account_or_404(account_id)
     data = request.get_json()
 
     if not data:

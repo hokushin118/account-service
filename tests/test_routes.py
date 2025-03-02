@@ -45,7 +45,7 @@ INVALID_ETAG = 'invalid-etag'
 ######################################################################
 #  ROUTE TEST CASES
 ######################################################################
-class TestAccountRoute(TestCase): # pylint:disable=R0904
+class TestAccountRoute(TestCase):  # pylint:disable=R0904
     """Account Route Tests."""
 
     def setUp(self):
@@ -564,13 +564,35 @@ class TestAccountRoute(TestCase): # pylint:disable=R0904
     ######################################################################
     #  PARTIALLY UPDATE AN EXISTING ACCOUNT TEST CASES
     ######################################################################
-    def test_partial_update_by_id_success(self):
+    @patch('requests.get')
+    def test_partial_update_by_id_success(self, mock_get):
         """It should partially update an existing Account."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
         # create an Account to update
         test_account = AccountFactory()
+
+        # Generate test JWT using RS256 with right account id and role
+        test_jwt = jwt.encode(
+            {
+                'sub': test_account.name,
+                REALM_ACCESS_CLAIM: {
+                    ROLES_CLAIM: [ROLE_USER]
+                }
+            },
+            self.private_key,
+            algorithm=JWT_ALGORITHM,
+            headers={'kid': 'test-kid'}
+        )
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
+
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account.to_dict()
+            json=test_account.to_dict(),
+            content_type='application/json',
+            headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -584,15 +606,101 @@ class TestAccountRoute(TestCase): # pylint:disable=R0904
         response = self.client.patch(
             f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
             content_type='application/json',
-            json=update_data
+            json=update_data,
+            headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         updated_account = response.get_json()
         self.assertEqual(updated_account['name'], 'Test Account')
         self.assertEqual(updated_account['email'], 'test@example.com')
 
+    @patch('requests.get')
+    def test_partial_update_by_id_wrong_role(self, mock_get):
+        """It should not partially update an existing Account with a JWT
+        belonging to a different role.
+        """
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to update
+        test_account = AccountFactory()
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account.to_dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # partially update the account
+        new_account = response.get_json()
+        updated_account_id = new_account['id']
+        update_data = {
+            'name': 'Test Account',
+            'email': 'test@example.com'
+        }
+        response = self.client.patch(
+            f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
+            content_type='application/json',
+            json=update_data,
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch('requests.get')
+    def test_partial_update_by_id_wrong_account_id(self, mock_get):
+        """It should not partially update an existing Account with a JWT
+        belonging to a different user.
+        """
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to update
+        test_account = AccountFactory()
+
+        # Generate test JWT using RS256 (different account name)
+        test_jwt = jwt.encode(
+            {
+                'sub': TEST_USER,
+                REALM_ACCESS_CLAIM: {
+                    ROLES_CLAIM: [ROLE_USER]
+                }
+            },
+            self.private_key,
+            algorithm=JWT_ALGORITHM,
+            headers={'kid': 'test-kid'}
+        )
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
+
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account.to_dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # partially update the account
+        new_account = response.get_json()
+        updated_account_id = new_account['id']
+        update_data = {
+            'name': 'Test Account',
+            'email': 'test@example.com'
+        }
+        response = self.client.patch(
+            f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
+            content_type='application/json',
+            json=update_data,
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_partial_update_by_id_not_found(self):
-        """It should not Read an Account that is not found."""
+        """It should not partially update an Account that is not found."""
         response = self.client.patch(
             f"{ACCOUNTS_PATH_V1}/0",
             content_type='application/json'
