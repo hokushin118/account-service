@@ -13,9 +13,10 @@ from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager, create_access_token
 
 from service.common import status
-from service.common.constants import AUTHORIZATION_HEADER, BEARER_HEADER
+from service.common.constants import AUTHORIZATION_HEADER, BEARER_HEADER, \
+    ROLE_USER, ROLE_ADMIN
 from service.common.keycloak_utils import (
-    has_role,
+    has_roles,
     KEYCLOAK_CLIENT_ID,
     REALM_ACCESS_CLAIM,
     ROLES_CLAIM,
@@ -25,7 +26,7 @@ from service.common.keycloak_utils import (
     X5C_KID,
     JWT_KID,
     get_keycloak_certificate,
-    get_keycloak_certificate_with_retry
+    get_keycloak_certificate_with_retry, has_roles_and
 )
 from tests.test_constants import (
     TEST_USER,
@@ -36,6 +37,7 @@ from tests.test_constants import (
 TEST_CERTIFICATE = 'test_certificate'
 TEST_PATH = '/test'
 TEST_NO_JWT_PATH = '/test_no_jwt'
+JWT_SECRET_KEY = 'H0fnsBnCc7Ts22rxhvLcy66s1yvzSRgG'
 
 
 ######################################################################
@@ -204,27 +206,27 @@ class TestGetKeycloakCertificateWithRetry(TestCase):
         mock_sleep.assert_not_called()
 
 
-class TestHasRoleDecorator(TestCase):
-    """Tests for the has_role function."""
+class TestHasRolesDecorator(TestCase):
+    """Tests for the has_roles function."""
 
     def setUp(self):
         """This runs before each test."""
         self.app = Flask(__name__)
-        self.app.config['JWT_SECRET_KEY'] = 'H0fnsBnCc7Ts22rxhvLcy66s1yvzSRgG'
+        self.app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
         self.jwt = JWTManager(self.app)
         self.client = self.app.test_client()
 
         @self.app.route(TEST_PATH)
-        @has_role(TEST_ROLE)
+        @has_roles([TEST_ROLE, ROLE_USER])
         def test_route():
-            """Test route with has_role decorator."""
-            return jsonify({'message': 'success'})
+            """Test route with has_roles decorator."""
+            return jsonify({'message': 'success'}), status.HTTP_200_OK
 
         @self.app.route(TEST_NO_JWT_PATH)
-        @has_role(TEST_ROLE)
+        @has_roles([TEST_ROLE])
         def test_route_no_jwt():
             """Test route without JWT token."""
-            return jsonify({'message': 'success'})
+            return jsonify({'message': 'success'}), status.HTTP_200_OK
 
     def test_has_required_role(self):
         """It should return 200 OK when user has the required role."""
@@ -357,6 +359,172 @@ class TestHasRoleDecorator(TestCase):
                 additional_claims={
                     REALM_ACCESS_CLAIM: {
                         ROLES_CLAIM: [TEST_ROLE]
+                    }
+                }
+            )
+            headers = {AUTHORIZATION_HEADER: f'{BEARER_HEADER} {access_token}'}
+            response = self.client.get(TEST_PATH, headers=headers)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(response.json, {'message': 'success'})
+
+
+class TestHasRolesAndDecorator(TestCase):
+    """Tests for the has_roles_and function."""
+
+    def setUp(self):
+        """This runs before each test."""
+        self.app = Flask(__name__)
+        self.app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
+        self.jwt = JWTManager(self.app)
+        self.client = self.app.test_client()
+
+        @self.app.route(TEST_PATH, methods=['GET'])
+        @has_roles_and([ROLE_USER, ROLE_ADMIN])
+        def test_route():
+            """Test route with has_roles decorator."""
+            return jsonify({'message': 'success'}), status.HTTP_200_OK
+
+        @self.app.route(TEST_NO_JWT_PATH, methods=['GET'])
+        @has_roles_and([ROLE_USER, ROLE_ADMIN])
+        def test_route_no_jwt():
+            """Test route without JWT token."""
+            return jsonify({'message': 'success'}), status.HTTP_200_OK
+
+    def test_has_required_role(self):
+        """It should return 200 OK when user has the required role."""
+        with self.app.test_request_context():
+            access_token = create_access_token(
+                identity=TEST_USER,
+                additional_claims={
+                    RESOURCE_ACCESS: {
+                        KEYCLOAK_CLIENT_ID: {
+                            ROLES_CLAIM: [
+                                ROLE_USER,
+                                ROLE_ADMIN
+                            ]
+                        }
+                    }
+                }
+            )
+
+            headers = {AUTHORIZATION_HEADER: f'{BEARER_HEADER} {access_token}'}
+            response = self.client.get(TEST_PATH, headers=headers)
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_200_OK
+            )
+            self.assertEqual(response.json, {'message': 'success'})
+
+    def test_missing_required_role(self):
+        """It should return 403 Forbidden when user does not have the both required roles."""
+        with self.app.test_request_context():
+            access_token = create_access_token(
+                identity=TEST_USER,
+                additional_claims={
+                    RESOURCE_ACCESS: {
+                        KEYCLOAK_CLIENT_ID: {
+                            ROLES_CLAIM: [
+                                ROLE_USER
+                            ]
+                        }
+                    }
+                }
+            )
+
+            headers = {AUTHORIZATION_HEADER: f'{BEARER_HEADER} {access_token}'}
+            response = self.client.get(TEST_PATH, headers=headers)
+            self.assertEqual(response.status_code,
+                             status.HTTP_403_FORBIDDEN)
+            self.assertEqual(
+                response.json,
+                {'message': INSUFFICIENT_PERMISSIONS_ERROR_MESSAGE}
+            )
+
+    def test_missing_resource_access(self):
+        """It should return 403 Forbidden when resource_access claim is missing."""
+        with self.app.test_request_context():
+            access_token = create_access_token(
+                identity=TEST_USER,
+                additional_claims={}
+            )
+
+            headers = {AUTHORIZATION_HEADER: f'{BEARER_HEADER} {access_token}'}
+            response = self.client.get(TEST_PATH, headers=headers)
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_403_FORBIDDEN
+            )
+            self.assertEqual(
+                response.json,
+                {'message': INSUFFICIENT_PERMISSIONS_ERROR_MESSAGE}
+            )
+
+    def test_missing_client_id(self):
+        """It should return 403 Forbidden when client ID is missing in resource_access."""
+        with self.app.test_request_context():
+            access_token = create_access_token(
+                identity=TEST_USER,
+                additional_claims={
+                    RESOURCE_ACCESS: {
+                        'other_client_id': {
+                            ROLES_CLAIM: [
+                                TEST_ROLE]
+                        }
+                    }
+                }
+            )
+
+            headers = {AUTHORIZATION_HEADER: f'{BEARER_HEADER} {access_token}'}
+            response = self.client.get(TEST_PATH, headers=headers)
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_403_FORBIDDEN
+            )
+            self.assertEqual(
+                response.json,
+                {'message': INSUFFICIENT_PERMISSIONS_ERROR_MESSAGE}
+            )
+
+    def test_missing_roles_claim(self):
+        """It should return 403 Forbidden when roles claim is missing in resource_access."""
+        with self.app.test_request_context():
+            access_token = create_access_token(
+                identity=TEST_USER,
+                additional_claims={
+                    RESOURCE_ACCESS: {
+                        KEYCLOAK_CLIENT_ID: {}
+                    }
+                }
+            )
+
+            headers = {AUTHORIZATION_HEADER: f'{BEARER_HEADER} {access_token}'}
+            response = self.client.get(TEST_PATH, headers=headers)
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_403_FORBIDDEN
+            )
+            self.assertEqual(
+                response.json,
+                {'message': INSUFFICIENT_PERMISSIONS_ERROR_MESSAGE}
+            )
+
+    def test_no_jwt_token(self):
+        """It should return 401 Unauthorized when no JWT token is provided."""
+        response = self.client.get(TEST_NO_JWT_PATH)
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED
+        )
+
+    def test_realm_access_fallback(self):
+        """It should return 200 OK when user has the required roles in
+        realm_access."""
+        with self.app.test_request_context():
+            access_token = create_access_token(
+                identity=TEST_USER,
+                additional_claims={
+                    REALM_ACCESS_CLAIM: {
+                        ROLES_CLAIM: [ROLE_USER, ROLE_ADMIN]
                     }
                 }
             )
