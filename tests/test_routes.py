@@ -440,6 +440,13 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
 
         test_account_dto = AccountDTO.from_orm(test_account)
 
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
         # Generate test JWT using RS256 with right account id and role
         test_jwt = jwt.encode(
             {
@@ -455,14 +462,6 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
 
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
 
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
         # update the account
         new_account = response.get_json()
         new_account['name'] = 'Something Known'
@@ -477,6 +476,36 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(updated_account['name'], 'Something Known')
 
     @patch('requests.get')
+    def test_update_by_id_unauthorized(self, mock_get):
+        """It should return 401 if no JWT is provided."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to update
+        test_account = AccountFactory()
+
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account.to_dict(),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # partially update the account
+        new_account = response.get_json()
+        updated_account_id = new_account['id']
+        update_data = {
+            'name': 'Test Account',
+            'email': 'test@example.com'
+        }
+        response = self.client.put(
+            f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
+            content_type='application/json',
+            json=update_data
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch('requests.get')
     def test_update_by_id_wrong_role(self, mock_get):
         """It should not update an existing Account with a JWT belonging to a different role."""
         mock_get.return_value.status_code = status.HTTP_200_OK
@@ -487,15 +516,14 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
 
         test_account_dto = AccountDTO.from_orm(test_account)
 
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-
         response = self.client.post(
             ACCOUNTS_PATH_V1,
             json=test_account_dto.dict(),
-            content_type='application/json',
-            headers=headers
+            content_type='application/json'
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
 
         # update the account
         new_account = response.get_json()
@@ -519,6 +547,13 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
 
         test_account_dto = AccountDTO.from_orm(test_account)
 
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
         # Generate test JWT using RS256 (different account name)
         test_jwt = jwt.encode(
             {
@@ -533,14 +568,6 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
 
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         # update the account
         new_account = response.get_json()
@@ -573,6 +600,13 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         # create an Account to update
         test_account = AccountFactory()
 
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account.to_dict(),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
         # Generate test JWT using RS256 with right account id and role
         test_jwt = jwt.encode(
             {
@@ -587,14 +621,6 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
 
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account.to_dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         # partially update the account
         new_account = response.get_json()
@@ -615,6 +641,36 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(updated_account['email'], 'test@example.com')
 
     @patch('requests.get')
+    def test_partial_update_by_id_unauthorized(self, mock_get):
+        """It should return 401 if no JWT is provided."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to update
+        test_account = AccountFactory()
+
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account.to_dict(),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # partially update the account
+        new_account = response.get_json()
+        updated_account_id = new_account['id']
+        update_data = {
+            'name': 'Test Account',
+            'email': 'test@example.com'
+        }
+        response = self.client.patch(
+            f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
+            content_type='application/json',
+            json=update_data
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch('requests.get')
     def test_partial_update_by_id_wrong_role(self, mock_get):
         """It should not partially update an existing Account with a JWT
         belonging to a different role.
@@ -625,15 +681,14 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         # create an Account to update
         test_account = AccountFactory()
 
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-
         response = self.client.post(
             ACCOUNTS_PATH_V1,
             json=test_account.to_dict(),
-            content_type='application/json',
-            headers=headers
+            content_type='application/json'
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
 
         # partially update the account
         new_account = response.get_json()
@@ -661,6 +716,13 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         # create an Account to update
         test_account = AccountFactory()
 
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account.to_dict(),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
         # Generate test JWT using RS256 (different account name)
         test_jwt = jwt.encode(
             {
@@ -675,14 +737,6 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
 
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account.to_dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         # partially update the account
         new_account = response.get_json()
@@ -710,10 +764,91 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
     ######################################################################
     #  DELETE AN ACCOUNT TEST CASES
     ######################################################################
-    def test_delete_by_id(self):
+    @patch('requests.get')
+    def test_delete_by_id_success(self, mock_get):
         """It should delete an Account."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to delete
         account = self._create_accounts(1)[0]
 
-        response = self.client.delete(f"{ACCOUNTS_PATH_V1}/{account.id}")
+        # Generate test JWT using RS256 with right account id and role
+        test_jwt = jwt.encode(
+            {
+                'sub': account.name,
+                REALM_ACCESS_CLAIM: {
+                    ROLES_CLAIM: [ROLE_USER]
+                }
+            },
+            self.private_key,
+            algorithm=JWT_ALGORITHM,
+            headers={'kid': 'test-kid'}
+        )
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
+
+        response = self.client.delete(
+            f"{ACCOUNTS_PATH_V1}/{account.id}",
+            headers=headers
+        )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(response.data, b'')  # Check for empty body
+
+    def test_delete_by_id_unauthorized(self):
+        """It should return 401 if no JWT is provided."""
+        # create an Account to delete
+        account = self._create_accounts(1)[0]
+
+        response = self.client.delete(
+            f"{ACCOUNTS_PATH_V1}/{account.id}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch('requests.get')
+    def test_delete_by_id_wrong_role(self, mock_get):
+        """It should not delete an Account with a JWT belonging to a different
+        role."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to delete
+        account = self._create_accounts(1)[0]
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+
+        response = self.client.delete(
+            f"{ACCOUNTS_PATH_V1}/{account.id}",
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch('requests.get')
+    def test_delete_by_id__wrong_account_id(self, mock_get):
+        """It not should not delete an Account with a JWT belonging to a different user."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to delete
+        account = self._create_accounts(1)[0]
+
+        # Generate test JWT using RS256 with right account id and role
+        test_jwt = jwt.encode(
+            {
+                'sub': TEST_USER,
+                REALM_ACCESS_CLAIM: {
+                    ROLES_CLAIM: [ROLE_USER]
+                }
+            },
+            self.private_key,
+            algorithm=JWT_ALGORITHM,
+            headers={'kid': 'test-kid'}
+        )
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
+
+        response = self.client.delete(
+            f"{ACCOUNTS_PATH_V1}/{account.id}",
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

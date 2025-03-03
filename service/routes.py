@@ -529,7 +529,8 @@ def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     'operationId': 'deleteAccountByIdV1',
     'tags': ['Accounts V1'],
     'summary': 'Delete Account by ID',
-    'description': 'Deletes an account based on its unique identifier.',
+    'description': 'Deletes an account based on its unique identifier.</br></br>'
+                   'Only authenticated users can access this endpoint.',
     'security': [{"bearerAuth": []}],
     'parameters': [
         {
@@ -546,15 +547,32 @@ def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
         204: {'description': 'No Content'},
         # For DataValidationError/IntegrityError
         400: {'description': 'Bad Request'},
+        # For unauthorized requests
+        401: {'description': 'Unauthorized'},
+        403: {'description': 'Forbidden'},
         # For any other internal errors
         500: {'description': 'Internal Server Error'}
     }
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['DELETE'])
+@has_role(ROLE_USER)
 @count_requests
 def delete_by_id(account_id: UUID) -> Tuple[str, int]:
-    """Delete Account By ID"""
-    app.logger.info("Request to delete an Account with id: %s", account_id)
+    """Delete Account By ID."""
+    app.logger.info(
+        "Request to delete an Account with id: %s", account_id
+    )
+
+    # Get the user identity from the JWT token
+    current_user = get_jwt_identity()
+    app.logger.debug('Current user: %s', current_user)
+
+    # Check if the logged-in user is the owner of the resource
+    if not check_if_user_is_owner(current_user, account_id):
+        abort(
+            status.HTTP_403_FORBIDDEN,
+            FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
+        )
 
     account = Account.find(account_id)
 
