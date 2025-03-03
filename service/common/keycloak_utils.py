@@ -12,7 +12,7 @@ and role validation based on JWT claims extracted fro
 import logging
 import os
 import time
-from typing import Union, Any, Callable
+from typing import Union, Any, Callable, List
 
 import requests
 from flask import jsonify
@@ -122,7 +122,7 @@ def get_keycloak_certificate() -> Union[str, None]:
     return None
 
 
-def has_role(required_role: str):
+def has_roles(required_roles: List[str]):
     """
     Decorator to enforce role-based access control.
 
@@ -132,7 +132,11 @@ def has_role(required_role: str):
     against the `required_role`.
 
     Args:
-        required_role (str): The role required to access the decorated function.
+        required_roles (List[str]): A list of roles required to access the
+                                      decorated function.
+
+    Usage:
+        @has_roles(['ROLE_USER', 'ROLE_ADMIN'])  # Logical OR
 
     Returns:
         callable: A decorator that wraps the provided function with role-based
@@ -164,15 +168,16 @@ def has_role(required_role: str):
                 []
             )
 
-            if required_role in roles:
-                return wrapped_fn(*args, **kwargs)
-
             # Check realm_access if resource_access check failed.
             realm_roles = claims.get(
                 REALM_ACCESS_CLAIM, {}
-            ).get(ROLES_CLAIM, [])
+            ).get(
+                ROLES_CLAIM,
+                []
+            )
 
-            if required_role in realm_roles:
+            # Check if any required role is present
+            if any(role in (roles + realm_roles) for role in required_roles):
                 return wrapped_fn(*args, **kwargs)
 
             return jsonify(
@@ -183,3 +188,103 @@ def has_role(required_role: str):
         return decorated_function
 
     return wrapper
+
+
+def has_roles_and(required_roles: List[str]):
+    """
+    Decorator to enforce role-based access control (AND).
+
+    This decorator checks if the user, identified by their JWT, possesses
+    all the specified `required_roles`.
+
+    @has_roles(["ROLE_USER", "ROLE_ADMIN"])  # Logical OR
+
+    Args:
+        required_roles (List[str]): A list of roles required to access the
+                                      decorated function.
+
+    Usage:
+        @has_roles_and(['ROLE_USER', 'ROLE_ADMIN']) # Logical AND
+
+    Returns:
+        callable: A decorator that wraps the provided function with role-based
+                  access control.
+
+    Raises:
+        HTTP 403 Forbidden: If the user does not have the required role.
+    """
+
+    def wrapper(wrapped_fn: Callable) -> Callable:
+        """
+        Wrapper function that performs role-based access control.
+
+        Args:
+            wrapped_fn (callable): The function to be wrapped.
+
+        Returns:
+            callable: The wrapped function with role-based access control.
+        """
+
+        @jwt_required()
+        def decorated_function(*args, **kwargs) -> Any:
+            """"""
+            claims = get_jwt()
+            roles = claims.get(RESOURCE_ACCESS, {}).get(
+                KEYCLOAK_CLIENT_ID,
+                {}).get(
+                ROLES_CLAIM, []
+            )
+            realm_roles = claims.get(
+                REALM_ACCESS_CLAIM, {}
+            ).get(
+                ROLES_CLAIM,
+                []
+            )
+
+            # Check if all required role is present
+            if all(role in (roles + realm_roles) for role in required_roles):
+                return wrapped_fn(*args, **kwargs)
+
+            return jsonify(
+                {'message': INSUFFICIENT_PERMISSIONS_ERROR_MESSAGE}
+            ), status.HTTP_403_FORBIDDEN
+
+        decorated_function.__name__ = wrapped_fn.__name__
+        return decorated_function
+
+    return wrapper
+
+
+def get_user_roles() -> List[str]:
+    """
+    Extracts the user's roles from the JWT claims.
+
+    This function retrieves roles from both 'resource_access' and
+    'realm_access' claims within the JWT, combining them into a single list.
+
+    Realm roles are defined at the realm level. This means they apply to all
+    clients (applications) within that realm.
+
+    Resource roles are defined at the client (application) level.
+    This means they are specific to a particular application.
+
+    Returns:
+        List[str]: A list of user roles, or an empty list if no roles are found.
+    """
+    try:
+        claims = get_jwt()
+        if not claims:
+            logging.warning('JWT claims are missing.')
+            return []
+
+        roles = claims.get(RESOURCE_ACCESS, {}).get(
+            KEYCLOAK_CLIENT_ID, {}).get(ROLES_CLAIM, [])
+        realm_roles = claims.get(REALM_ACCESS_CLAIM, {}).get(ROLES_CLAIM, [])
+
+        all_roles = roles + realm_roles
+        logging.debug("User roles: %s", all_roles)
+        return all_roles
+
+    except (AttributeError, TypeError, KeyError) as err:
+        logging.error("Error extracting user roles: %s", err)
+        return []

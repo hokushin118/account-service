@@ -18,7 +18,7 @@ from jose import jwt
 
 from service import AUTHORIZATION_HEADER, BEARER_HEADER
 from service.common import status  # HTTP Status Codes
-from service.common.constants import ROLE_USER
+from service.common.constants import ROLE_USER, ROLE_ADMIN
 from service.common.keycloak_utils import KEYS, REALM_ACCESS_CLAIM, ROLES_CLAIM
 from service.models import db, Account
 from service.routes import (
@@ -579,6 +579,55 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch('requests.get')
+    def test_update_by_id_wrong_account_id_admin_role(self, mock_get):
+        """It should update an existing Account with a JWT belonging to a
+        different user if an admin role."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to update
+        test_account = AccountFactory()
+
+        test_account_dto = AccountDTO.from_orm(test_account)
+
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Generate test JWT using RS256 (different account name)
+        test_jwt = jwt.encode(
+            {
+                'sub': TEST_USER,
+                REALM_ACCESS_CLAIM: {
+                    ROLES_CLAIM: [ROLE_ADMIN]
+                }
+            },
+            self.private_key,
+            algorithm=JWT_ALGORITHM,
+            headers={'kid': 'test-kid'}
+        )
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
+
+        # update the account
+        new_account = response.get_json()
+        new_account['name'] = 'Something Known'
+        new_account['email'] = 'test@example.com'
+        response = self.client.put(
+            f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
+            content_type='application/json',
+            json=new_account,
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        updated_account = response.get_json()
+        self.assertEqual(updated_account['name'], 'Something Known')
+        self.assertEqual(updated_account['email'], 'test@example.com')
 
     def test_update_by_id_not_found(self):
         """It should not update an Account that is not found."""
