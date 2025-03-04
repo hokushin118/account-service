@@ -802,6 +802,56 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    @patch('requests.get')
+    def test_partial_update_by_id_wrong_account_id_admin_role(self, mock_get):
+        """It should partially update an existing Account with a JWT
+        belonging to a different user if an admin role."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to update
+        test_account = AccountFactory()
+
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account.to_dict(),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Generate test JWT using RS256 (different account name)
+        test_jwt = jwt.encode(
+            {
+                'sub': TEST_USER,
+                REALM_ACCESS_CLAIM: {
+                    ROLES_CLAIM: [ROLE_ADMIN]
+                }
+            },
+            self.private_key,
+            algorithm=JWT_ALGORITHM,
+            headers={'kid': 'test-kid'}
+        )
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
+
+        # partially update the account
+        new_account = response.get_json()
+        updated_account_id = new_account['id']
+        update_data = {
+            'name': 'Something Known',
+            'email': 'test@example.com'
+        }
+        response = self.client.patch(
+            f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
+            content_type='application/json',
+            json=update_data,
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        updated_account = response.get_json()
+        self.assertEqual(updated_account['name'], 'Something Known')
+        self.assertEqual(updated_account['email'], 'test@example.com')
+
     def test_partial_update_by_id_not_found(self):
         """It should not partially update an Account that is not found."""
         response = self.client.patch(
