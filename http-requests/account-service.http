@@ -1,0 +1,99 @@
+# Get list of accounts v1 - 200
+
+GET http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+###
+
+# Get list of accounts v1 - 401
+
+GET http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+###
+
+# Get account by id v1 - 200
+
+GET http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts/{{test_id}} HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+###
+
+# Get account by id v1 - 401
+
+GET http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts/{{test_id}} HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+###
+
+# Create new account v1 - 201
+
+POST http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "address": "718 Noah Drive\nChristensenburgh, NE 45784",
+  "date_joined": "2025-03-05",
+  "email": "jdavis@example.com",
+  "name": "John Davis",
+  "phone_number": "918-295-1876"
+}
+
+###
+
+# Create new account by id v1 - 401
+
+POST http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "address": "718 Noah Drive\nChristensenburgh, NE 45784",
+  "date_joined": "2025-03-05",
+  "email": "jdavis@example.com",
+  "name": "John Davis",
+  "phone_number": "918-295-1876"
+}
+
+###
+
+# Update existing account v1 - 200
+
+PUT http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts/{{test_id}} HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "address": "718 Noah Drive\nChristensenburgh, NE 45784",
+  "date_joined": "2025-03-05",
+  "email": "jdavis@example.com",
+  "name": "John Davis",
+  "phone_number": "918-777-1888"
+}
+
+###
+
+# Update existing account v1 - 401
+
+PUT http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts/{{test_id}} HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "address": "718 Noah Drive\nChristensenburgh, NE 45784",
+  "date_joined": "2025-03-05",
+  "email": "jdavis@example.com",
+  "name": "John Davis",
+  "phone_number": "918-777-1888"
+}
+
+###

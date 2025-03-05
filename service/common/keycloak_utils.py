@@ -14,9 +14,12 @@ import os
 import time
 from typing import Union, Any, Callable, List
 
+# import jwt
 import requests
 from flask import jsonify
 from flask_jwt_extended import jwt_required, get_jwt
+from jwt.algorithms import RSAAlgorithm
+from jwt.exceptions import InvalidKeyError
 
 from service.common import status
 
@@ -113,10 +116,18 @@ def get_keycloak_certificate() -> Union[str, None]:
 
     keys = jwks.get(KEYS, [])
     for key in keys:
-        x5c_list = key.get(X5C_KID, [])
-        if x5c_list:
-            logger.debug("Found x5c certificate for kid: %s", key.get(JWT_KID))
-            return x5c_list[0]
+        kid = key.get(JWT_KID)
+        if kid:
+            try:
+                return RSAAlgorithm.from_jwk(key)
+            except (
+                    InvalidKeyError,
+                    KeyError,
+                    TypeError,
+                    ValueError
+            ) as err:
+                logger.error("Error getting public key from jwk: %s", err)
+                return None
 
     logger.error("Key with kid '%s' not found in JWKS.", X5C_KID)
     return None

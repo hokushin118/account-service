@@ -1,0 +1,17 @@
+# Get JWT Token
+POST http://{{kc_host}}:{{kc_port}}/realms/cba-dev/protocol/openid-connect/token HTTP/1.1
+Accept: application/json
+Content-Type: application/x-www-form-urlencoded
+
+grant_type = client_credentials &
+client_id = oauth2-proxy &
+client_secret = {{kc_secret_key}}
+
+###
+
+# Get Keycloak Config
+GET http://localhost:28080/realms/cba-dev/.well-known/openid-configuration HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+###

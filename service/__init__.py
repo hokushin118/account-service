@@ -12,6 +12,7 @@ import sys
 from dotenv import load_dotenv
 from flasgger import Swagger, LazyString, LazyJSONEncoder, MK_SANITIZER
 from flask import Flask, request
+from flask_caching import Cache
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_talisman import Talisman
@@ -106,6 +107,10 @@ VERSION = os.environ.get('VERSION', '0.0.1')  # Default if not set
 NAME = os.environ.get('NAME', 'account-service')
 FORCE_HTTPS = os.environ.get('FORCE_HTTPS', 'False').lower() == 'true'
 SWAGGER_ENABLED = os.environ.get('SWAGGER_ENABLED', 'false').lower() == 'true'
+CACHE_TYPE = os.environ.get('CACHE_TYPE', 'redis')
+CACHE_REDIS_HOST = os.environ.get('CACHE_REDIS_HOST', 'localhost')
+CACHE_REDIS_PORT = int(os.environ.get('CACHE_REDIS_PORT', 6379))
+CACHE_REDIS_DB = int(os.environ.get('CACHE_REDIS_DB', 0))
 
 
 # --- Security and Monitoring ---
@@ -368,11 +373,6 @@ def configure_jwt(current_app: Flask) -> None:
         logger.debug('Retrieved Keycloak certificate successfully.')
         current_app.config['JWT_PUBLIC_KEY'] = certificate
         current_app.config['JWT_ALGORITHM'] = 'RS256'
-        current_app.config['JWT_DECODE_KEY'] = (
-                '-----BEGIN CERTIFICATE-----\n' +
-                current_app.config['JWT_PUBLIC_KEY'] +
-                '\n-----END CERTIFICATE-----'
-        )
         current_app.config['JWT_TOKEN_LOCATION'] = ['headers']
         current_app.config['JWT_HEADER_NAME'] = AUTHORIZATION_HEADER
         current_app.config['JWT_HEADER_TYPE'] = BEARER_HEADER
@@ -384,6 +384,34 @@ def configure_jwt(current_app: Flask) -> None:
         logger.error(
             'Failed to retrieve Keycloak certificate. JWT configuration skipped.'
         )
+
+
+# --- Cache Configuration ---
+def configure_cache(current_app: Flask) -> Cache:
+    """
+    Configures caching for the Flask application using Redis.
+
+    This function sets up the Flask-Caching extension with Redis as the backend,
+    using configuration values from the application's config.
+
+    Args:
+        current_app (Flask): The Flask application instance to configure.
+
+    Returns:
+        Cache: The initialized Cache instance.
+    """
+    current_app.config['CACHE_TYPE'] = CACHE_TYPE
+    current_app.config['CACHE_REDIS_HOST'] = CACHE_REDIS_HOST
+    current_app.config['CACHE_REDIS_PORT'] = CACHE_REDIS_PORT
+    current_app.config['CACHE_REDIS_DB'] = CACHE_REDIS_DB
+    current_app.config[
+        'CACHE_REDIS_URL'
+    ] = f"redis://{CACHE_REDIS_HOST}:{CACHE_REDIS_PORT}/{CACHE_REDIS_DB}"
+
+    # Initialize Flask-Caching with Redis
+    redis_cache = Cache(current_app)
+    redis_cache.init_app(current_app)
+    return redis_cache
 
 
 # --- Flask Application Setup ---
@@ -441,6 +469,9 @@ def create_app() -> Flask:
 # --- Application Initialization ---
 
 app = create_app()
+
+# Configure cache with Redis
+cache = configure_cache(app)
 
 # Import the routes After the Flask app is created
 # pylint: disable=wrong-import-position, cyclic-import, wrong-import-order

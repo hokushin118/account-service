@@ -51,19 +51,21 @@ class TestGetKeycloakCertificate(TestCase):
         """It should successfully retrieve the Keycloak certificate."""
         # Mock successful response
         mock_response = Mock()
-        mock_response.raise_for_status.return_value = None
+        mock_response.status_code = status.HTTP_200_OK
         mock_response.json.return_value = {
             KEYS: [
                 {
                     JWT_KID: 'test_kid',
-                    X5C_KID: [TEST_CERTIFICATE]
+                    'kty': 'RSA',
+                    'n': 'some_n',
+                    'e': 'some_e',
                 }
             ]
         }
         mock_get.return_value = mock_response
 
         certificate = get_keycloak_certificate()
-        self.assertEqual(certificate, TEST_CERTIFICATE)
+        self.assertIsNotNone(certificate)
 
     @patch('requests.get')
     def test_http_error(self, mock_get):
