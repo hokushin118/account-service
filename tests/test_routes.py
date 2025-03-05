@@ -26,7 +26,7 @@ from service.routes import (
     ACCOUNTS_PATH_V1,
     ROOT_PATH,
     HEALTH_PATH,
-    IF_NONE_MATCH_HEADER
+    IF_NONE_MATCH_HEADER, CACHE_CONTROL_HEADER
 )
 from service.schemas import AccountDTO
 from tests.factories import AccountFactory
@@ -279,6 +279,7 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+        headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
         etag = response.headers.get('ETag').replace('"', '')  # Extract ETag
         headers[IF_NONE_MATCH_HEADER] = etag
 
@@ -380,6 +381,7 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+        headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
         etag = response.headers.get('ETag').replace('"', '')  # Extract ETag
         headers[IF_NONE_MATCH_HEADER] = etag
 

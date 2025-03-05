@@ -4,17 +4,27 @@ Account Service
 This microservice handles the lifecycle of Accounts
 """
 import datetime
+import os
 from typing import Dict, Tuple, Any, List
 from uuid import UUID
 
+import redis
 from flasgger import swag_from
 # pylint: disable=unused-import
 from flask import jsonify, request, make_response, abort, url_for  # noqa; F401
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from service import app, VERSION, NAME
+from service import (
+    app,
+    cache,
+    VERSION,
+    NAME,
+    CACHE_REDIS_HOST,
+    CACHE_REDIS_PORT,
+    CACHE_REDIS_DB
+)
 from service.common import status
-from service.common.constants import ROLE_USER, ROLE_ADMIN
+from service.common.constants import ROLE_USER, ROLE_ADMIN, ACCOUNTS_CACHE_KEY
 from service.common.keycloak_utils import has_roles, get_user_roles
 from service.common.utils import (
     check_content_type,
@@ -27,10 +37,19 @@ from service.schemas import AccountDTO
 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE = 'You are not authorized to update this resource.'
 ACCOUNT_NOT_FOUND_MESSAGE = "Account with id [{account_id}] could not be found."
 IF_NONE_MATCH_HEADER = 'If-None-Match'
+CACHE_CONTROL_HEADER = 'Cache-Control'
 ROOT_PATH = '/api'
 HEALTH_PATH = f"{ROOT_PATH}/health"
 INFO_PATH = f"{ROOT_PATH}/info"
 ACCOUNTS_PATH_V1 = f"{ROOT_PATH}/v1/accounts"
+CACHE_DEFAULT_TIMEOUT = int(os.environ.get('CACHE_DEFAULT_TIMEOUT', 3600))
+
+# Initialize Redis client
+redis_client = redis.Redis(
+    host=CACHE_REDIS_HOST,
+    port=CACHE_REDIS_PORT,
+    db=CACHE_REDIS_DB
+)
 
 
 ######################################################################
@@ -213,6 +232,10 @@ def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
         _external=True
     )
 
+    # Invalidate specific cache key(s)
+    cache.delete(ACCOUNTS_CACHE_KEY)  # Invalidate the list
+    app.logger.debug("Cache key %s invalidated.", ACCOUNTS_CACHE_KEY)
+
     return make_response(
         jsonify(message), status.HTTP_201_CREATED, {'Location': location_url}
     )
@@ -257,21 +280,31 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
     current_user = get_jwt_identity()
     app.logger.debug('Current user: %s', current_user)
 
-    accounts = Account.all()
-    account_list = [
-        AccountDTO.from_orm(account).dict() for account in
-        accounts
-    ]
+    # Attempt to retrieve cached data
+    cached_data = cache.get(ACCOUNTS_CACHE_KEY)
 
-    app.logger.info("Returning %d accounts", len(account_list))
+    if cached_data:
+        app.logger.debug('Retrieving Accounts from cache')
+        account_list, etag_hash = cached_data
+    else:
+        app.logger.debug('Fetching Accounts from database')
+        accounts = Account.all()
+        account_list = [
+            AccountDTO.from_orm(account).dict() for account in accounts
+        ]
+        # 1. Generate the ETag:
+        etag_hash = generate_etag_hash(account_list)
+        cache.set(
+            ACCOUNTS_CACHE_KEY, (account_list, etag_hash),
+            timeout=CACHE_DEFAULT_TIMEOUT
+        )
+
+    app.logger.debug("Returning %d accounts", len(account_list))
 
     if account_list:
         app.logger.debug(
             f"Accounts returned: {account_list}"
         )
-
-    # 1. Generate the ETag:
-    etag_hash = generate_etag_hash(account_list)
 
     # 2. Check If-None-Match:
     if_none_match = request.headers.get(IF_NONE_MATCH_HEADER)
@@ -280,6 +313,7 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
 
     # 3. Create the response with the ETag:
     response = make_response(jsonify(account_list), status.HTTP_200_OK)
+    response.headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
     response.set_etag(etag_hash)  # Set the ETag header
     return response
 
@@ -353,6 +387,7 @@ def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
 
     # 3. Create the response with the ETag:
     response = make_response(jsonify(data), status.HTTP_200_OK)
+    response.headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
     response.set_etag(etag_hash)  # Set the ETag header
     return response
 
@@ -437,6 +472,11 @@ def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
 
     # Convert SQLAlchemy model to DTO
     account_dto = AccountDTO.from_orm(account)
+
+    # Invalidate specific cache key
+    cache.delete(ACCOUNTS_CACHE_KEY)  # Invalidate the list
+    app.logger.debug("Cache key %s invalidated.", ACCOUNTS_CACHE_KEY)
+
     return account_dto.dict(), status.HTTP_200_OK
 
 
@@ -531,6 +571,11 @@ def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
 
     # Convert SQLAlchemy model to DTO
     account_dto = AccountDTO.from_orm(account)
+
+    # Invalidate specific cache key
+    cache.delete(ACCOUNTS_CACHE_KEY)  # Invalidate the list
+    app.logger.debug("Cache key %s invalidated.", ACCOUNTS_CACHE_KEY)
+
     return account_dto.dict(), status.HTTP_200_OK
 
 
@@ -596,5 +641,8 @@ def delete_by_id(account_id: UUID) -> Tuple[str, int]:
 
     if account:
         account.delete()
+        # Invalidate specific cache key
+        cache.delete(ACCOUNTS_CACHE_KEY)  # Invalidate the list
+        app.logger.debug("Cache key %s invalidated.", ACCOUNTS_CACHE_KEY)
 
     return "", status.HTTP_204_NO_CONTENT
