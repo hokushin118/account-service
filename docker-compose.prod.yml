@@ -76,6 +76,22 @@ services:
     deploy:
       replicas: 1
 
+  # Redis is a high performance key-value database. It shores cached values.
+  redis:
+    extends:
+      file: docker-compose.yml
+      service: redis
+    pull_policy: always
+    restart: always
+    env_file:
+      - .env.production
+    environment:
+      - REDIS_REPLICATION_MODE=master
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL,CONFIG
+    deploy:
+      replicas: 1
+
   account-service:
     extends:
       file: docker-compose-account.yml

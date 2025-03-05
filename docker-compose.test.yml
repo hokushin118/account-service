@@ -76,6 +76,22 @@ services:
     deploy:
       replicas: 1
 
+  # Redis is a high performance key-value database. It shores cached values.
+  redis:
+    extends:
+      file: docker-compose.yml
+      service: redis
+    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
+      - 16379:6379 # external port / container port
+    env_file:
+      - .env.docker
+    environment:
+      - REDIS_REPLICATION_MODE=master
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL,CONFIG
+    deploy:
+      replicas: 1
+
 volumes:
   postgresql_data:
     driver: local

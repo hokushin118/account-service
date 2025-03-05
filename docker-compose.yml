@@ -73,10 +73,30 @@ services:
         max-size: 10m
         max-file: 5
 
+  # Redis is a high performance key-value database. It shores cached values.
+  redis:
+    image: bitnami/redis:${REDIS_VERSION}
+    hostname: ${REDIS_HOSTNAME}
+    restart: on-failure
+    command: redis-server --save 20 1 --loglevel warning --protected-mode no --stop-writes-on-bgsave-error no
+    volumes:
+      - cache-data:/bitnami/redis/data # creating a volume to save Redis data locally
+    networks:
+      - ${BACKEND_NETWORK}
+    deploy:
+      replicas: 1
+    logging: # Common logging config
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: 5
+
 volumes:
   keycloak-postgresql-data:
     driver: local
   prometheus_data:
+    driver: local
+  cache-data:
     driver: local
 
 # networks
