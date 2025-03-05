@@ -567,7 +567,7 @@ def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     }
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['DELETE'])
-@has_roles([ROLE_USER])
+@has_roles([ROLE_USER, ROLE_ADMIN])
 @count_requests
 def delete_by_id(account_id: UUID) -> Tuple[str, int]:
     """Delete Account By ID."""
@@ -579,12 +579,18 @@ def delete_by_id(account_id: UUID) -> Tuple[str, int]:
     current_user = get_jwt_identity()
     app.logger.debug('Current user: %s', current_user)
 
-    # Check if the logged-in user is the owner of the resource
-    if not check_if_user_is_owner(current_user, account_id):
-        abort(
-            status.HTTP_403_FORBIDDEN,
-            FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
-        )
+    roles = get_user_roles()
+
+    app.logger.debug('Roles: %s', roles)
+
+    if ROLE_ADMIN not in roles:
+        # If not ROLE_ADMIN, check ownership шf admin, then skip ownership check.
+        # Check if the logged-in user is the owner of the resource
+        if not check_if_user_is_owner(current_user, account_id):
+            abort(
+                status.HTTP_403_FORBIDDEN,
+                FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
+            )
 
     account = Account.find(account_id)
 

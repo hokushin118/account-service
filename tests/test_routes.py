@@ -951,3 +951,34 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch('requests.get')
+    def test_delete_by_id__wrong_account_id_admin_role(self, mock_get):
+        """It not should not delete an Account with a JWT belonging to a different user."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        # create an Account to delete
+        account = self._create_accounts(1)[0]
+
+        # Generate test JWT using RS256 with right account id and role
+        test_jwt = jwt.encode(
+            {
+                'sub': TEST_USER,
+                REALM_ACCESS_CLAIM: {
+                    ROLES_CLAIM: [ROLE_ADMIN]
+                }
+            },
+            self.private_key,
+            algorithm=JWT_ALGORITHM,
+            headers={'kid': 'test-kid'}
+        )
+
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
+
+        response = self.client.delete(
+            f"{ACCOUNTS_PATH_V1}/{account.id}",
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.data, b'')  # Check for empty body
