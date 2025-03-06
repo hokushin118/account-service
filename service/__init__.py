@@ -26,7 +26,7 @@ from service.common.constants import (
     ADDRESS_MAX_LENGTH,
     PHONE_MAX_LENGTH,
     AUTHORIZATION_HEADER,
-    BEARER_HEADER
+    BEARER_HEADER, GENDER_MAX_LENGTH
 )
 from service.common.keycloak_utils import (
     KEYCLOAK_URL,
@@ -242,6 +242,11 @@ def configure_swagger(current_app: Flask) -> None:
                             'format': 'email',
                             'description': 'The account email address'
                         },
+                        'gender': {
+                            'type': 'string',
+                            'description': 'Gender',
+                            'maxLength': GENDER_MAX_LENGTH
+                        },
                         'address': {
                             'type': 'string',
                             'description': 'The account address',
@@ -273,6 +278,11 @@ def configure_swagger(current_app: Flask) -> None:
                             'type': 'string',
                             'format': 'email',
                             'description': 'The account email address'
+                        },
+                        'gender': {
+                            'type': 'string',
+                            'description': 'Gender',
+                            'maxLength': GENDER_MAX_LENGTH
                         },
                         'address': {
                             'type': 'string',

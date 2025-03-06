@@ -53,6 +53,7 @@ class TestAccount(TestCase):
         account = Account(
             name=fake_account.name,
             email=fake_account.email,
+            gender=fake_account.gender,
             address=fake_account.address,
             phone_number=fake_account.phone_number,
             date_joined=fake_account.date_joined,
@@ -61,6 +62,7 @@ class TestAccount(TestCase):
         self.assertEqual(account.id, None)
         self.assertEqual(account.name, fake_account.name)
         self.assertEqual(account.email, fake_account.email)
+        self.assertEqual(account.gender, fake_account.gender)
         self.assertEqual(account.address, fake_account.address)
         self.assertEqual(account.phone_number, fake_account.phone_number)
         self.assertEqual(account.date_joined, fake_account.date_joined)
@@ -86,6 +88,7 @@ class TestAccount(TestCase):
         self.assertEqual(found_account.id, account.id)
         self.assertEqual(found_account.name, account.name)
         self.assertEqual(found_account.email, account.email)
+        self.assertEqual(found_account.gender, account.gender)
         self.assertEqual(found_account.address, account.address)
         self.assertEqual(found_account.phone_number, account.phone_number)
         self.assertEqual(found_account.date_joined, account.date_joined)
@@ -149,6 +152,7 @@ class TestAccount(TestCase):
         self.assertEqual(serial_account['id'], account.id)
         self.assertEqual(serial_account['name'], account.name)
         self.assertEqual(serial_account['email'], account.email)
+        self.assertEqual(serial_account['gender'], account.gender)
         self.assertEqual(serial_account['address'], account.address)
         self.assertEqual(serial_account['phone_number'], account.phone_number)
         self.assertEqual(serial_account['date_joined'],
@@ -163,6 +167,7 @@ class TestAccount(TestCase):
         new_account.deserialize(serial_account)
         self.assertEqual(new_account.name, account.name)
         self.assertEqual(new_account.email, account.email)
+        self.assertEqual(new_account.gender, account.gender)
         self.assertEqual(new_account.address, account.address)
         self.assertEqual(new_account.phone_number, account.phone_number)
         self.assertEqual(new_account.date_joined, account.date_joined)

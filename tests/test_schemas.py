@@ -25,6 +25,7 @@ class TestAccountDTO(TestCase):
             'id': '51cb6dfd-c8fc-4ef0-b35c-8c76a216d274',
             'name': 'John Doe',
             'email': 'john.doe@example.com',
+            'gender': 'Male',
             'address': '123 Main St',
             'phone_number': '123-456-7890',
             'date_joined': '2024-07-26'
@@ -32,6 +33,7 @@ class TestAccountDTO(TestCase):
         account_dto = AccountDTO(**data)
         self.assertEqual(account_dto.name, 'John Doe')
         self.assertEqual(account_dto.email, 'john.doe@example.com')
+        self.assertEqual(account_dto.gender, 'Male')
         self.assertEqual(account_dto.address, '123 Main St')
         self.assertEqual(account_dto.phone_number, '123-456-7890')
         self.assertEqual(account_dto.date_joined.isoformat(), '2024-07-26')
@@ -41,6 +43,7 @@ class TestAccountDTO(TestCase):
         data = {
             'name': 'John Doe',
             'email': 'invalid_email',  # Invalid email
+            'gender': 'Male',
             'address': '123 Main St',
             'phone_number': '123-456-7890',
             'date_joined': '2024-07-26'
@@ -57,6 +60,7 @@ class TestAccountDTO(TestCase):
         data = {
             'name': 'John Doe',
             'email': 'john.doe@example.com',
+            'gender': 'Male',
             'address': '123 Main St',
             'phone_number': '123-456-7890',
             'date_joined': '26-07-2024'  # Invalid date format
@@ -88,6 +92,7 @@ class TestAccountDTO(TestCase):
         data = {
             'name': '',  # Empty name
             'email': 'john.doe@example.com',
+            'gender': 'Male',
             'address': '123 Main St',
             'phone_number': '123-456-7890',
             'date_joined': '2024-07-26'
@@ -106,6 +111,7 @@ class TestAccountDTO(TestCase):
         self.assertEqual(account_dto.id, account.id)
         self.assertEqual(account_dto.name, account.name)
         self.assertEqual(account_dto.email, account.email)
+        self.assertEqual(account_dto.gender, account.gender)
         self.assertEqual(account_dto.address, account.address)
         self.assertEqual(account_dto.phone_number, account.phone_number)
         self.assertEqual(account_dto.date_joined, account.date_joined)

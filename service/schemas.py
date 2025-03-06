@@ -13,7 +13,7 @@ from service.common.constants import (
     NAME_MIN_LENGTH,
     NAME_MAX_LENGTH,
     ADDRESS_MAX_LENGTH,
-    PHONE_MAX_LENGTH
+    PHONE_MAX_LENGTH, GENDER_MAX_LENGTH
 )
 from service.common.utils import account_to_dict
 
@@ -26,6 +26,7 @@ class AccountDTO(BaseModel):
         max_length=NAME_MAX_LENGTH
     )  # Constrained name
     email: EmailStr  # Validated email
+    gender: Optional[constr(max_length=GENDER_MAX_LENGTH)] = None
     address: Optional[constr(max_length=ADDRESS_MAX_LENGTH)] = None
     phone_number: Optional[constr(max_length=PHONE_MAX_LENGTH)] = None
     date_joined: date
