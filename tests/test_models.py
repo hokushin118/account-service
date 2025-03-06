@@ -8,6 +8,8 @@ Test cases can be run with the following:
 import logging
 from unittest import TestCase
 
+from sqlalchemy.sql.expression import desc
+
 from service import app
 from service.models import Account, DataValidationError, db
 from tests.factories import AccountFactory
@@ -17,7 +19,7 @@ from tests.test_constants import DATABASE_URI
 ######################################################################
 #  ACCOUNT MODEL TEST CASES
 ######################################################################
-class TestAccount(TestCase):
+class TestAccount(TestCase):  # pylint:disable=R0904
     """Test Cases for Account Model."""
 
     @classmethod
@@ -125,14 +127,50 @@ class TestAccount(TestCase):
         accounts = Account.all()
         self.assertEqual(len(accounts), 0)
 
-    def test_list_all_accounts(self):
+    def test_all_accounts(self):
         """It should list all Accounts in the database."""
         accounts = Account.all()
         self.assertEqual(accounts, [])
         for account in AccountFactory.create_batch(5):
             account.create()
-        # Assert that there are not 5 accounts in the database
+        # Assert that there are now 5 accounts in the database
         accounts = Account.all()
+        self.assertEqual(len(accounts), 5)
+
+    def test_all_paginated_empty(self):
+        """It should return an empty list when no accounts exist."""
+        accounts = Account.all_paginated(page=1, per_page=10)
+        self.assertEqual(accounts, [])
+
+    def test_all_paginated_first_page(self):
+        """It should return the first page of accounts."""
+        for account in AccountFactory.create_batch(15):
+            account.create()
+
+        accounts = Account.all_paginated(page=1, per_page=10)
+        self.assertEqual(len(accounts), 10)
+        # Verify ordering
+        self.assertEqual(accounts[0].id, Account.query.order_by(
+            desc(Account.created_at)).first().id)
+
+    def test_all_paginated_second_page(self):
+        """It should return the second page of accounts."""
+        for account in AccountFactory.create_batch(15):
+            account.create()
+
+        accounts = Account.all_paginated(page=2, per_page=10)
+        self.assertEqual(len(accounts), 5)
+
+    def test_all_paginated_custom_per_page(self):
+        """It should return the correct number of accounts per page."""
+        for account in AccountFactory.create_batch(20):
+            account.create()
+
+        accounts = Account.all_paginated(page=1, per_page=5)
+        self.assertEqual(len(accounts), 5)
+        accounts = Account.all_paginated(page=2, per_page=5)
+        self.assertEqual(len(accounts), 5)
+        accounts = Account.all_paginated(page=4, per_page=5)
         self.assertEqual(len(accounts), 5)
 
     def test_find_by_name(self):

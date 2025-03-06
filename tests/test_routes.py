@@ -1,3 +1,4 @@
+# pylint:disable=C0302
 """
 Account API Service Test Suite.
 
@@ -253,7 +254,58 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.get_json()
-        self.assertEqual(len(data), 3)
+        self.assertEqual(len(data['items']), 3)
+
+    @patch('requests.get')
+    def test_list_accounts_paginated(self, mock_get):
+        """It should return paginated accounts with a valid JWT."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        self._create_accounts(15)
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+
+        response = self.client.get(
+            f"{ACCOUNTS_PATH_V1}?page=2&per_page=5",
+            content_type='application/json',
+            headers=headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.get_json()
+        self.assertEqual(len(data['items']), 5)
+        self.assertEqual(data['page'], 2)
+        self.assertEqual(data['per_page'], 5)
+        self.assertEqual(data['total'], 15)
+
+    @patch('requests.get')
+    def test_list_accounts_cache(self, mock_get):
+        """It should retrieve data from the cache on subsequent requests."""
+        mock_get.return_value.status_code = status.HTTP_200_OK
+        mock_get.return_value.json.return_value = self.mock_certs
+
+        self._create_accounts(3)
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+
+        # First request (populates cache)
+        response1 = self.client.get(
+            ACCOUNTS_PATH_V1,
+            content_type='application/json',
+            headers=headers,
+        )
+
+        self.assertEqual(response1.status_code, status.HTTP_200_OK)
+
+        # Second request (retrieves from cache)
+        with patch(
+                'service.routes.Account.all_paginated') as mock_all_paginated:
+            response2 = self.client.get(
+                ACCOUNTS_PATH_V1,
+                content_type='application/json',
+                headers=headers,
+            )
+            self.assertEqual(response2.status_code, status.HTTP_200_OK)
+            mock_all_paginated.assert_not_called()
 
     def test_list_accounts_unauthorized(self):
         """It should return 401 if no JWT is provided."""

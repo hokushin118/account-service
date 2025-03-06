@@ -13,7 +13,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.sql.expression import text
+from sqlalchemy.sql.expression import text, desc
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 
 from service.common.constants import (
@@ -198,6 +198,35 @@ class PersistentBase:
         """
         logger.info('Retrieving all records...')
         return cls.query.all()
+
+    @classmethod
+    def all_paginated(
+            cls,
+            page: int = 1,
+            per_page: int = 10
+    ) -> List['PersistentBase']:
+        """Retrieves all records from the database with pagination.
+
+        Args:
+            page: The page number (default: 1).
+            per_page: The number of items per page (default: 10).
+
+        Returns:
+            A list of Account objects for the specified page.
+        """
+        logger.info(
+            'Retrieving all records (page %d, per_page %d)...',
+            page,
+            per_page
+        )
+        paginated_accounts = cls.query.order_by(
+            desc(
+                cls.created_at
+            )).paginate(
+            page=page,
+            per_page=per_page
+        )
+        return paginated_accounts.items
 
     @classmethod
     def find(cls, by_id: UUID) -> Optional['PersistentBase']:

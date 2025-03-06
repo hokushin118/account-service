@@ -5,7 +5,7 @@ This microservice handles the lifecycle of Accounts
 """
 import datetime
 import os
-from typing import Dict, Tuple, Any, List
+from typing import Dict, Tuple, Any
 from uuid import UUID
 
 import redis
@@ -24,7 +24,8 @@ from service import (
     CACHE_REDIS_DB
 )
 from service.common import status
-from service.common.constants import ROLE_USER, ROLE_ADMIN, ACCOUNTS_CACHE_KEY
+from service.common.constants import ROLE_USER, ROLE_ADMIN, \
+    ACCOUNT_CACHE_KEY
 from service.common.keycloak_utils import has_roles, get_user_roles
 from service.common.utils import (
     check_content_type,
@@ -85,6 +86,12 @@ def check_if_user_is_owner(user: str, account_id: UUID) -> bool:
     """
     users = Account.find_by_name(user)
     return bool(users and str(users[0].id) == str(account_id))
+
+
+def invalidate_all_account_pages() -> None:
+    """Invalidates all cached paginated account results."""
+    app.logger.debug('Invalidated cache...')
+    cache.clear()
 
 
 ######################################################################
@@ -233,8 +240,8 @@ def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
     )
 
     # Invalidate specific cache key(s)
-    cache.delete(ACCOUNTS_CACHE_KEY)  # Invalidate the list
-    app.logger.debug("Cache key %s invalidated.", ACCOUNTS_CACHE_KEY)
+    invalidate_all_account_pages()
+    app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
     return make_response(
         jsonify(message), status.HTTP_201_CREATED, {'Location': location_url}
@@ -247,11 +254,28 @@ def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
 @swag_from({
     'operationId': 'getAccountsV1',
     'tags': ['Accounts V1'],
-    'summary': 'Lists all Accounts',
-    'description': 'Retrieves a list of all Account objects from the '
+    'summary': 'Lists all Accounts (paginated)',
+    'description': 'Retrieves a paginated list of Account objects from the '
                    'database and returns them as a JSON array.</br></br>'
-                   'Only authenticated users can access this endpoint.',
-    'security': [{"bearerAuth": []}],
+                   'Only authenticated users can access this endpoint.</br></br>'
+                   'Query parameters `page` and `per_page` are used for pagination.',
+    'security': [{'bearerAuth': []}],
+    'parameters': [
+        {
+            'name': 'page',
+            'in': 'query',
+            'description': 'Page number',
+            'schema': {'type': 'integer'},
+            'default': 1
+        },
+        {
+            'name': 'per_page',
+            'in': 'query',
+            'description': 'Items per page',
+            'schema': {'type': 'integer'},
+            'default': 10
+        }
+    ],
     'responses': {
         200: {'description': 'OK',
               'content': {
@@ -272,7 +296,7 @@ def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
 @app.route(ACCOUNTS_PATH_V1, methods=['GET'])
 @jwt_required()
 @count_requests
-def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
+def list_accounts() -> Tuple[Dict[str, Any], int]:
     """Lists all Accounts."""
     app.logger.info('Request to list Accounts')
 
@@ -280,30 +304,48 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
     current_user = get_jwt_identity()
     app.logger.debug('Current user: %s', current_user)
 
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+
+    # Cache key for paginated results (include page and per_page)
+    cache_key = f"{ACCOUNT_CACHE_KEY}:{page}:{per_page}"
+
     # Attempt to retrieve cached data
-    cached_data = cache.get(ACCOUNTS_CACHE_KEY)
+    cached_data = cache.get(cache_key)
 
     if cached_data:
-        app.logger.debug('Retrieving Accounts from cache')
-        account_list, etag_hash = cached_data
+        app.logger.debug('Retrieving Accounts (page %d) from cache.', page)
+        paginated_data, etag_hash = cached_data
     else:
-        app.logger.debug('Fetching Accounts from database')
-        accounts = Account.all()
+        app.logger.debug('Fetching Accounts (page %d) from database.', page)
+
+        accounts = Account.all_paginated(page=page, per_page=per_page)
         account_list = [
             AccountDTO.from_orm(account).dict() for account in accounts
         ]
+
+        total_accounts = Account.query.count()
+
+        # Paginate the results
+        paginated_data = {
+            'items': account_list,
+            'page': page,
+            'per_page': per_page,
+            'total': total_accounts
+        }
+
         # 1. Generate the ETag:
-        etag_hash = generate_etag_hash(account_list)
+        etag_hash = generate_etag_hash(paginated_data)
         cache.set(
-            ACCOUNTS_CACHE_KEY, (account_list, etag_hash),
+            cache_key, (paginated_data, etag_hash),
             timeout=CACHE_DEFAULT_TIMEOUT
         )
 
-    app.logger.debug("Returning %d accounts", len(account_list))
-
-    if account_list:
+    if paginated_data['items']:
         app.logger.debug(
-            f"Accounts returned: {account_list}"
+            "Returning %d accounts (page %d)",
+            len(paginated_data['items']),
+            page
         )
 
     # 2. Check If-None-Match:
@@ -312,7 +354,7 @@ def list_accounts() -> Tuple[List[Dict[str, Any]], int]:
         return make_response('', status.HTTP_304_NOT_MODIFIED)
 
     # 3. Create the response with the ETag:
-    response = make_response(jsonify(account_list), status.HTTP_200_OK)
+    response = make_response(jsonify(paginated_data), status.HTTP_200_OK)
     response.headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
     response.set_etag(etag_hash)  # Set the ETag header
     return response
@@ -369,7 +411,7 @@ def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     current_user = get_jwt_identity()
     app.logger.debug('Current user: %s', current_user)
 
-    cache_key = f"{ACCOUNTS_PATH_V1}:{account_id}"
+    cache_key = f"{ACCOUNT_CACHE_KEY}:{account_id}"
 
     # Attempt to retrieve cached data
     cached_data = cache.get(cache_key)
@@ -390,8 +432,11 @@ def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
 
         # Cache the data
         try:
-            cache.set(cache_key, (data, etag_hash),
-                      timeout=CACHE_DEFAULT_TIMEOUT)
+            cache.set(
+                cache_key,
+                (data, etag_hash),
+                timeout=CACHE_DEFAULT_TIMEOUT
+            )
         except TypeError as type_err:
             app.logger.error(
                 "Failed to cache account due to type error: %s",
@@ -505,9 +550,9 @@ def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     # Convert SQLAlchemy model to DTO
     account_dto = AccountDTO.from_orm(account)
 
-    # Invalidate specific cache key
-    cache.delete(ACCOUNTS_CACHE_KEY)  # Invalidate the list
-    app.logger.debug("Cache key %s invalidated.", ACCOUNTS_CACHE_KEY)
+    # Invalidate specific cache key(s)
+    invalidate_all_account_pages()
+    app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
     return account_dto.dict(), status.HTTP_200_OK
 
@@ -604,9 +649,9 @@ def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     # Convert SQLAlchemy model to DTO
     account_dto = AccountDTO.from_orm(account)
 
-    # Invalidate specific cache key
-    cache.delete(ACCOUNTS_CACHE_KEY)  # Invalidate the list
-    app.logger.debug("Cache key %s invalidated.", ACCOUNTS_CACHE_KEY)
+    # Invalidate specific cache key(s)
+    invalidate_all_account_pages()
+    app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
     return account_dto.dict(), status.HTTP_200_OK
 
@@ -673,8 +718,8 @@ def delete_by_id(account_id: UUID) -> Tuple[str, int]:
 
     if account:
         account.delete()
-        # Invalidate specific cache key
-        cache.delete(ACCOUNTS_CACHE_KEY)  # Invalidate the list
-        app.logger.debug("Cache key %s invalidated.", ACCOUNTS_CACHE_KEY)
+        # Invalidate specific cache key(s)
+        invalidate_all_account_pages()
+        app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
     return "", status.HTTP_204_NO_CONTENT
