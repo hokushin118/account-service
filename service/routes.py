@@ -369,16 +369,48 @@ def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     current_user = get_jwt_identity()
     app.logger.debug('Current user: %s', current_user)
 
-    account = get_account_or_404(account_id)
+    cache_key = f"{ACCOUNTS_PATH_V1}:{account_id}"
 
-    # Convert SQLAlchemy model to DTO
-    account_dto = AccountDTO.from_orm(account)
-    data = account_dto.dict()
+    # Attempt to retrieve cached data
+    cached_data = cache.get(cache_key)
+
+    if cached_data:
+        app.logger.debug('Retrieving Account from cache...')
+        data, etag_hash = cached_data
+    else:
+        app.logger.debug('Fetching Account from database...')
+        account = get_account_or_404(account_id)
+
+        # Convert SQLAlchemy model to DTO
+        account_dto = AccountDTO.from_orm(account)
+        data = account_dto.dict()
+
+        # 1. Generate the ETag:
+        etag_hash = generate_etag_hash(data)
+
+        # Cache the data
+        try:
+            cache.set(cache_key, (data, etag_hash),
+                      timeout=CACHE_DEFAULT_TIMEOUT)
+        except TypeError as type_err:
+            app.logger.error(
+                "Failed to cache account due to type error: %s",
+                type_err
+            )
+        except ValueError as value_err:
+            app.logger.error(
+                "Failed to cache account due to value error: %s",
+                value_err
+            )
+        except AttributeError as attr_err:
+            app.logger.error(
+                "Failed to cache account due to attribute error: %s",
+                attr_err
+            )
+        except Exception as err:  # pylint: disable=W0703
+            app.logger.error("Failed to cache account: %s", err)
 
     app.logger.debug(f"Account returned: {data}")
-
-    # 1. Generate the ETag:
-    etag_hash = generate_etag_hash(data)
 
     # 2. Check for If-None-Match header:
     if_none_match = request.headers.get(IF_NONE_MATCH_HEADER)
