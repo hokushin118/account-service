@@ -97,3 +97,46 @@ Content-Type: application/json
 }
 
 ###
+
+# Partial update existing account v1 - 200
+
+PATCH http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts/{{test_id}} HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "phone_number": "918-777-1888"
+}
+
+###
+
+# Partial update existing account v1 - 401
+
+PATCH http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts/{{test_id}} HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "phone_number": "918-777-1888"
+}
+
+###
+
+# Delete account by id v1 - 204
+
+DELETE http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts/{{test_id}} HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+###
+
+# Delete account by id v1 - 401
+
+DELETE http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts
+/{{test_id}} HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+
+###
