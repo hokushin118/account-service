@@ -109,8 +109,9 @@ FORCE_HTTPS = os.environ.get('FORCE_HTTPS', 'False').lower() == 'true'
 SWAGGER_ENABLED = os.environ.get('SWAGGER_ENABLED', 'false').lower() == 'true'
 CACHE_TYPE = os.environ.get('CACHE_TYPE', 'redis')
 CACHE_REDIS_HOST = os.environ.get('CACHE_REDIS_HOST', 'localhost')
-CACHE_REDIS_PORT = int(os.environ.get('CACHE_REDIS_PORT', 6379))
-CACHE_REDIS_DB = int(os.environ.get('CACHE_REDIS_DB', 0))
+CACHE_REDIS_PORT = os.environ.get('CACHE_REDIS_PORT', '6379')
+CACHE_REDIS_DB = os.environ.get('CACHE_REDIS_DB', '0')
+CACHE_REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD')
 
 
 # --- Security and Monitoring ---
@@ -303,9 +304,32 @@ def configure_swagger(current_app: Flask) -> None:
                     'required': ['name', 'email', 'date_joined']
                 },
                 'ListOfAccountDTO': {
-                    'type': 'array',
-                    'items': {
-                        '$ref': '#/components/schemas/AccountDTO'
+                    'type': 'object',
+                    'properties': {
+                        'items': {
+                            'type': 'array',
+                            'items': {
+                                '$ref': '#/components/schemas/AccountDTO'
+                            }
+                        },
+                        'page': {
+                            'type': 'integer',
+                            'description': 'Current page number',
+                            'example': 1,
+                            'format': 'int32'
+                        },
+                        'per_page': {
+                            'type': 'integer',
+                            'description': 'Number of items per page',
+                            'example': 5,
+                            'format': 'int32'
+                        },
+                        'total': {
+                            'type': 'integer',
+                            'description': 'Total number of entries',
+                            'example': 1,
+                            'format': 'int32'
+                        }
                     }
                 }
             }
