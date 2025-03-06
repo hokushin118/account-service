@@ -44,6 +44,7 @@ Authorization: Bearer {{token}}
   "date_joined": "2025-03-05",
   "email": "jdavis@example.com",
   "name": "John Davis",
+  "gender": "Male",
   "phone_number": "918-295-1876"
 }
 
@@ -60,6 +61,7 @@ Content-Type: application/json
   "date_joined": "2025-03-05",
   "email": "jdavis@example.com",
   "name": "John Davis",
+  "gender": "Male",
   "phone_number": "918-295-1876"
 }
 
@@ -77,6 +79,7 @@ Authorization: Bearer {{token}}
   "date_joined": "2025-03-05",
   "email": "jdavis@example.com",
   "name": "John Davis",
+  "gender": "Male",
   "phone_number": "918-777-1888"
 }
 
@@ -93,6 +96,7 @@ Content-Type: application/json
   "date_joined": "2025-03-05",
   "email": "jdavis@example.com",
   "name": "John Davis",
+  "gender": "Male",
   "phone_number": "918-777-1888"
 }
 

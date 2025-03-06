@@ -101,6 +101,7 @@ def account_to_dict(account_or_dto: Union[object, dict]) -> dict[str, Any]:
         'id': account_or_dto.id,
         'name': account_or_dto.name,
         'email': account_or_dto.email,
+        'gender': account_or_dto.gender,
         'address': account_or_dto.address,
         'phone_number': account_or_dto.phone_number,
         'date_joined': account_or_dto.date_joined.isoformat(),

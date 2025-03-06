@@ -5,7 +5,7 @@ from datetime import date
 from uuid import uuid4
 
 import factory
-from factory.fuzzy import FuzzyDate
+from factory.fuzzy import FuzzyDate, FuzzyChoice
 
 from service.models import Account
 
@@ -21,6 +21,7 @@ class AccountFactory(factory.Factory):
     id = factory.LazyAttribute(lambda o: uuid4())
     name = factory.Faker('name')
     email = factory.Faker('email')
+    gender = FuzzyChoice(['Male', 'Female', 'Other', 'Prefer not to say'])
     address = factory.Faker('address')
     phone_number = factory.Faker('phone_number')
     date_joined = FuzzyDate(date(2008, 1, 1))

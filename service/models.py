@@ -20,7 +20,7 @@ from service.common.constants import (
     NAME_MAX_LENGTH,
     ADDRESS_MAX_LENGTH,
     EMAIL_MAX_LENGTH,
-    PHONE_MAX_LENGTH
+    PHONE_MAX_LENGTH, GENDER_MAX_LENGTH
 )
 from service.common.utils import account_to_dict
 
@@ -249,6 +249,10 @@ class Account(db.Model, PersistentBase):
         nullable=False,
         unique=True
     )
+    gender = db.Column(
+        db.String(GENDER_MAX_LENGTH),
+        nullable=True
+    )
     address = db.Column(
         db.String(ADDRESS_MAX_LENGTH)
     )
@@ -298,6 +302,7 @@ class Account(db.Model, PersistentBase):
         try:
             self.name = data['name']
             self.email = data['email']
+            self.gender = data.get('gender')
             self.address = data.get('address')  # Address is optional
             self.phone_number = data.get('phone_number')
             self.date_joined = parser.parse(str(data['date_joined'])).date()
