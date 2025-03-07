@@ -55,7 +55,7 @@ def load_environment_variables() -> None:
     # Load the correct .env file based on APP_SETTINGS
     # export APP_SETTINGS=docker  # Or production, etc.
     env = os.environ.get('APP_SETTINGS')
-    logging.debug("Environment variables: %s", env)
+    logging.warning("Environment variables: %s", env)
     base_dir = os.path.dirname(os.path.dirname(__file__))
     dotenv_filename = '.env' if not env else f'.env.{env}'
     dotenv_path = os.path.join(base_dir, dotenv_filename)

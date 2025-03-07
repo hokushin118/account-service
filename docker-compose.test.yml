@@ -1,97 +1,21 @@
 # Testing profile
-# docker compose -f docker-compose.yml -f docker-compose.test.yml up
+# docker compose -f docker-compose.yml -f docker-compose.test.yml up --build
 # You only need to include the services you are changing in the override file.
 # All other settings will be inherited from the original docker-compose.yml file.
 # Project name
 name: cba
 
 services:
-  postgres:
+  account-service:
     extends:
       file: docker-compose.yml
-      service: postgres
-    volumes:
-      - postgresql_data:/var/lib/postgresql/data
-    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
-      - 15432:5432 # external port / container port
-    env_file:
-      - .env.testing
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes # is recommended only for development
-      - POSTGRES_HOST_AUTH_METHOD=trust
-      - POSTGRES_USER=${DATABASE_USER}
-      - POSTGRES_DB=${DATABASE_NAME}
-
-  prometheus:
-    extends:
-      file: docker-compose.yml
-      service: prometheus
-    container_name: ${PROMETHEUS_CONTAINER_NAME}
-    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
-      - ${PROMETHEUS_PORT}:9090 # external port / container port
-    env_file:
-      - .env.testing
-
-  # PostgreSQL object-relational database system is used as Keycloak data storage.
-  keycloak-postgres:
-    extends:
-      file: docker-compose.yml
-      service: keycloak-postgres
-    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
-      - 15433:5433 # external port / container port
-    env_file:
-      - .env.testing
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes # is recommended only for development
-      - POSTGRESQL_DATABASE=${KEYCLOAK_POSTGRES_DB_NAME}
-      - POSTGRESQL_USERNAME=${KEYCLOAK_POSTGRES_DB_USER}
-      - POSTGRESQL_PASSWORD=${KEYCLOAK_POSTGRES_DB_PASSWORD}
-    deploy:
-      replicas: 1
-
-  # Keycloak IAM (Identity and Access Management) service.
-  keycloak:
-    extends:
-      file: docker-compose.yml
-      service: keycloak
+      service: account-service
     build:
       context: .
-      dockerfile: ./.infrastructure/keycloak/Dockerfile
+      dockerfile: ./Dockerfile
     ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
-      - 28080:8080 # external port / container port
+      - ${ACCOUNT_SRV_PORT}:5000 # external port / container port
     env_file:
       - .env.testing
-    environment: # override values from the conf file
-      # https://github.com/bitnami/containers/tree/main/bitnami/keycloak#configuration
-      - KEYCLOAK_DATABASE_HOST=${KEYCLOAK_DATABASE_HOST}
-      - KEYCLOAK_DATABASE_PORT=${KEYCLOAK_DATABASE_PORT}
-      - KEYCLOAK_DATABASE_NAME=${KEYCLOAK_POSTGRES_DB_NAME}
-      - KEYCLOAK_DATABASE_USER=${KEYCLOAK_POSTGRES_DB_USER}
-      - KEYCLOAK_DATABASE_PASSWORD=${KEYCLOAK_POSTGRES_DB_PASSWORD}
-      - KEYCLOAK_CREATE_ADMIN_USER=true # Creates admin user on start-up
-      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN_USER}
-      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
-      - KC_METRICS_ENABLED=true
-      - KC_HEALTH_ENABLED=true # https://www.keycloak.org/server/health
     deploy:
       replicas: 1
-
-  # Redis is a high performance key-value database. It shores cached values.
-  redis:
-    extends:
-      file: docker-compose.yml
-      service: redis
-    ports: # Important: In a production environment you should remove the external port that kept here for debugging purposes.
-      - 16379:6379 # external port / container port
-    env_file:
-      - .env.docker
-    environment:
-      - REDIS_REPLICATION_MODE=master
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL,CONFIG
-    deploy:
-      replicas: 1
-
-volumes:
-  postgresql_data:
-    driver: local

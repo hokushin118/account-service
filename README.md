@@ -5,222 +5,499 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.9](https://img.shields.io/badge/Python-3.9-green.svg)](https://shields.io/)
 
-This repository contains the code for the **account-service**, a cloud-native
-microservice.
+This repository provides the implementation for the `account-service`, a
+cloud-native microservice built to **scale horizontally and handle high volumes
+of requests efficiently.**
 
-## Microservice Purpose
+## Microservice Purpose: Account Management
 
-The core purpose of the **account-service** cloud-native microservice is to
-handle the **CRUD** (Create, Read, Update, Delete) operations for
-**Account** objects. It provides endpoints for creating new accounts, listing
-all accounts,
-retrieving a specific account by ID, updating an account, partially updating an
-account, and deleting an account.
+The `account-service` is a cloud-native microservice designed to provide robust
+and scalable account management capabilities. Its primary function is to handle
+**CRUD (Create, Read, Update, Delete)** operations for **Account** entities.
+
+**Key Responsibilities:**
+
+* **Account Creation:** Provides an endpoint to register new user accounts.
+* **Account Retrieval:** Enables fetching single accounts by their unique
+  identifiers and listing all accounts.
+* **Account Modification:** Supports full and partial updates of existing
+  account information.
+* **Account Deletion:** Allows for the removal of accounts.
+
+**Design Principles:**
+
+* **Scalability:** Designed to handle a large volume of account-related
+  requests.
+* **Reliability:** Implemented with error handling and robust data validation.
+* **Maintainability:** Follows clean code principles and adheres to best
+  practices.
+* **Cloud-Native:** Built to leverage cloud infrastructure and
+  containerization.
 
 ## Key Components and Libraries
 
-**Python 3.9**: The programming language used to implement the microservice.  
-**Flask**: The web framework used to create the REST API.
+This microservice is built using the following core technologies:
+
+* **[Python 3.9](https://www.python.org/downloads/release/python-390/):**
+    * The primary programming language used for development.
+    * Chosen for its readability, extensive libraries, and strong community
+      support.
+* **[Flask](https://flask.palletsprojects.com):**
+    * A lightweight and flexible web framework for Python.
+    * Used to create the RESTful API endpoints and handle HTTP requests.
+    * Allows for rapid development and easy prototyping.
+
+**Additional Libraries and Tools:**
+
+* **(Add other relevant libraries and tools here, e.g.,):**
+    * **SQLAlchemy:** For database interaction.
+    * **Flask-Migrate:** For database migrations.
+    * **Pydantic:** For data validation.
+    * **Gunicorn:** For WSGI HTTP server.
+    * **unittest:** For unit testing.
+    * **pylint:** For linting.
+
+**Rationale:**
+
+* [Python 3.9](https://www.python.org/downloads/release/python-390/)
+  provides a stable and modern environment for development.
+* [Flask](https://flask.palletsprojects.com)'s simplicity and extensibility
+  make it an ideal choice for building
+  microservices.
+* The additional libraries are selected based on their functionality and
+  suitability for the project's requirements.
 
 ## Prerequisites
 
-- [Python 3.9](https://www.python.org/downloads/release/python-390/)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop)
-- [PyCharm](https://www.jetbrains.com/pycharm)
-  or [Visual Studio Code](https://code.visualstudio.com) - Optional for
-  development
+To develop and run this project, you'll need the following tools and software
+installed:
 
-I've been
-using [Red Hat Enterprise Linux for Workstations](https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/workstations)
-as my development machine, but the project should run on any operating system.
-The project uses [Gunicorn](https://gunicorn.org) for local
-development. [Gunicorn](https://gunicorn.org) is a WSGI HTTP server designed
-specifically for Unix-like systems (Linux, macOS, etc.) and you cannot
-directly use [Gunicorn](https://gunicorn.org) on Windows. Therefore, you'll
-need to
-use [Docker](https://docs.docker.com/desktop/setup/install/windows-install/) to
-run the application locally on Windows.
+**Required:**
 
-## Project version
+* **Python 3.9:**
+    * Download and install Python 3.9 from the official
+      website: [Python 3.9 Downloads](https://www.python.org/downloads/release/python-390/)
+    * Ensure
+      that [Python 3.9 Downloads](https://www.python.org/downloads/release/python-390/)
+      is added to your system's PATH environment variable.
+* **Docker Desktop:**
+    * Install Docker Desktop for your operating
+      system: [Docker Desktop Downloads](https://www.docker.com/products/docker-desktop)
+    * Docker is essential for running infrastructure services and
+      containerizing the application.
 
-The project uses **semantic** versioning for its versioning scheme. The
-versioning scheme is defined in the **VERSION** file located in the root
-directory of the project. The version number is in the format **X.Y.Z**, where
-**X** is the major version, **Y** is the minor version, and **Z** is the patch
-version.
+**Optional (Recommended for Development):**
 
-## Profiles
+* **Integrated Development Environment (IDE):**
+    * Choose an IDE for efficient development:
+        * [PyCharm](https://www.jetbrains.com/pycharm) (Recommended for Python
+          development)
+        * [Visual Studio Code](https://code.visualstudio.com) (Highly versatile
+          and extensible)
 
-The microservice has three launching profiles:
+**Operating System Compatibility:**
 
-**development** - (default, used for launching the microservice in a
-development environment)
-**docker** - (used for launching the microservice in a docker container)  
-**production** - (used for launching the microservice in a production
-environment)
+* While development has been primarily conducted
+  on [Red Hat Enterprise Linux for Workstations](https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/workstations),
+  this project is designed to be cross-platform compatible.
+* **Gunicorn and Windows:**
+    * This project uses Gunicorn as the WSGI HTTP server for local development.
+    * Gunicorn is designed for Unix-like operating systems (Linux, macOS).
+    * To run the application locally on Windows, it is highly recommended to
+      use Docker.
+    * Follow the instructions for installing docker on windows found
+      here: [Docker for Windows Installation](https://docs.docker.com/desktop/setup/install/windows-install/).
 
-The environment variables specific to profile are defined in the *
-*.env.<pofile>** file located in the root directory of the microservice.
+**Important Notes:**
 
-.env - - default (development) profile
+* Ensure that all required software is installed and configured correctly
+  before proceeding with development.
+* Using a virtual environment for Python development is strongly recommended to
+  isolate project dependencies.
+* If you are having issues with gunicorn on windows, use docker.
 
-.env.docker - docker profile
+## Project Versioning
 
-.env.production - production profile, never commit it to the repository
+This project adheres to [Semantic Versioning 2.0.0](https://semver.org) for
+managing releases.
 
-The profile is set using the **APP_SETTINGS** environment variable.
+**Version File:**
 
-```
-export APP_SETTINGS=docker 
-```
+* The current project version is defined in the `VERSION` file, located in the
+  root directory of the repository.
+* This file contains a single line representing the version number.
 
-## Local Development
+**Versioning Scheme:**
 
-To run the microservice locally, follow these steps:
+* The version number follows the format `X.Y.Z`, where:
+    * `X` (Major Version): Incremented when incompatible API changes are made.
+    * `Y` (Minor Version): Incremented when new functionality is added in a
+      backward-compatible manner.
+    * `Z` (Patch Version): Incremented when backward-compatible bug fixes are
+      made.
 
-1. Clone the repository to your local machine.
+**Example:**
 
-```bash
-git clone https://github.com/hokushin118/account-service.git
-```
+* `1.2.3` indicates major version 1, minor version 2, and patch version 3.
 
-2. Navigate to the project directory.
+**Benefits of Semantic Versioning:**
 
-```bash
-cd account-service
-```
+* **Clarity:** Provides a clear indication of the type of changes included in
+  each release.
+* **Compatibility:** Helps users understand the potential impact of upgrading
+  to a new version.
+* **Automation:** Enables automated dependency management and release
+  processes.
 
-3. Create a virtual environment and activate it:
+**Updating the Version:**
 
-```bash
-python3.9 -m pip install venv
-python3.9 -m venv .venv
-source .venv/bin/activate
-```
+* When making changes to the project, update the `VERSION` file accordingly.
+* Follow the [Semantic Versioning 2.0.0](https://semver.org) rules to determine
+  which part of the version number to increment.
 
-4. Install the required dependencies using pip:
+**Release Notes:**
 
-```bash
-python3.9 -m pip install -r requirements.txt
-```
+* Each release should be accompanied by detailed release notes that describe
+  the changes made.
 
-5. Deploy infrastructure services with **Docker Compose**:
+## Environment Profiles
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.test.yml up
-```
+This microservice utilizes distinct environment profiles to manage
+infrastructure and application configurations for different stages of
+development and deployment.
 
-6. Apply the database migration, using the following command:
+**Available Profiles:**
 
-```bash
-flask db-upgrade
-```
+* **development (default):**
+    * Used for local development and testing.
+    * Provides a development-friendly configuration.
+* **docker:**
+    * Used for running microservices within Docker containers.
+    * Configures the application for a containerized environment.
+* **production:**
+    * Used for deploying microservices in a production environment.
+    * Optimized for performance and security.
 
-7. Run the microservice
+**Profile-Specific Environment Variables:**
 
-```bash
-python3.9 wsgi.py
-```
+Environment variables specific to each profile are defined in `.env.<profile>`
+files located in the microservice's root directory.
 
-## Database
+* `.env`: Default environment variables (development profile).
+* `.env.docker`: Environment variables for the Docker profile.
+* `.env.production`: Environment variables for the production profile.
 
-The microservice uses a **PostgreSQL** database to store account data. Make
-sure you have **PostgreSQL** running locally on port **5432** with a database
-named **account_db** and a user named **cba** with password **pa$$wOrd123!**.
+**Important Security Note (Production):**
 
-## Run on Docker
+* The `.env.production` file may contain sensitive information (e.g., database
+  credentials, API keys). **Never commit this file to a version control
+  repository.** Use secure methods for deploying production secrets, such as
+  environment variables managed by your deployment platform or dedicated secret
+  management tools.
 
-To run the microservice using **Docker**, follow these steps:
+**Setting the Active Profile:**
 
-1. Build the **Docker** image:
+The active profile is determined by the `APP_SETTINGS` environment variable.
 
-```bash
-docker build -t account-service .
-```
+* Example (setting the Docker profile):
+    ```bash
+    export APP_SETTINGS=docker
+    ```
 
-2. Run the **Docker** container:
+## Local Development Setup
 
-```bash
-docker run -p 5000:5000 account-service
-```
+This section outlines the steps to set up and run the microservice in a local
+development environment.
 
-## Run on Docker Compose
+**1. Start Infrastructure Services:**
 
-To run the microservice using **Docker Compose**, follow these steps:
+* Ensure that the necessary infrastructure services (e.g., databases, message
+  queues) are running.
+* Refer to
+  the [Local Development](https://github.com/hokushin118/cba-devops/blob/main/README.md#local-development)
+  section of the `cba-devops` repository's README for detailed instructions on
+  setting up these services.
 
-1. Build and run the **Docker Compose** services:
+**2. Clone the Repository:**
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.<profile>.yml up --build
-```
+* Clone the `account-service` repository to your local machine:
 
-For example, to run the services with the  **dev** profile, use the following
-command:
+    ```bash
+    git clone [https://github.com/hokushin118/account-service.git](https://github.com/hokushin118/account-service.git)
+    ```
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml up --build
-```
+**3. Navigate to the Project Directory:**
 
-or
+* Change your current directory to the cloned repository:
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml up --build -d
-```
+    ```bash
+    cd account-service
+    ```
 
-2. Apply the database migration, using the following command:
+**4. Create and Activate a Virtual Environment:**
 
-```bash
-flask db-upgrade
-```
+* Create a virtual environment to isolate project dependencies:
 
-You can access the microservice at http://127.0.0.1:5000.
+    ```bash
+    python3.9 -m venv .venv
+    ```
 
-To stop the services, press **Ctrl+C** in the terminal where the services are
-running, or run:
+    * Note: Ensure you have Python 3.9 installed. Adjust the version if needed.
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.<profile>.yml down
-```
+* Activate the virtual environment:
 
-For example, to stop the services running with the  **dev** profile, use the
-following command:
+    ```bash
+    source .venv/bin/activate  # On macOS/Linux
+    .venv\Scripts\activate     # On Windows
+    ```
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml down
-```
+**5. Install Dependencies:**
 
-or
+* Install the required Python packages using `pip`:
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.dev.yml down -v
-```
+    ```bash
+    python3.9 -m pip install -r requirements.txt
+    ```
 
-For more details on extending **Docker Compose** configuration, see:
-[Extend your Compose files](https://docs.docker.com/compose/how-tos/multiple-compose-files/extends)
+**6. Apply Database Migrations:**
 
-## Run tests
+* Apply any pending database migrations to update the database schema:
 
-1. Make sure you have deployed infrastructure services with **Docker Compose**:
+    ```bash
+    flask db upgrade
+    ```
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.test.yml up
-```
+**7. Run the Microservice:**
 
-2. Apply the database migration, using the following command:
+* Start the microservice using the `wsgi.py` file:
 
-```bash
-flask db-upgrade
-```
+    ```bash
+    python3.9 wsgi.py
+    ```
 
-3. To run the tests for the microservice, use the following command:
+* The microservice will be accessible at `http://127.0.0.1:5000` (or the port
+  specified in your application's configuration).
 
-```bash
-nosetests -v --with-spec --spec-color
-```
+**Important Notes:**
+
+* Verify that your application's configuration is correctly set up for the
+  local development environment.
+* If you encounter any dependency issues, ensure that your virtual environment
+  is activated and that you have the correct Python version.
+* When you are finished, deactivate the virtual environment:
+
+    ```bash
+    deactivate
+    ```
+
+## Database Configuration
+
+This microservice relies on a PostgreSQL database for persistent account data.
+
+**Database Requirements:**
+
+* **PostgreSQL Instance:** A running PostgreSQL instance is required.
+* **Port:** The instance must be accessible on port `5432`.
+* **Database Name:** A database named `account_db` must exist.
+* **User Credentials:** A database user named `cba` with the
+  password `pa$$wOrd123!` must be created.
+
+**Example (Local Development):**
+
+* If you're using Docker Compose, the `docker-compose.test.yml` file will set
+  up a suitable PostgreSQL instance.
+* Otherwise, ensure you have a local PostgreSQL instance running with the
+  specified database and user credentials.
+
+## Running the Microservice with Docker
+
+This section describes how to build and run the microservice using Docker.
+
+**1. Build the Docker Image:**
+
+* Navigate to the directory containing microservice `Dockerfile` (root
+  directory of microservice).
+* Use the following command to build the Docker image:
+
+    ```bash
+    docker build -t account-service .
+    ```
+
+    * `docker build`: Builds a Docker image.
+    * `-t account-service`: Tags the image with the name `account-service`.
+    * `.`: Specifies the build context (current directory).
+
+**2. Run the Docker Container:**
+
+* Use the following command to run the Docker container:
+
+    ```bash
+    docker run -p 5000:5000 account-service
+    ```
+
+    * `docker run`: Runs a Docker container.
+    * `-p 5000:5000`: Maps port 5000 on the host to port 5000 in the container.
+    * `account-service`: Specifies the image to run.
+
+**Important Notes:**
+
+* Ensure that Docker is installed and running on your system.
+* Verify that your `Dockerfile` is correctly configured.
+* The `-p 5000:5000` option maps the container's port to the host. If your
+  application uses a different port, adjust the mapping accordingly.
+* If you are running a database or other dependencies, you will need to run
+  them as separate containers or use Docker Compose.
+* To run the container in detached mode (background), add the `-d` flag:
+
+    ```bash
+    docker run -d -p 5000:5000 account-service
+    ```
+* To remove the container after stopping it, add the `--rm` flag:
+
+    ```bash
+    docker run --rm -p 5000:5000 account-service
+    ```
+
+* To run a specific version of the image, use the tag. For example:
+
+    ```bash
+    docker run -p 5000:5000 account-service:v1
+    ```
+
+## Running the Microservice with Docker Compose
+
+This section outlines how to run the microservice using Docker Compose,
+including infrastructure setup, database migrations, and service access.
+
+**1. Start Infrastructure Services:**
+
+* Before running the microservice, ensure that the necessary infrastructure
+  services (e.g., databases, message queues) are running.
+* Refer to
+  the [Local Development](https://github.com/hokushin118/cba-devops/blob/main/README.md#local-development)
+  section of the README for detailed instructions.
+
+**2. Build and Run the Microservice:**
+
+* Before executing any Docker Compose commands, ensure you are in the root
+  directory of the microservice repository.
+* Use the following command to navigate to the root directory, if needed:
+
+    ```bash
+    cd /path/to/account-service
+    ```
+
+* Use Docker Compose to build and run the microservice, along with any
+  profile-specific configurations.
+* Replace `<profile>` with the desired profile (e.g., `dev`, `test`, `prod`).
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.<profile>.yml up --build
+    ```
+
+* Example (dev profile):
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+    ```
+
+* To run the services in detached mode (background), add the `-d` flag:
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
+    ```
+
+**3. Apply Database Migrations:**
+
+* After the services are running, apply any pending database migrations.
+* This step ensures that the database schema is up-to-date.
+
+    ```bash
+    flask db-upgrade
+    ```
+
+**4. Access the Microservice:**
+
+* Once the microservice is running, you can access it
+  at `http://127.0.0.1:5000`.
+* Replace `5000` with the port defined in your `docker-compose.<profile>.yml`
+  file if necessary.
+
+**5. Stop the Services:**
+
+* To stop the services, press **Ctrl+C** in the terminal where they are
+  running (if not detached), or use the following command:
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.<profile>.yml down
+    ```
+
+* Example (dev profile):
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+    ```
+
+* To remove volumes as well, add the `-v` flag:
+
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v
+    ```
+
+**6. Extending Docker Compose Configuration:**
+
+* For more details on extending Docker Compose configurations,
+  see: [Extend your Compose files](https://docs.docker.com/compose/how-tos/multiple-compose-files/extends)
+
+## Running Tests
+
+To execute the microservice's tests, follow these steps:
+
+1. **Start Infrastructure Services:**
+    * Ensure that the necessary infrastructure services (e.g., databases,
+      message queues) are running using Docker Compose. For more information,
+      see
+      the [Start Infrastructure Services](https://github.com/hokushin118/cba-devops?tab=readme-ov-file#local-development)
+      section of the README.
+
+2. **Apply Database Migrations:**
+    * Before applying database migration, ensure you are in the root directory
+      of the microservice repository.
+    * Use the following command to navigate to the root directory, if needed:
+
+    ```bash
+    cd /path/to/account-service
+    ```
+
+    * Apply any pending database migrations to ensure the database schema is
+      up-to-date.
+
+   ```bash
+   flask db-upgrade
+   ```
+
+3. **Run Tests:**
+    * Execute the microservice's tests using `nosetests`.
+   ```bash
+   nosetests -v --with-spec --spec-color
+   ```
+    * `-v`: Enables verbose output.
+    * `--with-spec`: Enables the `nose-spec` plugin for a more readable test
+      output.
+    * `--spec-color`: Enables colored output for `nose-spec`.
+
+**Important Notes:**
+
+* Verify that your application's configuration is set up correctly for the
+  testing environment.
+* Review the test output for any failures or errors.
+* If you are using a different testing framework than nose, update the testing
+  command accordingly.
 
 ## Lint
 
-To lint the code, use the following command:
+This project uses `pylint` to enforce code quality and style standards. To lint
+the code, use the following command:
 
 ```bash
 pylint service/
@@ -228,253 +505,155 @@ pylint service/
 
 ## Environment Variables
 
-You can set the environment variables for the profile in the **.env** files.
+Environment variables for each profile are configured in the `.env` files.
 
 ## Endpoints
 
-/api (GET): The root endpoint. Returns a welcome message.  
-/api/health (GET): Returns the health status of the service (currently always
-"UP").  
-/api/info (GET): Returns information about the service (name, version,
-uptime).  
-/api/v1/accounts (POST): Creates a new account.  
-/api/v1/accounts (GET): Lists all accounts.  
-/api/v1/accounts/<uuid:account_id> (GET): Retrieves a specific account by ID.  
-/api/v1/accounts/<uuid:account_id> (PUT): Updates an existing account.  
-/api/v1/accounts/<uuid:account_id> (PATCH): Partially updates an existing
-account.  
-/api/v1/accounts/<uuid:account_id> (DELETE): Deletes an account.
+This section describes the available API endpoints.
+
+**General Endpoints:**
+
+* `/api` (GET):
+    * Returns a welcome message indicating the API is running.
+    * Example Response: `{"message": "Welcome to the API!"}`
+* `/api/health` (GET):
+    * Provides the health status of the service.
+    * Response: `{"status": "UP"}` (Note: Currently always "UP").
+* `/api/info` (GET):
+    * Returns service information, including name, version, and uptime.
+    * Example
+      Response: `{"name": "Account Service", "version": "1.0.0", "uptime": "1d 2h 3m"}`
+
+**Account Management (v1):**
+
+* `/api/v1/accounts` (POST):
+    * Creates a new account.
+    * Request Body: JSON object containing account details (
+      e.g., `{"name": "testuser", "email": "test@example.com"}`).
+    * Response: JSON object representing the created account.
+* `/api/v1/accounts` (GET):
+    * Lists all accounts.
+    * Response: JSON array of account objects.
+* `/api/v1/accounts/{account_id}` (GET):
+    * Retrieves a specific account by its unique ID.
+    * `{account_id}`: UUID of the account.
+    * Response: JSON object representing the requested account.
+* `/api/v1/accounts/{account_id}` (PUT):
+    * Updates an existing account. Replaces the entire account object.
+    * `{account_id}`: UUID of the account.
+    * Request Body: JSON object containing the updated account details.
+    * Response: JSON object representing the updated account.
+* `/api/v1/accounts/{account_id}` (PATCH):
+    * Partially updates an existing account. Updates only the provided fields.
+    * `{account_id}`: UUID of the account.
+    * Request Body: JSON object containing the fields to update.
+    * Response: JSON object representing the updated account.
+* `/api/v1/accounts/{account_id}` (DELETE):
+    * Deletes an account.
+    * `{account_id}`: UUID of the account.
+    * Response: Response: Success status (204 No Content).
+
+**Notes:**
+
+* `{account_id}` refers to a version
+  4 [UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier) (
+  Universally Unique Identifier).
+* Request and response formats are in JSON.
+* Error handling and response codes are omitted for brevity. Refer to the API
+  documentation ([Swagger](https://swagger.io)) for detailed error information.
 
 ## API Versioning
 
-The API is versioned using the path prefix **/api/v1**. When the API is
-updated, the version number will be incremented to **/api/v2**, and the
-previous version will be deprecated.
+This API employs path-based versioning to manage changes and ensure backward
+compatibility.
+
+**Current Version:**
+
+* The current API version is **v1**.
+* All API endpoints are prefixed with `/api/v1/`.
+* Example: `/api/v1/accounts`
+
+**Future Versions:**
+
+* When significant changes are introduced to the API, a new version will be
+  released (e.g., **v2**).
+* New versions will be accessible through their respective path prefixes (
+  e.g., `/api/v2/`).
+* Previous versions will be deprecated, and a migration period will be provided
+  before they are removed.
+
+**Deprecation Policy:**
+
+* A clear deprecation notice will be provided when a new API version is
+  released.
+* The deprecation period will allow developers sufficient time to migrate to
+  the latest version.
+* The exact deprecation period will be announced in the release notes and
+  documentation.
+
+**Benefits of Versioning:**
+
+* **Backward Compatibility:** Allows existing applications to continue
+  functioning without immediate changes.
+* **Controlled Updates:** Provides a structured way to introduce breaking
+  changes.
+* **Improved Communication:** Clearly indicates which version is being used.
 
 ## API Documentation
 
-The API is documented using Swagger. You can access the **Swagger**
-documentation at http://127.0.0.1:5000/apidocs.
+This API utilizes [Swagger](https://swagger.io) for interactive documentation.
 
-**Swagger** can be conditionally enabled or disabled using the
-**SWAGGER_ENABLED** environment variable.
+**Accessing Swagger:**
 
-## Prometheus
+* You can access the [Swagger](https://swagger.io) UI
+  at [http://127.0.0.1:5000/apidocs](http://127.0.0.1:5000/apidocs).
+* This interface allows you to explore the available API endpoints, understand
+  their parameters, and even make test requests directly from your browser.
 
-**Prometheus** endpoint is available at:
+**Enabling/Disabling Swagger:**
 
-http://localhost:19090/metrics
+* [Swagger](https://swagger.io) can be conditionally enabled or disabled using
+  the `SWAGGER_ENABLED` environment variable.
+* To enable Swagger, set `SWAGGER_ENABLED` to `true` (or any value that your
+  application interprets as true).
+* To disable Swagger, set `SWAGGER_ENABLED` to `false` (or omit the variable
+  entirely).
+* Example (using bash):
+    ```bash
+    export SWAGGER_ENABLED=true
+    ```
 
-http://localhost:19090/targets
+**Important Notes:**
+
+* Ensure that your application is running on port 5000 (or the port specified
+  in your application's configuration) for the [Swagger](https://swagger.io) UI
+  to be accessible.
+* In production environments, it's generally recommended to disable Swagger for
+  security reasons, unless access is carefully controlled.
+
+## Prometheus Monitoring
+
+For more information, see
+the [Prometheus Monitoring](https://github.com/hokushin118/cba-devops?tab=readme-ov-file#prometheus-monitoring)
+section of the README.
 
 ## Deployment on Kubernetes
 
-Kubernetes deployment files are located in the **.infrastructure/k8s**
-directory.
+For more information, see
+the [Deployment on Kubernetes](https://github.com/hokushin118/cba-devops?tab=readme-ov-file#deployment-on-kubernetes)
+section of the README.
 
-To deploy the **Account** microservice to **Kubernetes**, use the following
-commands:
+## Deployment on Red Hat OpenShift with Tekton
 
-1. **Namespace**: Apply the namespace yaml first. All other resources will be
-   created within this namespace (**cba-dev**).
+For more information, see
+the [Deployment on Red Hat OpenShift with Tekton](https://github.com/hokushin118/cba-devops?tab=readme-ov-file#deployment-on-red-hat-openshift-with-tekton)
+section of the README.
 
-```bash
-kubectl apply -f .infrastructure/k8s/cba-dev-ns.yml
-```
+**Running Pipelines:**
 
-2. **ConfigMap**: Apply the ConfigMap yaml next. The Deployment depends on it.
-
-```bash
-kubectl apply -n cba-dev -f .infrastructure/k8s/account-srv-cm.yml
-```
-
-3. **Secret**: Apply the Secret yaml. The Deployment also depends on it.
-
-```bash
-kubectl apply -n cba-dev -f .infrastructure/k8s/account-srv-secret.yml
-```
-
-4. **Deployment**: Apply the Deployment yaml last. It depends on the Namespace,
-   ConfigMap, and Secret.
-
-```bash
-kubectl apply -n cba-dev -f .infrastructure/k8s/account-srv-deployment.yml
-```
-
-5. **Service**: Apply the Service yaml. It depends on the Pods created by the
-   Deployment.
-
-```bash
-kubectl apply -n cba-dev -f .infrastructure/k8s/account-srv-service.yml
-```
-
-6. **HPA**: Apply the HPA yaml. It depends on the Deployment.
-
-```bash
-kubectl apply -n cba-dev -f .infrastructure/k8s/account-srv-hpa.yml
-```
-
-Check the pods are running with:
-
-```bash
-kubectl get pods -n cba-dev
-```
-
-Check the Service is created with:
-
-```bash
-kubectl get services -n cba-dev
-```
-
-Check the HPA is created with:
-
-```bash
-kubectl get hpa -n cba-dev
-```
-
-## Deployment on OpenShift using Tekton
-
-[Tekton](https://tekton.dev) is a cloud-native solution for building CI/CD
-systems. It consists of [Tekton](https://tekton.dev) Pipelines, which provides
-the building blocks, and of supporting components, such as Tekton CLI and
-Tekton Catalog, that make Tekton a complete ecosystem. For more information,
-see the [Tekton documentation](https://tekton.dev/docs/).
-
-You would need to have **OpenShift CLI** (oc) installed on your machine. You
-can download it
-from [here](https://access.redhat.com/downloads/content/290/ver=4.17/rhel---9/4.17.16/x86_64/product-software).
-
-Verify the availability of the OpenShift CLI using the following command:
-
-```bash
-oc version
-```
-
-The [Tekton](https://tekton.dev) pipeline deployment files for **OpenShift**
-are located in the **.infrastructure/openshift/tekton** directory.
-
-1. Login to **OpenShift** cluster, using the following command:
-
-```bash
-oc login --token=<token> --server=https://api.,,.p1.openshiftapps.com:6443
-```
-
-2. Install [Tekton Pipeline](https://github.com/tektoncd/pipeline/releases)
-   on **OpenShift** using the following command:
-
-```bash
-oc apply -f https://storage.googleapis.com/tekton-releases/pipeline/previous/v0.68.0/release.yaml
-```
-
-3. [Download](https://github.com/tektoncd/cli/releases) and install [Tekton
-   CLI](https://tekton.dev/docs/cli) on your machine. For example, to download
-   and install **Tekton CLI** on **RHEL 9**, use the following commands:
-
-```bash
-rpm -Uvh https://github.com/tektoncd/cli/releases/download/v0.37.1/tektoncd-cli-0.37.1_Linux-64bit.rpm
-```
-
-or
-
-```bash
-curl -LO https://github.com/tektoncd/cli/releases/download/v0.37.1/tkn_0.37.1_Linux_x86_64.tar.gz
-sudo tar xvzf tkn_0.37.1_Linux_x86_64.tar.gz -C /usr/local/bin/ tkn
-```
-
-After installation (using either method), verify that Tekton is installed
-correctly, using the following command:
-
-```bash
-tkn version
-```
-
-4. To create a workspace for pipeline on **OpenShift**, use the following
-   commands:
-
-```bash
-oc create -f .infrastructure/openshift/cba-pipeline-pvc.yml
-```
-
-5. Apply the Secret yaml.
-
-```bash
-oc apply -f .infrastructure/openshift/cba-pipeline-secret.yml
-```
-
-6. To create custom [Tekton](https://tekton.dev) tasks for pipeline on *
-   *OpenShift**, use the following commands:
-
-```bash
-oc apply -f .infrastructure/openshift/tekton/tasks/run-cleanup-workspace.yml 
-oc apply -f .infrastructure/openshift/tekton/tasks/run-flake8-lint.yml 
-oc apply -f .infrastructure/openshift/tekton/tasks/run-nose-tests.yml 
-oc apply -f .infrastructure/openshift/tekton/tasks/run-trivy-scan.yml 
-oc apply -f .infrastructure/openshift/tekton/tasks/run-database-migration.yml 
-oc apply -f .infrastructure/openshift/tekton/tasks/run-revert-database-migration.yml 
-```
-
-Apply the run-github-clone-w-token.yml if you are using a private repository.
-
-```bash
-oc apply -f .infrastructure/openshift/tekton/tasks/run-github-clone-w-token.yml 
-```
-
-To verify the created custom tasks, using the following command:
-
-```bash
-oc get tasks
-```
-
-7. The **clone** task requires the **git-clone**, the **build** task
-   requires **buildah** and the **deploy** task requires the
-   ""openshift-client"" tasks from the **Tekton Hub**, use the following
-   commands to install them:
-
-```bash
-tkn hub install task git-clone
-tkn hub install task buildah
-tkn hub install task openshift-client
-```
-
-Make sure that the **git-clone**, **buildah** and **openshift-client** tasks
-are available in the **OpenShift** using the following command:
-
-```bash
-oc get clustertask
-```
-
-8. To create [Tekton](https://tekton.dev) pipelines on **OpenShift**, use
-   the following commands:
-
-```bash
-oc apply -f .infrastructure/openshift/tekton/pipelines/cba-pipeline.yml
-oc apply -f .infrastructure/openshift/tekton/pipelines/cba-db-migration-revert-pipeline.yml
-```
-
-9. To start CI/CD pipeline on **OpenShift**, use the following command:
-
-```bash
-tkn pipeline start cba-pipeline \
-            -p repo-url=<GITHUB_REPO_URL> \
-            -p branch=<BRANCH> \
-            -p build-image=<DOCKER_IMAGE> \
-            -p deploy-enabled=<DEPLOY_ENABLED> \
-            -w name=<WORKSPAVCE_NAME>,claimName=<PVC_CLAIM_NAME> \
-            -s pipeline \
-            --showlog
-```
-
-- **GITHUB_REPO_URL** - URL of the GitHub repository
-- **BRANCH** - name of the branch
-- **DOCKER_IMAGE** - docker image with tag and registry, for example: `quay.
-  io/username/cba:latest`
-- **DEPLOY_ENABLED** - Enable/disable deployment step, for example: `true`
-- **WORKSPACE_NAME** - name of the workspace specified in the pipeline yaml
-  file, for example: `cba-pipeline-pvc`
-- **PVC_CLAIM_NAME** - name of the PVC claim created for pipeline, for
-  example: `cba-pipeline-pvc`
-
-For example:
+1. To start CI/CD pipeline
+   on [Red Hat OpenShift](https://www.redhat.com/en/technologies/cloud-computing/openshift),
+   use the following command:
 
 ```bash
 tkn pipeline start cba-pipeline \
@@ -487,28 +666,9 @@ tkn pipeline start cba-pipeline \
             --showlog
 ```
 
-10. To start the database migration revert pipeline on **OpenShift**, use the
-    following command:
-
-```bash
-tkn pipeline start cba-pipeline \
-            -p repo-url=<GITHUB_REPO_URL> \
-            -p branch=<BRANCH> \
-            -p revision=<REVISION> \
-            -w name=<WORKSPAVCE_NAME>,claimName=<PVC_CLAIM_NAME> \
-            -s pipeline \
-            --showlog
-```
-
-- **GITHUB_REPO_URL** - URL of the GitHub repository
-- **BRANCH** - name of the branch
-- **REVISION** - database migration revision id, for example: `1234abcd'
-- **WORKSPACE_NAME** - name of the workspace specified in the pipeline yaml
-  file, for example: `cba-pipeline-pvc`
-- **PVC_CLAIM_NAME** - name of the PVC claim created for pipeline, for
-  example: `cba-pipeline-pvc`
-
-For example:
+2. To start the database migration revert pipeline
+   on [Red Hat OpenShift](https://www.redhat.com/en/technologies/cloud-computing/openshift),
+   use the following command:
 
 ```bash
 tkn pipeline start cba-pipeline \
@@ -520,45 +680,11 @@ tkn pipeline start cba-pipeline \
             --showlog
 ```
 
-To make the pipeline ran successfully, run the following command:
+## Keycloak Identity and Access Management (IAM)
 
-```bash
-tkn pipelinerun ls
-```
-
-You can check the logs of the last pipeline run with:
-
-```bash
-tkn pipelinerun logs --last
-```
-
-## Keycloak
-
-The microservice uses [Keycloak](https://www.keycloak.org) for authentication
-and authorization. The [Keycloak](https://www.keycloak.org) configuration is
-stored in the
-`.infrastructure/keycloak/cba-dev-realm.json` file. The [Keycloak](https://www.
-keycloak.org) dev - **cba-dev** - realm configuration is automatically
-imported when Keycloak is deployed using Docker Compose.
-
-[Keycloak](https://www.keycloak.org) OpenID configuration url:
-
-```
-http://localhost:28080/realms/cba-dev/.well-known/openid-configuration
-```
-
-[Keycloak](https://www.keycloak.org) Admin Console url:
-
-```
-http://localhost:28080
-```
-
-[Keycloak](https://www.keycloak.org) Admin Console credentials (super user
-account):
-
-| **user name** | **password** |
-|---------------|--------------|
-| admin         | admin        |
+For more information, see
+the [Keycloak IAM](https://github.com/hokushin118/cba-devops?tab=readme-ov-file#keycloak-identity-and-access-management-iam)
+section of the README.
 
 ## Database Migrations
 
