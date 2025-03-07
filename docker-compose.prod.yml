@@ -1,100 +1,14 @@
 # Production profile
-# docker compose -f docker-compose.yml -f docker-compose-account.yml -f docker-compose.prod.yml up
+# docker compose -f docker-compose.yml -f docker-compose.prod.yml up
 # You only need to include the services you are changing in the override file.
 # All other settings will be inherited from the original docker-compose.yml file.
 # Project name
 name: cba
 
 services:
-  postgres:
-    extends:
-      file: docker-compose.yml
-      service: postgres
-    pull_policy: always # Always pulls the latest image
-    restart: always
-    volumes:
-      - postgresql_data:/var/lib/postgresql/data
-    env_file:
-      - .env.production
-    environment:
-      - POSTGRES_USER=${DATABASE_USER}
-      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
-      - POSTGRES_DB=${DATABASE_NAME}
-    deploy:
-      replicas: 1
-
-  prometheus:
-    extends:
-      file: docker-compose.yml
-      service: prometheus
-    pull_policy: always
-    restart: always
-    env_file:
-      - .env.production
-    deploy:
-      replicas: 1
-
-  # PostgreSQL object-relational database system is used as Keycloak data storage.
-  keycloak-postgres:
-    extends:
-      file: docker-compose.yml
-      service: keycloak-postgres
-    pull_policy: always
-    restart: always
-    env_file:
-      - .env.production
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes # is recommended only for development
-      - POSTGRESQL_DATABASE=${KEYCLOAK_POSTGRES_DB_NAME}
-      - POSTGRESQL_USERNAME=${KEYCLOAK_POSTGRES_DB_USER}
-      - POSTGRESQL_PASSWORD=${KEYCLOAK_POSTGRES_DB_PASSWORD}
-    deploy:
-      replicas: 1
-
-  # Keycloak IAM (Identity and Access Management) service.
-  keycloak:
-    extends:
-      file: docker-compose.yml
-      service: keycloak
-    image: bitnami/keycloak:18.0.0-debian-11-r7
-    pull_policy: always
-    restart: always
-    env_file:
-      - .env.production
-    environment: # override values from the conf file
-      # https://github.com/bitnami/containers/tree/main/bitnami/keycloak#configuration
-      - KEYCLOAK_DATABASE_HOST=${KEYCLOAK_DATABASE_HOST}
-      - KEYCLOAK_DATABASE_PORT=${KEYCLOAK_DATABASE_PORT}
-      - KEYCLOAK_DATABASE_NAME=${KEYCLOAK_POSTGRES_DB_NAME}
-      - KEYCLOAK_DATABASE_USER=${KEYCLOAK_POSTGRES_DB_USER}
-      - KEYCLOAK_DATABASE_PASSWORD=${KEYCLOAK_POSTGRES_DB_PASSWORD}
-      - KEYCLOAK_CREATE_ADMIN_USER=true # Creates admin user on start-up
-      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN_USER}
-      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
-      - KC_METRICS_ENABLED=true
-      - KC_HEALTH_ENABLED=true # https://www.keycloak.org/server/health
-    deploy:
-      replicas: 1
-
-  # Redis is a high performance key-value database. It shores cached values.
-  redis:
-    extends:
-      file: docker-compose.yml
-      service: redis
-    pull_policy: always
-    restart: always
-    env_file:
-      - .env.production
-    environment:
-      - REDIS_REPLICATION_MODE=master
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL,CONFIG
-    deploy:
-      replicas: 1
-
   account-service:
     extends:
-      file: docker-compose-account.yml
+      file: docker-compose.yml
       service: account-service
     pull_policy: always
     restart: always
@@ -102,7 +16,3 @@ services:
       - .env.production
     deploy:
       replicas: 3
-
-volumes:
-  postgresql_data:
-    driver: local

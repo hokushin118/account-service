@@ -1,103 +1,45 @@
-# This is the base Docker Compose file containing infrastructure services.
+# This is the base Docker Compose file for the Account microservice.
 # Project name
 name: cba
 
 services:
-  # PostgreSQL object-relational database system is used as Account data storage.
-  postgres:
-    image: postgres:${POSTGRES_VERSION}
+  # The Account microservice provides REST API for the CBA app.
+  account-service:
+    image: ${ACCOUNT_SRV_IMAGE}:${ACCOUNT_SRV_VERSION}
+    hostname: ${ACCOUNT_SRV_HOSTNAME}
     restart: on-failure
+    environment:
+      - JVM_OPTS=-Xmx8g -Xms8g -XX:MaxPermSize=1024m
+    labels:
+      collect_logs_with_filebeat: true
+      decode_log_event_to_json: true
     networks:
       - ${BACKEND_NETWORK}
     healthcheck: # Healthcheck for better container management
-      test: [ "CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    logging: # Common logging config
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: 5
-
-  # Prometheus (metrics database) - http://<host-ip>:19090
-  # Example: http://localhost:19090/targets
-  prometheus:
-    image: prom/prometheus:${PROMETHEUS_VERSION}
-    hostname: ${PROMETHEUS_HOSTNAME}
-    restart: on-failure
-    volumes: # prometheus configuration file
-      - ./.infrastructure/metrics/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/data # creating a volume to save Prometheus data locally
-    networks:
-      - ${BACKEND_NETWORK}
-    healthcheck:
-      test: [ 'CMD-SHELL', 'wget --spider http://${PROMETHEUS_HOSTNAME}:${PROMETHEUS_PORT}/-/healthy || exit 1' ]
-      interval: 30s
+      test: [ 'CMD-SHELL', 'curl -f http://${ACCOUNT_SRV_HOSTNAME}:${ACCOUNT_SRV_PORT}/api/health || exit 1' ]
+      interval: 15s
       timeout: 10s
       retries: 5
-      start_period: 60s
-    logging: # Common logging config
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: 5
-
-  # PostgreSQL object-relational database system is used as Keycloak data storage.
-  keycloak-postgres:
-    hostname: keycloak
-    image: bitnami/postgresql:${KEYCLOAK_POSTGRES_VERSION}
-    restart: on-failure
-    volumes:
-      - keycloak-postgresql-data:/bitnami/postgresql  # creating a volume to save PostgreSQL data locally
-    networks:
-      - ${BACKEND_NETWORK}
-    logging: # Common logging config
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: 5
-
-  # Keycloak IAM (Identity and Access Management) service.
-  keycloak:
-    hostname: keycloak
-    restart: on-failure
-    depends_on:
-      - keycloak-postgres
-    networks:
-      - ${BACKEND_NETWORK}
-    logging: # Common logging config
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: 5
-
-  # Redis is a high performance key-value database. It shores cached values.
-  redis:
-    image: bitnami/redis:${REDIS_VERSION}
-    hostname: ${REDIS_HOSTNAME}
-    restart: on-failure
-    command: redis-server --save 20 1 --loglevel warning --protected-mode no --stop-writes-on-bgsave-error no
-    volumes:
-      - cache-data:/bitnami/redis/data # creating a volume to save Redis data locally
-    networks:
-      - ${BACKEND_NETWORK}
+      start_period: 15s
     deploy:
-      replicas: 1
+      replicas: 0
+      update_config:
+        parallelism: 1 # Update one replica at a time
+        delay: 10s      # Wait between updates
+        order: stop-first  # Stop old containers before starting new ones
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+      restart_policy:
+        condition: on-failure # Only restart on failure
+        delay: 5s # Wait 5 seconds before restarting
+        max_attempts: 3 # Retry up to 3 times
     logging: # Common logging config
       driver: json-file
       options:
         max-size: 10m
         max-file: 5
-
-volumes:
-  keycloak-postgresql-data:
-    driver: local
-  prometheus_data:
-    driver: local
-  cache-data:
-    driver: local
 
 # networks
 networks:
