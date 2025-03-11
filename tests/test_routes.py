@@ -12,9 +12,9 @@ from unittest.mock import patch
 from cryptography.hazmat.primitives import serialization
 from flask import Flask
 from flask_jwt_extended import (
-    get_jwt_identity,
+    JWTManager,
     verify_jwt_in_request,
-    JWTManager
+    get_jwt_identity
 )
 from jose import jwt
 
@@ -32,6 +32,7 @@ from service.routes import (
 )
 from service.schemas import AccountDTO
 from tests.factories import AccountFactory
+from tests.test_base import DummyKafkaProducer
 from tests.test_constants import (
     TEST_USER,
     TEST_ROLE
@@ -242,6 +243,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
     #  LIST ALL ACCOUNTS TEST CASES
     ######################################################################
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_list_accounts_success(self, mock_get):
         """It should return a list of accounts with a valid JWT."""
         mock_get.return_value.status_code = status.HTTP_200_OK
@@ -261,6 +266,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(len(data['items']), 3)
 
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_list_accounts_paginated(self, mock_get):
         """It should return paginated accounts with a valid JWT."""
         mock_get.return_value.status_code = status.HTTP_200_OK
@@ -283,6 +292,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(data['total'], 15)
 
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_list_accounts_cache(self, mock_get):
         """It should retrieve data from the cache on subsequent requests."""
         mock_get.return_value.status_code = status.HTTP_200_OK
@@ -320,6 +333,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_list_accounts_etag_match(self, mock_get):
         """It should return 304 if ETag matches If-None-Match."""
         mock_get.return_value.status_code = status.HTTP_200_OK
@@ -349,6 +366,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.data, b'')  # Check for empty body
 
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_list_accounts_etag_mismatch(self, mock_get):
         """It should return 200 if ETag does not match If-None-Match."""
         mock_get.return_value.status_code = status.HTTP_200_OK

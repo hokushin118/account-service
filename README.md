@@ -688,6 +688,78 @@ section of the README.
 
 ## Audit with Kafka
 
+The **@audit_log** decorator is used to automatically log audit events to a
+dedicated Kafka topic. It is applied to Flask route handlers to ensure that all
+requests to those endpoints are captured for auditing purposes.
+
+**Purpose:**
+
+This feature provides a centralized and asynchronous mechanism for tracking and
+monitoring access to sensitive resources. Audit logs are sent to Kafka,
+enabling efficient processing, storage, and analysis of audit data.
+
+**Usage:**
+
+Add the **@audit_log** decorator directly above the Flask route handler you
+wish to audit.
+
+**Example:**
+
+```python
+@app.route('/accounts', methods=['GET'])
+@audit_log
+def list_accounts():
+    """Lists all accounts."""
+    accounts = [{"id": 1, "name": "Example Account"}]
+    return jsonify(accounts)
+```
+
+**Configuration:**
+
+Audit logging behavior is controlled via environment variables:
+
+* `KAFKA_AUDIT_BOOTSTRAP_SERVERS`: Kafka broker addresses (default: kafka:
+  9093).
+* `KAFKA_AUDIT_TOPIC`: Kafka topic to which audit events are sent (default:
+  audit-events).
+* `KAFKA_AUDIT_RETRIES`: Number of retries for Kafka producer (default: 5).
+* `KAFKA_AUDIT_ACKS`: Kafka acknowledgment setting (default: 1).
+* `KAFKA_AUDIT_COMPRESSION`: Kafka compression type (default: gzip).
+* `KAFKA_HEALTH_CHECK_INTERVAL`: Kafka health check interval in seconds
+  (default: 60).
+* `AUDIT_ENABLED`: Enables or disables audit logging, set to 'true' to
+  enable.
+
+**Audit Log Format (JSON):**
+
+Each audit log entry is a JSON object with the following fields:
+
+* `timestamp`: ISO 8601 formatted timestamp of the request (UTC).
+* `user`: User making the request (extracted from JWT,
+  defaults to Anonymous").
+* `method`: HTTP request method (e.g., GET, POST, PUT, DELETE).
+* `url`: Full URL of the request.
+* `request_headers`: HTTP request headers (excluding sensitive data like
+  Authorization).
+* `request_body`: Request body (JSON or plain text).
+* `response_status`: HTTP response status code.
+* `response_body`: Response body (JSON or plain text).
+* `client_ip`: Client IP address.
+* `correlation_id`: Unique correlation ID for tracking the request.
+
+**Error Handling:**
+
+If audit logging fails (e.g., Kafka connection issues), the original request
+will still be processed, and an error will be logged.
+
+**Important Considerations:**
+
+* JWT Authentication: The @audit_log decorator assumes JWT authentication is
+  used to identify users.
+* Environment Variables: Ensure that the necessary environment variables are
+  set correctly.
+* Kafka Configuration: Configure Kafka brokers and topics appropriately.
+
 For more information, see
 the [Audit with Kafka](https://github.com/hokushin118/cba-devops?tab=readme-ov-file#audit-with-kafka)
 section of the README.

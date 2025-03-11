@@ -333,6 +333,7 @@ def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
 })
 @app.route(ACCOUNTS_PATH_V1, methods=['GET'])
 @jwt_required()
+@audit_log
 @count_requests
 def list_accounts() -> Tuple[Dict[str, Any], int]:
     """Lists all Accounts."""

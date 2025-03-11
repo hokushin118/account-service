@@ -9,7 +9,7 @@ import json
 from unittest import TestCase
 from unittest.mock import patch
 
-from flask import request, Response
+from flask import request
 
 from service.common import status
 from service.common.audit_utils import (
@@ -18,128 +18,18 @@ from service.common.audit_utils import (
     on_send_error,
     audit_log_kafka
 )
-from tests.test_base import BaseTestCase
-from tests.test_constants import TEST_PATH
-
-TEST_TOPIC = 'test_topic'
+from tests.test_base import (
+    BaseTestCase,
+    DummyRecordMetadata,
+    dummy_route_success,
+    dummy_route_failure
+)
+from tests.test_constants import TEST_PATH, TEST_TOPIC
 
 
 ######################################################################
 #  AUDIT UTILS TEST CASES
 ######################################################################
-
-# Dummy classes for simulating external components
-
-class DummyRecordMetadata:
-    """DummyRecordMetadata is a mock class that simulates the RecordMetadata object returned
-    by a KafkaProducer upon successful message send.
-
-    It stores key information about the sent message, such as the topic,
-    partition, and offset.
-    """
-
-    def __init__(self, topic, partition, offset):
-        """Initialize the dummy record metadata with the given topic,
-        partition, and offset.
-
-        Args:
-            topic: The Kafka topic to which the message was published.
-            partition: The partition within the topic.
-            offset: The offset of the message within the partition.
-        """
-        self.topic = topic
-        self.partition = partition
-        self.offset = offset
-
-
-class DummyKafkaProducer:
-    """DummyKafkaProducer is a mock Kafka producer used for testing purposes.
-
-    It should record messages that would have been sent to Kafka, enabling verification
-    of message sending logic during tests.
-    """
-
-    def __init__(self):
-        """Initialize the dummy Kafka producer with an empty list of messages."""
-        self.messages = []  # Record the sent messages
-
-    def send(self, topic, key, value):
-        """Simulate sending a message to Kafka by storing the message details.
-
-        Args:
-            topic: The Kafka topic to which the message is sent.
-            key: The key of the message.
-            value: The payload or content of the message.
-
-        Returns:
-            DummyFuture: A dummy future object simulating asynchronous send behavior.
-        """
-        self.messages.append((topic, key, value))
-        return DummyFuture()
-
-    def flush(self):
-        """Simulate flushing any buffered messages.
-
-        In this dummy implementation, no action is needed.
-        """
-
-
-class DummyFuture:
-    """DummyFuture is a mock future object representing the asynchronous result of a send operation.
-
-    It should allow attaching callback and error callback functions that simulate handling of
-    success or failure of the send operation.
-    """
-
-    def add_callback(self, function):
-        """Simulate attaching a callback that is invoked upon a successful
-        send.
-
-        Args:
-            function: The callback function to be executed, receiving dummy metadata.
-
-        Returns:
-            DummyFuture: The current DummyFuture instance (to allow chaining).
-        """
-        dummy_metadata = DummyRecordMetadata(
-            TEST_TOPIC,
-            0,
-            0
-        )
-        function(dummy_metadata)
-        return self
-
-    def add_errback(self, function):
-        """Simulate attaching an error callback that is invoked
-        when a send error occurs.
-
-        Args:
-            function: The error callback function to be executed.
-
-        Returns:
-            DummyFuture: The current DummyFuture instance (to allow chaining).
-        """
-        function()
-        return self
-
-
-# Dummy route functions for testing the decorator
-
-def dummy_route_success():
-    """A dummy route that returns a successful JSON response."""
-    response_data = {'success': True}
-    return Response(
-        json.dumps(response_data),
-        status=status.HTTP_200_OK,
-        mimetype='application/json'
-    )
-
-
-def dummy_route_failure():
-    """A dummy route that simulates failure by raising an exception."""
-    raise Exception("Route failure occurred")
-
-
 class TestGetRequestBodyOrNone(BaseTestCase):
     """The get_request_body_or_none Function Tests."""
 
