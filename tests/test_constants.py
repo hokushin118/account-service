@@ -9,3 +9,5 @@ DATABASE_URI = os.getenv(
 TEST_ROLE = 'ROLE_TEST'
 TEST_OTHER_ROLE = 'ROLE_OTHER'
 TEST_USER = 'test_user'
+TEST_PATH = '/test'
+JWT_SECRET_KEY = 'H0fnsBnCc7Ts22rxhvLcy66s1yvzSRgG'

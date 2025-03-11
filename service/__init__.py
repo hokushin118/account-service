@@ -12,7 +12,7 @@ import sys
 from dotenv import load_dotenv
 from flasgger import Swagger, LazyString, LazyJSONEncoder, MK_SANITIZER
 from flask import Flask, request
-from flask_caching import Cache
+from flask_caching import Cache  # pylint: disable=E0401
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_talisman import Talisman
@@ -507,9 +507,15 @@ app = create_app()
 # Configure cache with Redis
 cache = configure_cache(app)
 
-# Import the routes After the Flask app is created
-# pylint: disable=wrong-import-position, cyclic-import, wrong-import-order
-from service import routes, models  # noqa: F401 E402
+# pylint:disable=C0413
+from service.common.utils import is_flask_cli_alternative
+# pylint:disable=C0413
+from service import models
+
+if not is_flask_cli_alternative():
+    # Import the routes After the Flask app is created
+    # pylint: disable=wrong-import-position, cyclic-import, wrong-import-order
+    from service import routes  # noqa: F401 E402
 
 try:
     models.init_db(app)  # make our database tables

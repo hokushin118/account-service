@@ -7,7 +7,7 @@ This module provides utility functions for interacting with Keycloak IAM, includ
 - Implementing a custom decorator for role-based access control using JWT claims.
 
 It handles Keycloak configuration, certificate retrieval with retry logic,
-and role validation based on JWT claims extracted fro
+and role validation based on JWT claims extracted from Keycloak token.
 """
 import logging
 import os
@@ -157,12 +157,12 @@ def has_roles(required_roles: List[str]):
         HTTP 403 Forbidden: If the user does not have the required role.
     """
 
-    def wrapper(wrapped_fn: Callable) -> Callable:
+    def wrapper(function: Callable) -> Callable:
         """
         Wrapper function that performs role-based access control.
 
         Args:
-            wrapped_fn (callable): The function to be wrapped.
+            function (callable): The function to be wrapped.
 
         Returns:
             callable: The wrapped function with role-based access control.
@@ -189,13 +189,13 @@ def has_roles(required_roles: List[str]):
 
             # Check if any required role is present
             if any(role in (roles + realm_roles) for role in required_roles):
-                return wrapped_fn(*args, **kwargs)
+                return function(*args, **kwargs)
 
             return jsonify(
                 {'message': INSUFFICIENT_PERMISSIONS_ERROR_MESSAGE}
             ), status.HTTP_403_FORBIDDEN
 
-        decorated_function.__name__ = wrapped_fn.__name__
+        decorated_function.__name__ = function.__name__
         return decorated_function
 
     return wrapper

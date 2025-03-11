@@ -4,6 +4,8 @@ Utility functions.
 This module contains utility functions to REST API.
 """
 import hashlib
+import sys
+import uuid
 from functools import wraps
 from typing import Any, Union, Callable
 from typing import Tuple
@@ -153,3 +155,32 @@ def timestamps(
             index=is_indexed,
         ),
     )
+
+
+def is_flask_cli_alternative() -> bool:
+    """
+    Determines if a Flask CLI command is being invoked using command-line arguments.
+
+    Returns:
+        bool: True if 'flask' appears in sys.argv (or if specific CLI commands are detected),
+              False otherwise.
+    """
+    # This is a simplistic check; you might want to refine based on your use-case.
+    flask_commands = {
+        'run', 'shell', 'db-upgrade', 'db', 'create', 'init',
+        'db-init', 'db-migrate', 'db-revision', 'db-downgrade',
+        'db-history', 'db-create'
+    }
+    return any(arg in flask_commands for arg in sys.argv)
+
+
+def generate_correlation_id() -> str:
+    """Generates a unique correlation ID.
+
+    It should create and return a new universally unique identifier (UUID)
+    as a string, which can be used to correlate logs or trace requests.
+
+    Returns:
+        str: A unique correlation ID in string format.
+    """
+    return str(uuid.uuid4())
