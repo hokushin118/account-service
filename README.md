@@ -764,6 +764,53 @@ For more information, see
 the [Audit with Kafka](https://github.com/hokushin118/cba-devops?tab=readme-ov-file#audit-with-kafka)
 section of the README.
 
+## Logging Configuration
+
+This section describes a utility function designed to establish consistent
+logging practices within containerized environments, ensuring clear separation
+between informational and error logs.
+
+### `init_logging(app, log_level=logging.INFO)`
+
+This function configures the application's logger to direct log messages to
+either `stdout` or `stderr`, based on their severity level.
+
+**Parameters:**
+
+* `app`: The application instance (e.g., a Flask application object).
+* `log_level`: The minimum log level for messages to be directed to `stdout` (
+  default: `logging.INFO`). Messages with this level or lower (e.g., `DEBUG`)
+  will be sent to `stdout`. Messages above this level, but
+  below `logging.ERROR`, will also be sent to `stdout`.
+
+**Behavior:**
+
+* **Consistent Log Format:** Configures a standardized log message format,
+  including:
+    * Timestamp (UTC)
+    * Log level
+    * Module name
+    * Log message
+* **`stdout` and `stderr` Handlers:** Sets up `logging.StreamHandler` objects
+  to direct log messages:
+    * Messages with a log level of `log_level` or lower are sent to `stdout`.
+    * Messages with a log level of `logging.ERROR` or `logging.CRITICAL` are
+      sent to `stderr`.
+* **Preventing Duplicate Logs:** Clears any existing log handlers associated
+  with the application's logger to avoid duplicate log entries.
+* **Application-Wide Log Level:** Sets the overall log level for the
+  application's logger to the provided `log_level`.
+* **Initialization Confirmation:** Logs an informational message upon
+  successful setup, including the configured log level.
+
+**Purpose:**
+
+This function is particularly useful in containerized environments (like
+Docker, Kubernetes or OpenShift), where it's essential to separate
+informational and error logs for efficient monitoring and log aggregation. By
+directing logs to `stdout` and `stderr`, container orchestrators can easily
+capture and process log data.
+
 ## Database Migrations
 
 The microservice uses [Flask-Migrate](https://flask-migrate.readthedocs.io) for
