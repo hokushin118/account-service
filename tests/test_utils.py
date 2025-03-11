@@ -6,29 +6,22 @@ Test cases can be run with the following:
   coverage report -m
 """
 import hashlib
+import sys
+import uuid
 from unittest import TestCase
-
-from flask import Flask
 
 from service.common.utils import (
     generate_etag_hash,
-    count_requests
+    count_requests, is_flask_cli_alternative, generate_correlation_id
 )
+from tests.test_base import BaseTestCase
 
 
 ######################################################################
 #  UTILS TEST CASES
 ######################################################################
-class TestUtils(TestCase):
+class TestUtils(BaseTestCase):
     """The Decorated Function Tests."""
-
-    def setUp(self):
-        self.app = Flask(__name__)  # Create a test Flask app
-        self.app_context = self.app.app_context()
-        self.app_context.push()  # Push the context so request works
-
-    def tearDown(self):
-        self.app_context.pop()  # Pop the context
 
     def test_count_requests_wraps(self):
         """It should preserve function metadata."""
@@ -111,3 +104,50 @@ class TestGenerateETagHash(TestCase):
             expected_hash1,
             expected_hash2
         )  # Different order = different hashes
+
+
+class TestFlaskCliAlternative(TestCase):
+    """The is_flask_cli_alternative Function Tests."""
+
+    def setUp(self):
+        self.original_argv = sys.argv.copy()
+
+    def tearDown(self):
+        sys.argv = self.original_argv
+
+    def test_with_flask_command(self):
+        """# It should return True when sys.argv contains a recognized Flask command."""
+        sys.argv = ['flask', 'run']
+        self.assertTrue(is_flask_cli_alternative())
+
+    def test_with_flask_command_in_different_position(self):
+        """It should return True when sys.argv contains a recognized Flask command in
+        a different position."""
+        sys.argv = ['some_script.py', 'shell']
+        self.assertTrue(is_flask_cli_alternative())
+
+    def test_without_flask_command(self):
+        """It should return False when sys.argv does not contain any recognized Flask command."""
+        sys.argv = ['python', 'app.py']
+        self.assertFalse(is_flask_cli_alternative())
+
+
+class TestGenerateCorrelationID(TestCase):
+    """The generate_correlation_id Function Tests."""
+
+    def test_return_type(self):
+        """It should return a string representing the UUID."""
+        correlation_id = generate_correlation_id()
+        self.assertIsInstance(correlation_id, str)
+        try:
+            _ = uuid.UUID(correlation_id)
+        except ValueError:
+            self.fail('Returned correlation id is not a valid UUID')
+
+    def test_uniqueness(self):
+        """It should generate unique correlation IDs over multiple invocations."""
+        ids = {generate_correlation_id() for _ in range(1000)}
+        self.assertEqual(
+            len(ids), 1000,
+            'Expected 1000 unique correlation ids'
+        )

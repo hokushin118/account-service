@@ -686,6 +686,12 @@ For more information, see
 the [Keycloak IAM](https://github.com/hokushin118/cba-devops?tab=readme-ov-file#keycloak-identity-and-access-management-iam)
 section of the README.
 
+## Audit with Kafka
+
+For more information, see
+the [Audit with Kafka](https://github.com/hokushin118/cba-devops?tab=readme-ov-file#audit-with-kafka)
+section of the README.
+
 ## Database Migrations
 
 The microservice uses [Flask-Migrate](https://flask-migrate.readthedocs.io) for

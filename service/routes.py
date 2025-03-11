@@ -4,11 +4,12 @@ Account Service
 This microservice handles the lifecycle of Accounts
 """
 import datetime
+import logging
 import os
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, Callable
 from uuid import UUID
 
-import redis
+import redis  # pylint: disable=E0401
 from flasgger import swag_from
 # pylint: disable=unused-import
 from flask import jsonify, request, make_response, abort, url_for  # noqa; F401
@@ -24,8 +25,10 @@ from service import (
     CACHE_REDIS_DB
 )
 from service.common import status
-from service.common.constants import ROLE_USER, ROLE_ADMIN, \
+from service.common.constants import (
+    ROLE_USER, ROLE_ADMIN,
     ACCOUNT_CACHE_KEY
+)
 from service.common.keycloak_utils import has_roles, get_user_roles
 from service.common.utils import (
     check_content_type,
@@ -34,6 +37,8 @@ from service.common.utils import (
 )
 from service.models import Account
 from service.schemas import AccountDTO
+
+logger = logging.getLogger(__name__)
 
 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE = 'You are not authorized to update this resource.'
 ACCOUNT_NOT_FOUND_MESSAGE = "Account with id [{account_id}] could not be found."
@@ -44,6 +49,10 @@ HEALTH_PATH = f"{ROOT_PATH}/health"
 INFO_PATH = f"{ROOT_PATH}/info"
 ACCOUNTS_PATH_V1 = f"{ROOT_PATH}/v1/accounts"
 CACHE_DEFAULT_TIMEOUT = int(os.environ.get('CACHE_DEFAULT_TIMEOUT', 3600))
+# Enable audit logging if AUDIT_ENABLED is set to "true"
+AUDIT_ENABLED = os.environ.get(
+    'AUDIT_ENABLED', 'False'
+).lower() == 'true'
 
 # Initialize Redis client
 redis_client = redis.Redis(
@@ -92,6 +101,35 @@ def invalidate_all_account_pages() -> None:
     """Invalidates all cached paginated account results."""
     app.logger.debug('Invalidated cache...')
     cache.clear()
+
+
+def audit_log(function: Callable) -> Callable:
+    """
+    Conditionally apply Kafka-based audit logging to a function based on the audit configuration.
+
+    If audit logging is enabled (i.e., AUDIT_ENABLED is True), this function dynamically imports
+    and applies the audit_log_kafka decorator to the provided function. Otherwise, it simply returns
+    the original function unmodified.
+
+    Args:
+        function (Callable): The function to be decorated with audit logging.
+
+    Returns:
+        Callable: The decorated function with Kafka-based audit logging if enabled,
+                  otherwise the original function.
+
+    Usage:
+        @audit_log
+        def my_route():
+           ...
+    """
+    if AUDIT_ENABLED:
+        # pylint:disable=C0415
+        from service.common.audit_utils import audit_log_kafka
+        logger.debug("Auditing Kafka log for %s", function.__name__)
+        return audit_log_kafka(function)
+    # Skip audit logging if audit is not enabled
+    return function
 
 
 ######################################################################

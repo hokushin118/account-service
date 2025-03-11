@@ -10,6 +10,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from cryptography.hazmat.primitives import serialization
+from flask import Flask
 from flask_jwt_extended import (
     get_jwt_identity,
     verify_jwt_in_request,
@@ -27,7 +28,7 @@ from service.routes import (
     ACCOUNTS_PATH_V1,
     ROOT_PATH,
     HEALTH_PATH,
-    IF_NONE_MATCH_HEADER, CACHE_CONTROL_HEADER
+    IF_NONE_MATCH_HEADER, CACHE_CONTROL_HEADER, audit_log
 )
 from service.schemas import AccountDTO
 from tests.factories import AccountFactory
@@ -41,6 +42,7 @@ JWT_ALGORITHM = 'RS256'
 PRIVATE_KEY_PATH = './tests/keys/private.pem'
 PUBLIC_KEY_PATH = './tests/keys/public.pem'
 INVALID_ETAG = 'invalid-etag'
+ORIGINAL = 'original'
 
 
 ######################################################################
@@ -51,8 +53,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
 
     def setUp(self):
         """Runs before each test."""
+        self.app = Flask(__name__)
+        self.app.testing = True
         self.app_context = app.app_context()
-        self.app_context.push()
+        self.app_context.push()  # Push the context so request works
 
         db.session.query(Account).delete()  # clean up the last tests
         db.session.commit()
@@ -1036,3 +1040,28 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(response.data, b'')  # Check for empty body
+
+
+def dummy_function() -> str:
+    """A simple dummy function to test the audit_log decorator."""
+    return ORIGINAL
+
+
+class TestAuditLogDecorator(TestCase):
+    """Audit Log Decorator Tests."""
+
+    def test_audit_enabled(self):
+        """It should apply audit logging when AUDIT_ENABLED is True."""
+        with patch("service.routes.AUDIT_ENABLED", True), \
+                patch("service.common.audit_utils.audit_log_kafka",
+                      side_effect=lambda f: f) as mock_audit_log_kafka:
+            decorated = audit_log(dummy_function)
+            mock_audit_log_kafka.assert_called_once_with(dummy_function)
+            self.assertEqual(decorated(), ORIGINAL)
+
+    def test_audit_disabled(self):
+        """It should not apply audit logging when AUDIT_ENABLED is False."""
+        with patch("service.routes.AUDIT_ENABLED", False):
+            result_function = audit_log(dummy_function)
+            self.assertIs(result_function, dummy_function)
+            self.assertEqual(result_function(), ORIGINAL)

@@ -29,15 +29,14 @@ from service.common.keycloak_utils import (
     get_keycloak_certificate_with_retry, has_roles_and
 )
 from tests.test_constants import (
+    TEST_PATH,
     TEST_USER,
     TEST_ROLE,
-    TEST_OTHER_ROLE
+    TEST_OTHER_ROLE, JWT_SECRET_KEY
 )
 
 TEST_CERTIFICATE = 'test_certificate'
-TEST_PATH = '/test'
 TEST_NO_JWT_PATH = '/test_no_jwt'
-JWT_SECRET_KEY = 'H0fnsBnCc7Ts22rxhvLcy66s1yvzSRgG'
 
 
 ######################################################################
@@ -214,6 +213,7 @@ class TestHasRolesDecorator(TestCase):
     def setUp(self):
         """This runs before each test."""
         self.app = Flask(__name__)
+        self.app.testing = True
         self.app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
         self.jwt = JWTManager(self.app)
         self.client = self.app.test_client()
@@ -376,6 +376,7 @@ class TestHasRolesAndDecorator(TestCase):
     def setUp(self):
         """This runs before each test."""
         self.app = Flask(__name__)
+        self.app.testing = True
         self.app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
         self.jwt = JWTManager(self.app)
         self.client = self.app.test_client()
