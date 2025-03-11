@@ -414,6 +414,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
     #  READ AN ACCOUNTS TEST CASES
     ######################################################################
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_find_by_id_success(self, mock_get):
         """It should return a single account with a valid JWT."""
         mock_get.return_value.status_code = status.HTTP_200_OK
@@ -443,6 +447,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_find_by_id_etag_match(self, mock_get):
         """It should return 304 if ETag matches If-None-Match."""
         mock_get.return_value.status_code = status.HTTP_200_OK
@@ -472,6 +480,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.data, b'')  # Check for empty body
 
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_find_by_id_etag_mismatch(self, mock_get):
         """It should return 200 if ETag does not match If-None-Match."""
         mock_get.return_value.status_code = status.HTTP_200_OK
