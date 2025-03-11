@@ -441,6 +441,7 @@ def list_accounts() -> Tuple[Dict[str, Any], int]:
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['GET'])
 @jwt_required()
+@audit_log
 @count_requests
 def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     """Retrieve Account by ID."""
