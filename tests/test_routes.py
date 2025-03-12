@@ -569,8 +569,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         updated_account = response.get_json()
         self.assertEqual(updated_account['phone_number'], '918-295-1876')
-        self.assertEqual(updated_account['address'],
-                         '718 Noah Drive\nChristensenburgh, NE 45784')
+        self.assertEqual(
+            updated_account['address'],
+            '718 Noah Drive\nChristensenburgh, NE 45784'
+        )
 
     @patch('requests.get')
     @patch(
@@ -752,6 +754,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
     #  PARTIALLY UPDATE AN EXISTING ACCOUNT TEST CASES
     ######################################################################
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_partial_update_by_id_success(self, mock_get):
         """It should partially update an existing Account."""
         mock_get.return_value.status_code = status.HTTP_200_OK
@@ -759,10 +765,11 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
 
         # create an Account to update
         test_account = AccountFactory()
+        test_account_dto = AccountDTO.from_orm(test_account)
 
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account.to_dict(),
+            json=test_account_dto.dict(),
             content_type='application/json'
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -786,8 +793,8 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         new_account = response.get_json()
         updated_account_id = new_account['id']
         update_data = {
-            'name': 'Test Account',
-            'email': 'test@example.com'
+            'phone_number': '918-295-1876',
+            'address': '718 Noah Drive\nChristensenburgh, NE 45784'
         }
         response = self.client.patch(
             f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
@@ -797,10 +804,17 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         updated_account = response.get_json()
-        self.assertEqual(updated_account['name'], 'Test Account')
-        self.assertEqual(updated_account['email'], 'test@example.com')
+        self.assertEqual(updated_account['phone_number'], '918-295-1876')
+        self.assertEqual(
+            updated_account['address'],
+            '718 Noah Drive\nChristensenburgh, NE 45784'
+        )
 
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_partial_update_by_id_unauthorized(self, mock_get):
         """It should return 401 if no JWT is provided."""
         mock_get.return_value.status_code = status.HTTP_200_OK
@@ -808,10 +822,11 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
 
         # create an Account to update
         test_account = AccountFactory()
+        test_account_dto = AccountDTO.from_orm(test_account)
 
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account.to_dict(),
+            json=test_account_dto.dict(),
             content_type='application/json'
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -831,6 +846,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_partial_update_by_id_wrong_role(self, mock_get):
         """It should not partially update an existing Account with a JWT
         belonging to a different role.
@@ -840,10 +859,11 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
 
         # create an Account to update
         test_account = AccountFactory()
+        test_account_dto = AccountDTO.from_orm(test_account)
 
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account.to_dict(),
+            json=test_account_dto.dict(),
             content_type='application/json'
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -866,6 +886,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_partial_update_by_id_wrong_account_id(self, mock_get):
         """It should not partially update an existing Account with a JWT
         belonging to a different user.
@@ -875,10 +899,11 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
 
         # create an Account to update
         test_account = AccountFactory()
+        test_account_dto = AccountDTO.from_orm(test_account)
 
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account.to_dict(),
+            json=test_account_dto.dict(),
             content_type='application/json'
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -914,6 +939,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_partial_update_by_id_wrong_account_id_admin_role(self, mock_get):
         """It should partially update an existing Account with a JWT
         belonging to a different user if an admin role."""
@@ -922,10 +951,11 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
 
         # create an Account to update
         test_account = AccountFactory()
+        test_account_dto = AccountDTO.from_orm(test_account)
 
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account.to_dict(),
+            json=test_account_dto.dict(),
             content_type='application/json'
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
