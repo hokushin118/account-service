@@ -489,7 +489,7 @@ def create_app() -> Flask:
         current_app.start_time = datetime.datetime.now()
 
     # Set up logging for production
-    log_handlers.init_logging(current_app, logging.INFO)
+    log_handlers.init_logging(current_app, logging.DEBUG)
 
     current_app.logger.info(70 * '*')
     current_app.logger.info(
