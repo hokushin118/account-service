@@ -12,7 +12,14 @@ from uuid import UUID
 import redis  # pylint: disable=E0401
 from flasgger import swag_from
 # pylint: disable=unused-import
-from flask import jsonify, request, make_response, abort, url_for  # noqa; F401
+from flask import (
+    Response,
+    jsonify,
+    request,
+    make_response,
+    abort,
+    url_for
+)  # noqa; F401
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from service import (
@@ -335,7 +342,7 @@ def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
 @jwt_required()
 @audit_log
 @count_requests
-def list_accounts() -> Tuple[Dict[str, Any], int]:
+def list_accounts() -> Response:
     """Lists all Accounts."""
     app.logger.info('Request to list Accounts')
 
@@ -443,7 +450,7 @@ def list_accounts() -> Tuple[Dict[str, Any], int]:
 @jwt_required()
 @audit_log
 @count_requests
-def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
+def find_by_id(account_id: UUID) -> Response:
     """Retrieve Account by ID."""
     app.logger.info("Request to read an Account with id: %s", account_id)
 
@@ -563,7 +570,7 @@ def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
 @has_roles([ROLE_USER, ROLE_ADMIN])
 @audit_log
 @count_requests
-def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
+def update_by_id(account_id: UUID) -> Response:
     """Update Account by ID."""
     app.logger.info("Request to update an Account with id: %s", account_id)
 
@@ -656,7 +663,7 @@ def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
 @has_roles([ROLE_USER, ROLE_ADMIN])
 @audit_log
 @count_requests
-def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
+def partial_update_by_id(account_id: UUID) -> Response:
     """Partial Update Account by ID."""
     app.logger.info(
         "Request to partially update an Account with id: %s",
@@ -740,8 +747,9 @@ def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['DELETE'])
 @has_roles([ROLE_USER, ROLE_ADMIN])
+@audit_log
 @count_requests
-def delete_by_id(account_id: UUID) -> Tuple[str, int]:
+def delete_by_id(account_id: UUID) -> Response:
     """Delete Account By ID."""
     app.logger.info(
         "Request to delete an Account with id: %s", account_id
@@ -751,8 +759,8 @@ def delete_by_id(account_id: UUID) -> Tuple[str, int]:
     current_user = get_jwt_identity()
     app.logger.debug('Current user: %s', current_user)
 
+    # Retrieve user roles
     roles = get_user_roles()
-
     app.logger.debug('Roles: %s', roles)
 
     if ROLE_ADMIN not in roles:
@@ -764,12 +772,12 @@ def delete_by_id(account_id: UUID) -> Tuple[str, int]:
                 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
             )
 
+    # Attempt to find the account by its ID.
     account = Account.find(account_id)
-
     if account:
         account.delete()
         # Invalidate specific cache key(s)
         invalidate_all_account_pages()
         app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
-    return "", status.HTTP_204_NO_CONTENT
+    return make_response("", status.HTTP_204_NO_CONTENT)
