@@ -6,7 +6,7 @@ This microservice handles the lifecycle of Accounts
 import datetime
 import logging
 import os
-from typing import Dict, Tuple, Any, Callable
+from typing import Callable
 from uuid import UUID
 
 import redis  # pylint: disable=E0401
@@ -155,11 +155,13 @@ def audit_log(function: Callable) -> Callable:
 })
 @app.route(ROOT_PATH, methods=['GET'])
 @count_requests
-def index() -> Tuple[Dict[str, Any], int]:
+def index() -> Response:
     """Returns a welcome message for the Account API"""
-    return jsonify(
-        {'message': 'Welcome to the Account API!'}
-    ), status.HTTP_200_OK
+    return make_response(
+        jsonify(
+            {'message': 'Welcome to the Account API!'}
+        ), status.HTTP_200_OK
+    )
 
 
 ############################################################
@@ -186,9 +188,9 @@ def index() -> Tuple[Dict[str, Any], int]:
 })
 @app.route(HEALTH_PATH, methods=['GET'])
 @count_requests
-def health() -> Tuple[Dict[str, Any], int]:
+def health() -> Response:
     """Returns the health status of the service"""
-    return jsonify({'status': 'UP'}), status.HTTP_200_OK
+    return make_response(jsonify({'status': 'UP'}), status.HTTP_200_OK)
 
 
 ############################################################
@@ -208,7 +210,7 @@ def health() -> Tuple[Dict[str, Any], int]:
 })
 @app.route(INFO_PATH, methods=['GET'])
 @count_requests
-def info() -> Tuple[Dict[str, Any], int]:
+def info() -> Response:
     """Returns information about the service"""
     uptime = 'Not yet started'
     if hasattr(app, 'start_time'):
@@ -219,7 +221,7 @@ def info() -> Tuple[Dict[str, Any], int]:
         'version': VERSION,
         'uptime': uptime,
     }
-    return jsonify(info_data), status.HTTP_200_OK
+    return make_response(jsonify(info_data), status.HTTP_200_OK)
 
 
 ######################################################################
@@ -263,8 +265,9 @@ def info() -> Tuple[Dict[str, Any], int]:
     }
 })
 @app.route(ACCOUNTS_PATH_V1, methods=['POST'])
+@audit_log
 @count_requests
-def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
+def create() -> Response:
     """Create a New Account"""
     app.logger.info('Request to create an Account...')
 
