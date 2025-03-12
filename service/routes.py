@@ -6,7 +6,7 @@ This microservice handles the lifecycle of Accounts
 import datetime
 import logging
 import os
-from typing import Callable
+from typing import Dict, Tuple, Any, Callable
 from uuid import UUID
 
 import redis  # pylint: disable=E0401
@@ -155,13 +155,11 @@ def audit_log(function: Callable) -> Callable:
 })
 @app.route(ROOT_PATH, methods=['GET'])
 @count_requests
-def index() -> Response:
+def index() -> Tuple[Dict[str, Any], int]:
     """Returns a welcome message for the Account API"""
-    return make_response(
-        jsonify(
-            {'message': 'Welcome to the Account API!'}
-        ), status.HTTP_200_OK
-    )
+    return jsonify(
+        {'message': 'Welcome to the Account API!'}
+    ), status.HTTP_200_OK
 
 
 ############################################################
@@ -188,9 +186,9 @@ def index() -> Response:
 })
 @app.route(HEALTH_PATH, methods=['GET'])
 @count_requests
-def health() -> Response:
+def health() -> Tuple[Dict[str, Any], int]:
     """Returns the health status of the service"""
-    return make_response(jsonify({'status': 'UP'}), status.HTTP_200_OK)
+    return jsonify({'status': 'UP'}), status.HTTP_200_OK
 
 
 ############################################################
@@ -210,7 +208,7 @@ def health() -> Response:
 })
 @app.route(INFO_PATH, methods=['GET'])
 @count_requests
-def info() -> Response:
+def info() -> Tuple[Dict[str, Any], int]:
     """Returns information about the service"""
     uptime = 'Not yet started'
     if hasattr(app, 'start_time'):
@@ -221,7 +219,7 @@ def info() -> Response:
         'version': VERSION,
         'uptime': uptime,
     }
-    return make_response(jsonify(info_data), status.HTTP_200_OK)
+    return jsonify(info_data), status.HTTP_200_OK
 
 
 ######################################################################
@@ -265,9 +263,8 @@ def info() -> Response:
     }
 })
 @app.route(ACCOUNTS_PATH_V1, methods=['POST'])
-@audit_log
 @count_requests
-def create() -> Response:
+def create() -> Tuple[Dict[str, Any], int, Dict[str, str]]:
     """Create a New Account"""
     app.logger.info('Request to create an Account...')
 
