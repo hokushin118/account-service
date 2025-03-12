@@ -34,8 +34,7 @@ from service.schemas import AccountDTO
 from tests.factories import AccountFactory
 from tests.test_base import DummyKafkaProducer
 from tests.test_constants import (
-    TEST_USER,
-    TEST_ROLE
+    TEST_USER
 )
 
 HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
@@ -102,7 +101,7 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
             {
                 'sub': TEST_USER,
                 REALM_ACCESS_CLAIM: {
-                    ROLES_CLAIM: [TEST_ROLE]
+                    ROLES_CLAIM: [ROLE_USER]
                 }
             },
             self.private_key,
@@ -1005,8 +1004,18 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
     #  DELETE AN ACCOUNT TEST CASES
     ######################################################################
     @patch('requests.get')
-    def test_delete_by_id_success(self, mock_get):
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
+    @patch('service.routes.check_if_user_is_owner')
+    def test_delete_by_id_success(
+            self,
+            mock_check_if_user_is_owner,
+            mock_get
+    ):
         """It should delete an Account."""
+        mock_check_if_user_is_owner.return_value = True
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
 
@@ -1016,7 +1025,7 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         # Generate test JWT using RS256 with right account id and role
         test_jwt = jwt.encode(
             {
-                'sub': account.name,
+                'sub': TEST_USER,
                 REALM_ACCESS_CLAIM: {
                     ROLES_CLAIM: [ROLE_USER]
                 }
@@ -1046,6 +1055,10 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
     def test_delete_by_id_wrong_role(self, mock_get):
         """It should not delete an Account with a JWT belonging to a different
         role."""
@@ -1064,7 +1077,11 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
-    def test_delete_by_id__wrong_account_id(self, mock_get):
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
+    def test_delete_by_id_wrong_account_id(self, mock_get):
         """It not should not delete an Account with a JWT belonging to a different user."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
@@ -1094,7 +1111,11 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
-    def test_delete_by_id__wrong_account_id_admin_role(self, mock_get):
+    @patch(
+        'service.common.audit_utils.kafka_producer_manager.get_producer',
+        new=DummyKafkaProducer
+    )
+    def test_delete_by_id_wrong_account_id_admin_role(self, mock_get):
         """It not should not delete an Account with a JWT belonging to a different user."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
