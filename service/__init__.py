@@ -37,6 +37,8 @@ from service.common.keycloak_utils import (
 
 logger = logging.getLogger(__name__)
 
+APP_INFO_METRICS = 'app_info'
+
 
 # --- Configuration and Environment Setup ---
 
@@ -114,15 +116,17 @@ CACHE_REDIS_DB = os.environ.get('CACHE_REDIS_DB', '0')
 CACHE_REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD')
 
 
-# --- Security and Monitoring ---
+# --- Security Configuration ---
 def configure_security(current_app: Flask) -> None:
     """
-    Configures security and monitoring for the Flask application.
+    Configures the security settings for the Flask application.
 
-    This function sets up various security measures and monitoring tools for the
-    Flask application. This may include, but is not limited to, configuring
-    security headers, enabling rate limiting, setting up logging, and integrating
-    with monitoring services.
+    This function sets up various security measures for the Flask application
+    by applying the following configurations:
+      - Configures a Content Security Policy (CSP) that restricts sources for scripts, styles,
+      images, fonts, and connections.
+      - Enables Talisman to enforce HTTPS and apply the defined CSP.
+      - Enables Cross-Origin Resource Sharing (CORS) for all routes and origins.
 
     Args:
         current_app (Flask): The Flask application instance to configure.
@@ -147,7 +151,7 @@ def configure_security(current_app: Flask) -> None:
         'connect-src': ['\'self\''],
     }
 
-    # Enable Talisman
+    # Initialize Talisman to enforce HTTPS and apply security headers including the CSP
     Talisman(
         current_app,
         content_security_policy=csp,
@@ -155,9 +159,29 @@ def configure_security(current_app: Flask) -> None:
     )
     # Enable CORS for all routes and origins
     CORS(current_app)
-    # initialize Prometheus metrics
-    metrics = PrometheusMetrics.for_app_factory()
-    metrics.init_app(current_app)
+
+
+# --- Monitoring Configuration ---
+def configure_monitoring(current_app: Flask) -> PrometheusMetrics:
+    """Configure Prometheus monitoring for the Flask application.
+
+    This function initializes Prometheus metrics for an application factory.
+    It performs the following actions:
+      - Creates a PrometheusMetrics instance using the application factory method.
+      - Initializes the metrics with the provided Flask application.
+      - Sets application-specific info metrics (such as application name and version).
+
+    Args:
+        current_app (Flask): The Flask application instance to configure.
+
+    Returns:
+        PrometheusMetrics: A configured PrometheusMetrics object that is attached
+        to the app for monitoring.
+    """
+    prometheus_metrics = PrometheusMetrics.for_app_factory()
+    prometheus_metrics.init_app(current_app)
+    prometheus_metrics.info(APP_INFO_METRICS, NAME, version=VERSION)
+    return prometheus_metrics
 
 
 # --- Swagger Configuration ---
@@ -503,6 +527,9 @@ def create_app() -> Flask:
 # --- Application Initialization ---
 
 app = create_app()
+
+# Configure monitoring with Prometheus
+metrics = configure_monitoring(app)
 
 # Configure cache with Redis
 cache = configure_cache(app)
