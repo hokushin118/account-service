@@ -29,7 +29,7 @@ from service import (
     NAME,
     CACHE_REDIS_HOST,
     CACHE_REDIS_PORT,
-    CACHE_REDIS_DB
+    CACHE_REDIS_DB, metrics
 )
 from service.common import status
 from service.common.constants import (
@@ -154,7 +154,7 @@ def audit_log(function: Callable) -> Callable:
     }
 })
 @app.route(ROOT_PATH, methods=['GET'])
-@count_requests
+@metrics.do_not_track()
 def index() -> Response:
     """Returns a welcome message for the Account API"""
     return make_response(
@@ -187,7 +187,7 @@ def index() -> Response:
     }
 })
 @app.route(HEALTH_PATH, methods=['GET'])
-@count_requests
+@metrics.do_not_track()
 def health() -> Response:
     """Returns the health status of the service"""
     return make_response(jsonify({'status': 'UP'}), status.HTTP_200_OK)
@@ -209,7 +209,7 @@ def health() -> Response:
     }
 })
 @app.route(INFO_PATH, methods=['GET'])
-@count_requests
+@metrics.do_not_track()
 def info() -> Response:
     """Returns information about the service"""
     uptime = 'Not yet started'
