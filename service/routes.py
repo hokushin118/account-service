@@ -561,6 +561,7 @@ def find_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['PUT'])
 @has_roles([ROLE_USER, ROLE_ADMIN])
+@audit_log
 @count_requests
 def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     """Update Account by ID."""
@@ -570,8 +571,8 @@ def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     current_user = get_jwt_identity()
     app.logger.debug('Current user: %s', current_user)
 
+    # Retrieve user roles
     roles = get_user_roles()
-
     app.logger.debug('Roles: %s', roles)
 
     if ROLE_ADMIN not in roles:
@@ -583,7 +584,10 @@ def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
                 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
             )
 
+    # Retrieve the account to be updated or return a 404 error if not found
     account = get_account_or_404(account_id)
+
+    # Update account with provided JSON payload
     account.deserialize(request.get_json())
     account.update()
 
@@ -594,7 +598,8 @@ def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     invalidate_all_account_pages()
     app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
-    return account_dto.dict(), status.HTTP_200_OK
+    # Return the updated account DTO as a JSON response with a 200 status code
+    return make_response(jsonify(account_dto.dict()), status.HTTP_200_OK)
 
 
 ######################################################################
