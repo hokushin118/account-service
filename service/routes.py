@@ -654,6 +654,7 @@ def update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['PATCH'])
 @has_roles([ROLE_USER, ROLE_ADMIN])
+@audit_log
 @count_requests
 def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     """Partial Update Account by ID."""
@@ -666,8 +667,8 @@ def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     current_user = get_jwt_identity()
     app.logger.debug('Current user: %s', current_user)
 
+    # Retrieve user roles
     roles = get_user_roles()
-
     app.logger.debug('Roles: %s', roles)
 
     if ROLE_ADMIN not in roles:
@@ -679,15 +680,18 @@ def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
                 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
             )
 
+    # Retrieve the account to be updated or return a 404 error if not found
     account = get_account_or_404(account_id)
-    data = request.get_json()
 
+    # Get the data payload from the request
+    data = request.get_json()
     if not data:
         abort(
             status.HTTP_400_BAD_REQUEST,
             'No data provided for update'
         )
 
+    # Partially update account with provided JSON payload
     account.partial_update(data)
     account.update()
 
@@ -698,7 +702,8 @@ def partial_update_by_id(account_id: UUID) -> Tuple[Dict[str, Any], int]:
     invalidate_all_account_pages()
     app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
-    return account_dto.dict(), status.HTTP_200_OK
+    # Return the updated account DTO as a JSON response with a 200 status code
+    return make_response(jsonify(account_dto.dict()), status.HTTP_200_OK)
 
 
 ######################################################################
