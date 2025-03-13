@@ -32,7 +32,7 @@ from service.common.keycloak_utils import (
     KEYCLOAK_URL,
     KEYCLOAK_REALM,
     get_keycloak_certificate,
-    get_keycloak_certificate_with_retry
+    get_keycloak_certificate_with_retry, KEYCLOAK_CLIENT_ID, KEYCLOAK_SECRET
 )
 
 logger = logging.getLogger(__name__)
@@ -148,7 +148,7 @@ def configure_security(current_app: Flask) -> None:
         'img-src': ["'self'", "data:"],
         'font-src': ['\'self\'', 'https://fonts.gstatic.com'],
         # Important for Google Fonts
-        'connect-src': ['\'self\''],
+        'connect-src': ['\'self\'', 'http://localhost:28080', KEYCLOAK_URL],
     }
 
     # Initialize Talisman to enforce HTTPS and apply security headers including the CSP
@@ -204,7 +204,7 @@ def configure_swagger(current_app: Flask) -> None:
 
     # Customize Swagger default configurations (important: define before Talisman)
     swagger_config = {
-        'openapi': "3.0.3",
+        'openapi': "3.0.2",
         'title': NAME,
         'headers': [
             ('Access-Control-Allow-Origin', '*'),
@@ -213,6 +213,12 @@ def configure_swagger(current_app: Flask) -> None:
                 'GET, POST, PUT, DELETE, OPTIONS'
             ),
             ('Access-Control-Allow-Credentials', 'true'),
+            (
+                'Cache-Control',
+                'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+            ),
+            ('Pragma', 'no-cache'),
+            ('Expires', '-1'),
         ],
         'specs': [
             {
@@ -228,15 +234,28 @@ def configure_swagger(current_app: Flask) -> None:
         'static_url_path': '/flasgger_static',  # Must be defined
         'swagger_ui': True,
         'specs_route': '/apidocs/',
-        'securityDefinitions': {  # If you use authentication
-            'bearerAuth': {
-                'type': 'apiKey',
-                'in': 'header',
-                'name': 'Authorization',
-                'description': 'JWT Authorization header'
-            }
-        },
         'components': {
+            'securitySchemes': {
+                'oauth2': {
+                    'type': 'oauth2',
+                    'flows': {
+                        'authorizationCode': {
+                            'authorizationUrl':
+                                f"http://localhost:28080/realms/{KEYCLOAK_REALM}"
+                                f"/protocol/openid-connect/auth",
+                            'tokenUrl':
+                                f"http://localhost:28080/realms/{KEYCLOAK_REALM}"
+                                f"/protocol/openid-connect/token",
+                            'scopes': {
+                                'openid': 'openid',
+                                'profile': 'profile',
+                                'email': 'email',
+                                'offline_access': 'offline_access'
+                            }
+                        }
+                    }
+                }
+            },
             'schemas': {
                 'HealthDTO': {
                     'type': 'object',
@@ -356,6 +375,15 @@ def configure_swagger(current_app: Flask) -> None:
                         }
                     }
                 }
+            }
+        },
+        'swaggerUiConfig': {
+            'oauth2': {
+                'clientId': KEYCLOAK_CLIENT_ID,
+                'clientSecret': KEYCLOAK_SECRET,
+                'defaultScopes': [
+                    'openid', 'profile', 'email', 'offline_access'
+                ],
             }
         }
     }

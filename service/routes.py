@@ -105,14 +105,27 @@ def check_if_user_is_owner(user: str, account_id: UUID) -> bool:
 
 
 def invalidate_all_account_pages() -> None:
-    """Invalidates all cached paginated account results."""
-    app.logger.debug('Invalidated cache...')
-    cache.clear()
+    """Invalidate all cached results.
+
+    This function clears the cache and logs the process. If a Redis connection error occurs,
+    it logs an error message indicating the connection issue. Any unexpected exceptions will also
+    be logged.
+    """
+    app.logger.debug('Invalidating all cached results...')
+    try:
+        cache.clear()
+        app.logger.debug('All cache has been successfully invalidated.')
+    except ConnectionError as conn_err:
+        app.logger.error(
+            'Redis connection error during cache invalidation: %s',
+            conn_err
+        )
+    except Exception as err:  # pylint: disable=W0703
+        app.logger.error('Error invalidating cache: %s', err)
 
 
 def audit_log(function: Callable) -> Callable:
-    """
-    Conditionally apply Kafka-based audit logging to a function based on the audit configuration.
+    """Conditionally apply Kafka-based audit logging to a function based on the audit configuration.
 
     If audit logging is enabled (i.e., AUDIT_ENABLED is True), this function dynamically imports
     and applies the audit_log_kafka decorator to the provided function. Otherwise, it simply returns
@@ -232,7 +245,7 @@ def info() -> Response:
     'tags': ['Accounts V1'],
     'summary': 'Create a New Account',
     'description': 'Creates a new account based on the provided JSON data.',
-    'security': [{"bearerAuth": []}],
+    'security': [{'oauth2': ['openid', 'profile', 'email']}],
     'requestBody': {
         'content': {
             'application/json': {
@@ -307,7 +320,7 @@ def create() -> Response:
                    'database and returns them as a JSON array.</br></br>'
                    'Only authenticated users can access this endpoint.</br></br>'
                    'Query parameters `page` and `per_page` are used for pagination.',
-    'security': [{'bearerAuth': []}],
+    'security': [{'oauth2': ['openid', 'profile', 'email']}],
     'parameters': [
         {
             'name': 'page',
@@ -353,8 +366,8 @@ def list_accounts() -> Response:
     current_user = get_jwt_identity()
     app.logger.debug('Current user: %s', current_user)
 
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
+    page = request.args.get('page', default=1, type=int)
+    per_page = request.args.get('per_page', default=10, type=int)
 
     # Cache key for paginated results (include page and per_page)
     cache_key = f"{ACCOUNT_CACHE_KEY}:{page}:{per_page}"
@@ -418,7 +431,7 @@ def list_accounts() -> Response:
     'summary': 'Retrieve Account by ID',
     'description': 'Retrieves an account based on its unique identifier.</br></br>'
                    'Only authenticated users can access this endpoint.',
-    'security': [{"bearerAuth": []}],
+    'security': [{'oauth2': ['openid', 'profile', 'email']}],
     'responses': {
         200: {'description': 'OK',
               'content': {
@@ -528,7 +541,7 @@ def find_by_id(account_id: UUID) -> Response:
     'summary': 'Update Account by ID',
     'description': 'Updates an existing account with the provided JSON data.</br></br>'
                    'Only authenticated users can access this endpoint.',
-    'security': [{"bearerAuth": []}],
+    'security': [{'oauth2': ['openid', 'profile', 'email']}],
     'parameters': [
         {
             'in': 'path',
@@ -621,7 +634,7 @@ def update_by_id(account_id: UUID) -> Response:
     'summary': 'Partial Update Account by ID',
     'description': 'Partially updates an existing account with the provided JSON data.</br></br>'
                    'Only authenticated users can access this endpoint.',
-    'security': [{"bearerAuth": []}],
+    'security': [{'oauth2': ['openid', 'profile', 'email']}],
     'parameters': [
         {
             'in': 'path',
@@ -725,7 +738,7 @@ def partial_update_by_id(account_id: UUID) -> Response:
     'summary': 'Delete Account by ID',
     'description': 'Deletes an account based on its unique identifier.</br></br>'
                    'Only authenticated users can access this endpoint.',
-    'security': [{"bearerAuth": []}],
+    'security': [{'oauth2': ['openid', 'profile', 'email']}],
     'parameters': [
         {
             'in': 'path',
