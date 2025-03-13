@@ -33,6 +33,10 @@ COPY --from=builder /app /app
 # Create a non-root user and change ownership in final stage
 RUN useradd --uid 1000 cbotee && chown -R cbotee /app
 
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
 # Switch to non-root user
 USER cbotee
 
