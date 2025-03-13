@@ -9,8 +9,7 @@ Authorization: Bearer {{token}}
 
 # Get list of paginated accounts v1 - 200
 
-GET http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts?page=1&
-    per_page=5 HTTP/1.1
+GET http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts?page=1&per_page=5 HTTP/1.1
 Accept: application/json
 Content-Type: application/json
 Authorization: Bearer {{token}}
@@ -150,30 +149,6 @@ Authorization: Bearer {{token}}
 
 DELETE http://{{account_srv_host}}:{{account_srv_port}}/api/v1/accounts
 /{{test_id}} HTTP/1.1
-Accept: application/json
-Content-Type: application/json
-
-###
-
-# Get index - 200
-
-GET http://{{account_srv_host}}:{{account_srv_port}}/api HTTP/1.1
-Accept: application/json
-Content-Type: application/json
-
-###
-
-# Get info - 200
-
-GET http://{{account_srv_host}}:{{account_srv_port}}/api/info HTTP/1.1
-Accept: application/json
-Content-Type: application/json
-
-###
-
-# Get health - 200
-
-GET http://{{account_srv_host}}:{{account_srv_port}}/api/health HTTP/1.1
 Accept: application/json
 Content-Type: application/json
 

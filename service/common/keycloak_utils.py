@@ -35,6 +35,8 @@ KEYCLOAK_PORT = os.getenv('KEYCLOAK_PORT', '28080')
 # A unique identifier for an application or service that wants to
 # authenticate or authorize users through Keycloak.
 KEYCLOAK_CLIENT_ID = os.getenv('KEYCLOAK_CLIENT_ID', 'oauth2-proxy')
+# Client secret used for authenticating application with Keycloak.
+KEYCLOAK_SECRET = os.getenv('KEYCLOAK_SECRET', '')
 # Keycloak communication protocol.
 KEYCLOAK_SCHEMA = os.getenv('KEYCLOAK_SCHEMA', 'http')
 KEYCLOAK_URL = f"{KEYCLOAK_SCHEMA}://{KEYCLOAK_HOST}:{KEYCLOAK_PORT}"
