@@ -18,7 +18,6 @@ from flask_jwt_extended import JWTManager
 from flask_talisman import Talisman
 from prometheus_flask_exporter import PrometheusMetrics
 
-from service import config
 from service.common import log_handlers
 from service.common.constants import (
     NAME_MAX_LENGTH,
@@ -27,12 +26,6 @@ from service.common.constants import (
     PHONE_MAX_LENGTH,
     AUTHORIZATION_HEADER,
     BEARER_HEADER, GENDER_MAX_LENGTH
-)
-from service.common.keycloak_utils import (
-    KEYCLOAK_URL,
-    KEYCLOAK_REALM,
-    get_keycloak_certificate,
-    get_keycloak_certificate_with_retry, KEYCLOAK_CLIENT_ID, KEYCLOAK_SECRET
 )
 
 logger = logging.getLogger(__name__)
@@ -102,6 +95,17 @@ def load_environment_variables() -> None:
 
 # Load environment at startup
 load_environment_variables()
+
+from service.configs import AppConfig  # pylint: disable=C0413
+# pylint: disable=C0413
+from service.common.keycloak_utils import (
+    KEYCLOAK_URL,
+    KEYCLOAK_REALM,
+    get_keycloak_certificate,
+    get_keycloak_certificate_with_retry, KEYCLOAK_CLIENT_ID, KEYCLOAK_SECRET
+)
+
+app_config = AppConfig()
 
 # Retrieving Information (Environment Variables Example):
 # This is a common way to manage configuration, especially in containerized environments.
@@ -305,6 +309,11 @@ def configure_swagger(current_app: Flask) -> None:
                             'type': 'string',
                             'format': 'date',
                             'description': 'The date the account was created (ISO 8601 format)'
+                        },
+                        'user_id': {
+                            'type': 'string',
+                            'format': 'uuid',
+                            'description': 'The user ID'
                         },
                     },
                     'required': ['id', 'name', 'email', 'date_joined']
@@ -513,7 +522,13 @@ def create_app() -> Flask:
         Flask: A configured Flask application instance.
     """
     current_app = Flask(__name__)
-    current_app.config.from_object(config)
+
+    # Configure app settings
+    current_app.config.from_object(app_config)
+    current_app.config['SQLALCHEMY_DATABASE_URI'] = \
+        app_config.sqlalchemy_database_uri
+    current_app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = \
+        app_config.sqlalchemy_track_modifications
 
     # Configure Security and Monitoring
     configure_security(current_app)

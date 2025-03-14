@@ -4,6 +4,7 @@ Models for Account
 All the models are stored in this module
 """
 import logging
+import uuid
 from datetime import date
 from typing import Any, Dict, List, Optional
 
@@ -293,6 +294,12 @@ class Account(db.Model, PersistentBase):
         nullable=False,
         default=date.today()
     )
+    user_id = db.Column(
+        UUID(as_uuid=True),
+        nullable=False,
+        unique=True,
+        index=True
+    )
 
     def __repr__(self) -> str:
         """Returns a string representation of the Account object.
@@ -335,6 +342,15 @@ class Account(db.Model, PersistentBase):
             self.address = data.get('address')  # Address is optional
             self.phone_number = data.get('phone_number')
             self.date_joined = parser.parse(str(data['date_joined'])).date()
+            user_id_data = data['user_id']
+            if isinstance(user_id_data, uuid.UUID):
+                self.user_id = user_id_data
+            elif isinstance(user_id_data, str):
+                self.user_id = uuid.UUID(user_id_data)
+            else:
+                raise DataValidationError(
+                    'Invalid user_id format. Must be a UUID or string.'
+                )
         except KeyError as error:
             raise DataValidationError(
                 f"Invalid Account: missing {error.args[0]}"

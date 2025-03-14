@@ -5,6 +5,7 @@ This module defines a base test class for Flask-based tests by extending
 Python’s built-in unittest.TestCase.
 """
 import json
+import logging
 from typing import Optional, Union
 from unittest import TestCase
 
@@ -12,9 +13,12 @@ from flask import Flask, Response
 from flask_jwt_extended import JWTManager
 from kafka.errors import KafkaConnectionError  # pylint: disable=E0401
 
+from service import app_config
 from service.common import status
 from service.common.kafka_producer import KafkaProducerManager
-from service.configs.kafka_config import KafkaProducerConfig
+from service.configs import KafkaProducerConfig
+from service.models import Account, db
+from tests import create_db_if_not_exists
 from tests.test_constants import JWT_SECRET_KEY, TEST_TOPIC
 
 
@@ -204,15 +208,42 @@ class DummyKafkaProducerConfig(KafkaProducerConfig):
 class BaseTestCase(TestCase):
     """A base test class for Flask-based tests that sets up the application context."""
 
-    def setUp(self):
-        """It should set up the Flask application context before each test."""
-        self.app = Flask(__name__)
-        self.app.testing = True
-        self.app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
-        JWTManager(self.app)
-        self.app_context = self.app.app_context()
-        self.app_context.push()  # Push the context so request works
+    app = None
 
-    def tearDown(self):
-        """It should tear down the Flask application context after each test."""
-        self.app_context.pop()
+    @classmethod
+    def setUpClass(cls):
+        """This runs once before the entire test suite."""
+        cls.app = Flask(__name__)
+        cls.app.testing = True
+        cls.app.config["TESTING"] = True
+        cls.app.config["DEBUG"] = False
+        cls.app.config["SQLALCHEMY_DATABASE_URI"] = app_config.database_uri
+        cls.app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        cls.app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
+        cls.app.logger.setLevel(logging.CRITICAL)
+        JWTManager(cls.app)
+        cls.app.app_context().push()
+
+        if app_config.database_uri:
+            engine = create_db_if_not_exists(app_config.database_uri)
+            if engine:
+                cls.app.logger.info('Database connection successful.')
+            else:
+                cls.app.logger.error('Failed to connect to database.')
+        else:
+            cls.app.logger.error('Database URI not set')
+
+        Account.init_db(cls.app)
+        db.create_all()
+
+    @classmethod
+    def tearDownClass(cls):
+        """This runs once after the entire test suite."""
+        db.session.close()
+        db.drop_all()
+
+    def setUp(self):
+        """This runs before each test."""
+        db.session.rollback()
+        db.session.query(Account).delete()
+        db.session.commit()

@@ -5,49 +5,23 @@ Test cases can be run with the following:
   nosetests -v --with-spec --spec-color
   coverage report -m
 """
-import logging
-from unittest import TestCase
 
 from sqlalchemy.sql.expression import desc
 
-from service import app
-from service.models import Account, DataValidationError, db
+from service.models import Account, DataValidationError
 from tests.factories import AccountFactory
-from tests.test_constants import DATABASE_URI
+from tests.test_base import BaseTestCase
 
 
 ######################################################################
 #  ACCOUNT MODEL TEST CASES
 ######################################################################
-class TestAccount(TestCase):  # pylint:disable=R0904
+class TestAccount(BaseTestCase):  # pylint:disable=R0904
     """Test Cases for Account Model."""
-
-    @classmethod
-    def setUpClass(cls):
-        """This runs once before the entire test suite."""
-        app.config['TESTING'] = True
-        app.config['DEBUG'] = False
-        app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
-        app.logger.setLevel(logging.CRITICAL)
-        Account.init_db(app)
-
-    @classmethod
-    def tearDownClass(cls):
-        """This runs once after the entire test suite."""
-
-    def setUp(self):
-        """This runs before each test."""
-        db.session.query(Account).delete()  # clean up the last tests
-        db.session.commit()
-
-    def tearDown(self):
-        """This runs after each test."""
-        db.session.remove()
 
     ######################################################################
     #  TEST CASES
     ######################################################################
-
     def test_create_an_account(self):
         """It should create an Account and assert that it exists."""
         fake_account = AccountFactory()
@@ -59,6 +33,7 @@ class TestAccount(TestCase):  # pylint:disable=R0904
             address=fake_account.address,
             phone_number=fake_account.phone_number,
             date_joined=fake_account.date_joined,
+            user_id=fake_account.user_id,
         )
         self.assertIsNotNone(account)
         self.assertEqual(account.id, None)
@@ -68,6 +43,7 @@ class TestAccount(TestCase):  # pylint:disable=R0904
         self.assertEqual(account.address, fake_account.address)
         self.assertEqual(account.phone_number, fake_account.phone_number)
         self.assertEqual(account.date_joined, fake_account.date_joined)
+        self.assertEqual(account.user_id, fake_account.user_id)
 
     def test_add_a_account(self):
         """It should create an account and add it to the database."""
@@ -94,6 +70,7 @@ class TestAccount(TestCase):  # pylint:disable=R0904
         self.assertEqual(found_account.address, account.address)
         self.assertEqual(found_account.phone_number, account.phone_number)
         self.assertEqual(found_account.date_joined, account.date_joined)
+        self.assertEqual(found_account.user_id, account.user_id)
 
     def test_update_account(self):
         """It should update an account."""
@@ -195,6 +172,7 @@ class TestAccount(TestCase):  # pylint:disable=R0904
         self.assertEqual(serial_account['phone_number'], account.phone_number)
         self.assertEqual(serial_account['date_joined'],
                          str(account.date_joined))
+        self.assertEqual(serial_account['user_id'], account.user_id)
 
     def test_deserialize_an_account(self):
         """It should deserialize an account."""
@@ -209,6 +187,7 @@ class TestAccount(TestCase):  # pylint:disable=R0904
         self.assertEqual(new_account.address, account.address)
         self.assertEqual(new_account.phone_number, account.phone_number)
         self.assertEqual(new_account.date_joined, account.date_joined)
+        self.assertEqual(new_account.user_id, account.user_id)
 
     def test_deserialize_with_key_error(self):
         """It should not deserialize an account with a KeyError."""

@@ -479,8 +479,10 @@ To execute the microservice's tests, follow these steps:
 3. **Run Tests:**
     * Execute the microservice's tests using `nosetests`.
    ```bash
-   nosetests -v --with-spec --spec-color
+   APP_SETTINGS=testing nosetests -v --with-spec --spec-color
    ```
+    * `APP_SETTINGS=testing`: Sets the environment for testing.
+    * `nosetests`: Executes the nosetests test runner.
     * `-v`: Enables verbose output.
     * `--with-spec`: Enables the `nose-spec` plugin for a more readable test
       output.
