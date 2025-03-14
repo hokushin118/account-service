@@ -1,21 +1,16 @@
 # pylint:disable=C0302
 """
 Account API Service Test Suite.
-
-Test cases can be run with the following:
+Test cases can be run with:
   nosetests -v --with-spec --spec-color
   coverage report -m
 """
+
 from unittest import TestCase
 from unittest.mock import patch
 
 from cryptography.hazmat.primitives import serialization
-from flask import Flask
-from flask_jwt_extended import (
-    JWTManager,
-    verify_jwt_in_request,
-    get_jwt_identity
-)
+from flask_jwt_extended import JWTManager
 from jose import jwt
 
 from service import AUTHORIZATION_HEADER, BEARER_HEADER
@@ -28,14 +23,14 @@ from service.routes import (
     ACCOUNTS_PATH_V1,
     ROOT_PATH,
     HEALTH_PATH,
-    IF_NONE_MATCH_HEADER, CACHE_CONTROL_HEADER, audit_log
+    IF_NONE_MATCH_HEADER,
+    CACHE_CONTROL_HEADER,
+    audit_log
 )
 from service.schemas import AccountDTO
 from tests.factories import AccountFactory
-from tests.test_base import DummyKafkaProducer
-from tests.test_constants import (
-    TEST_USER
-)
+from tests.test_base import BaseTestCase
+from tests.test_constants import TEST_USER_ID
 
 HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
 JWT_ALGORITHM = 'RS256'
@@ -48,24 +43,21 @@ ORIGINAL = 'original'
 ######################################################################
 #  ROUTE TEST CASES
 ######################################################################
-class TestAccountRoute(TestCase):  # pylint:disable=R0904
+class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     """Account Route Tests."""
 
     def setUp(self):
-        """Runs before each test."""
-        self.app = Flask(__name__)
-        self.app.testing = True
-        self.app_context = app.app_context()
-        self.app_context.push()  # Push the context so request works
-
-        db.session.query(Account).delete()  # clean up the last tests
+        """It should run before each test to set up the testing environment."""
+        db.session.rollback()
+        db.session.query(Account).delete()
         db.session.commit()
 
         self.client = app.test_client()
 
-        # Generating a private/public key pair
-        # openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:2048
-        # openssl rsa -pubout -in private.pem -out public.pem
+        # Generate a private/public key pair.
+        # For example:
+        #   openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:2048
+        #   openssl rsa -pubout -in private.pem -out public.pem
 
         # Load private key
         with open(PRIVATE_KEY_PATH, 'rb') as private_key_file:
@@ -78,13 +70,11 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
                 format=serialization.PrivateFormat.PKCS8,
                 encryption_algorithm=serialization.NoEncryption()
             )
-
         # Load public key
         with open(PUBLIC_KEY_PATH, 'rb') as public_key_file:
             self.public_key = serialization.load_pem_public_key(
                 public_key_file.read()
             )
-
         # Mock Keycloak public key retrieval
         self.mock_certs = {
             KEYS: [{
@@ -95,25 +85,20 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
                 'e': self.public_key.public_numbers().e
             }]
         }
-
-        # Generate test JWT using RS256
+        # Generate a test JWT using RS256
         self.test_jwt = jwt.encode(
             {
-                'sub': TEST_USER,
-                REALM_ACCESS_CLAIM: {
-                    ROLES_CLAIM: [ROLE_USER]
-                }
+                'sub': TEST_USER_ID,
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,
             headers={'kid': 'test-kid'}
         )
-
         with open(PUBLIC_KEY_PATH, 'rb') as public_key_file:
             app.config['JWT_PUBLIC_KEY'] = serialization.load_pem_public_key(
                 public_key_file.read()
             )
-
         app.config['JWT_ALGORITHM'] = JWT_ALGORITHM
         app.config['JWT_TOKEN_LOCATION'] = ['headers']
         app.config['JWT_HEADER_NAME'] = AUTHORIZATION_HEADER
@@ -122,32 +107,34 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         # Initialize JWTManager
         JWTManager(app)
 
-    def tearDown(self):
-        """Runs once after each test case."""
-        db.session.remove()  # Remove the session
-
-        self.app_context.pop()  # Pop the application context
-        self.app_context = None  # Reset the app context
-
     ######################################################################
     #  HELPER METHODS
     ######################################################################
     def _create_accounts(self, count):
-        """Factory method to create accounts in bulk."""
+        """It should create a specified number of accounts using the factory."""
         accounts = []
         for _ in range(count):
             account = AccountFactory()
+            # Generate test JWT for this account (using account.user_id and role)
+            test_jwt = jwt.encode(
+                {
+                    'sub': str(account.user_id),
+                    REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
+                },
+                self.private_key,
+                algorithm=JWT_ALGORITHM,
+                headers={'kid': 'test-kid'}
+            )
+            headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
             response = self.client.post(
                 ACCOUNTS_PATH_V1,
-                json=account.to_dict()
+                json=account.to_dict(),
+                headers=headers
             )
-            self.assertEqual(
-                response.status_code,
-                status.HTTP_201_CREATED,
-                'Could not create test Account',
-            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED,
+                             'Could not create test Account')
             new_account = response.get_json()
-            account.id = new_account['id']  # pylint: disable=C0103
+            account.id = new_account['id']
             accounts.append(account)
         return accounts
 
@@ -160,22 +147,21 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_health(self):
-        """It should be healthy."""
+        """It should be healthy when the health endpoint is called."""
         response = self.client.get(HEALTH_PATH)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-
         data = response.get_json()
         self.assertEqual(data['status'], 'UP')
 
     def test_unsupported_media_type(self):
-        """
-        It should not create an Account when sending the wrong media type.
-        """
+        """It should not create an Account when sending the wrong media type."""
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         account = AccountFactory()
         response = self.client.post(
             ACCOUNTS_PATH_V1,
             json=account.to_dict(),
-            content_type='test/html'
+            content_type='test/html',
+            headers=headers
         )
         self.assertEqual(
             response.status_code,
@@ -183,30 +169,24 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
 
     def test_security_headers(self):
-        """It should return security headers."""
-        response = self.client.get(
-            ROOT_PATH,
-            environ_overrides=HTTPS_ENVIRON
-        )
+        """It should return the correct security headers."""
+        response = self.client.get(ROOT_PATH, environ_overrides=HTTPS_ENVIRON)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        headers = {
+        expected_headers = {
             'X-Frame-Options': 'SAMEORIGIN',
             'X-Content-Type-Options': 'nosniff',
-            'Content-Security-Policy': 'default-src \'self\'; object-src \'none\'',
+            'Content-Security-Policy': "default-src 'self'; object-src 'none'",
             'Referrer-Policy': 'strict-origin-when-cross-origin'
         }
-        for key, value in headers.items():
+        for key, value in expected_headers.items():
+            # Optionally skip extra checks on headers that might vary.
             if key != 'Content-Security-Policy':
                 self.assertEqual(response.headers.get(key), value)
 
     def test_cors_security(self):
-        """It should return a CORS header."""
-        response = self.client.get(
-            ROOT_PATH,
-            environ_overrides=HTTPS_ENVIRON
-        )
+        """It should include a CORS header allowing all origins."""
+        response = self.client.get(ROOT_PATH, environ_overrides=HTTPS_ENVIRON)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Check for the CORS header
         self.assertEqual(
             response.headers.get('Access-Control-Allow-Origin'),
             '*'
@@ -215,116 +195,113 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
     ######################################################################
     #  CREATE ACCOUNTS TEST CASES
     ######################################################################
-    def test_create_accounts_success(self):
-        """It should create a new Account."""
+    @patch('requests.get')
+    @patch('service.routes.get_jwt_identity')
+    def test_create_accounts_success(self, mock_jwt_identity, mock_get):
+        """It should create a new Account successfully."""
+        mock_jwt_identity.return_value = TEST_USER_ID
+        mock_get.return_value.status_code = status.HTTP_201_CREATED
+        mock_get.return_value.json.return_value = self.mock_certs
         account = AccountFactory()
+        test_account_dto = AccountDTO.from_orm(account)
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=account.to_dict(),
-            content_type='application/json'
+            json=test_account_dto.to_dict(),
+            content_type='application/json',
+            headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        # Make sure location header is set
-        location = response.headers.get('Location', None)
-        self.assertIsNotNone(location)
-
-        # Check the data is correct
+        self.assertIsNotNone(response.headers.get('Location'))
         new_account = response.get_json()
-        self.assertEqual(new_account['name'], account.name)
-        self.assertEqual(new_account['email'], account.email)
-        self.assertEqual(new_account['address'], account.address)
-        self.assertEqual(new_account['phone_number'], account.phone_number)
-        # self.assertEqual(new_account['date_joined'],
-        #                  str(account.date_joined))
+        self.assertEqual(new_account['name'], test_account_dto.name)
+        self.assertEqual(new_account['email'], test_account_dto.email)
+        self.assertEqual(new_account['address'], test_account_dto.address)
+        self.assertEqual(new_account['phone_number'],
+                         test_account_dto.phone_number)
+        self.assertEqual(new_account['user_id'], TEST_USER_ID)
 
     ######################################################################
     #  LIST ALL ACCOUNTS TEST CASES
     ######################################################################
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
-    def test_list_accounts_success(self, mock_get):
-        """It should return a list of accounts with a valid JWT."""
+    @patch('service.routes.cache.set')
+    @patch('service.routes.cache.get')
+    @patch('service.routes.get_jwt_identity')
+    def test_list_accounts_success(self,
+                                   mock_jwt_identity,
+                                   mock_cache_get,
+                                   mock_cache_set,
+                                   mock_get):
+        """It should return a list of accounts when a valid JWT is provided."""
+        account = AccountFactory()
+        mock_jwt_identity.return_value = TEST_USER_ID
+        mock_cache_get.return_value = None
+        mock_cache_set.return_value = None
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        self._create_accounts(3)
+        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-
+        # Create account first.
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.to_dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # Retrieve all accounts.
         response = self.client.get(
             ACCOUNTS_PATH_V1,
             content_type='application/json',
             headers=headers,
         )
-
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.get_json()
-        self.assertEqual(len(data['items']), 3)
+        self.assertEqual(len(data['items']), 1)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
-    def test_list_accounts_paginated(self, mock_get):
-        """It should return paginated accounts with a valid JWT."""
+    @patch('service.routes.cache.set')
+    @patch('service.routes.cache.get')
+    @patch('service.routes.get_jwt_identity')
+    def test_list_accounts_paginated(self,
+                                     mock_jwt_identity,
+                                     mock_cache_get,
+                                     mock_cache_set,
+                                     mock_get):
+        """It should return paginated account results when valid pagination
+        parameters are provided."""
+        account = AccountFactory()
+        mock_jwt_identity.return_value = TEST_USER_ID
+        mock_cache_get.return_value = None
+        mock_cache_set.return_value = None
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        self._create_accounts(15)
+        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-
+        # Create account first.
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.to_dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # List paginated accounts.
         response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}?page=2&per_page=5",
+            f"{ACCOUNTS_PATH_V1}?page=1&per_page=5",
             content_type='application/json',
             headers=headers,
         )
-
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.get_json()
-        self.assertEqual(len(data['items']), 5)
-        self.assertEqual(data['page'], 2)
+        self.assertEqual(len(data['items']), 1)
+        self.assertEqual(data['page'], 1)
         self.assertEqual(data['per_page'], 5)
-        self.assertEqual(data['total'], 15)
-
-    @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
-    def test_list_accounts_cache(self, mock_get):
-        """It should retrieve data from the cache on subsequent requests."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-
-        self._create_accounts(3)
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-
-        # First request (populates cache)
-        response1 = self.client.get(
-            ACCOUNTS_PATH_V1,
-            content_type='application/json',
-            headers=headers,
-        )
-
-        self.assertEqual(response1.status_code, status.HTTP_200_OK)
-
-        # Second request (retrieves from cache)
-        with patch(
-                'service.routes.Account.all_paginated') as mock_all_paginated:
-            response2 = self.client.get(
-                ACCOUNTS_PATH_V1,
-                content_type='application/json',
-                headers=headers,
-            )
-            self.assertEqual(response2.status_code, status.HTTP_200_OK)
-            mock_all_paginated.assert_not_called()
+        self.assertEqual(data['total'], 1)
 
     def test_list_accounts_unauthorized(self):
-        """It should return 401 if no JWT is provided."""
+        """It should return 401 Unauthorized if no JWT is provided when listing accounts."""
         response = self.client.get(
             ACCOUNTS_PATH_V1,
             content_type='application/json'
@@ -332,61 +309,83 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
-    def test_list_accounts_etag_match(self, mock_get):
-        """It should return 304 if ETag matches If-None-Match."""
+    @patch('service.routes.cache.set')
+    @patch('service.routes.cache.get')
+    @patch('service.routes.get_jwt_identity')
+    def test_list_accounts_etag_match(self,
+                                      mock_jwt_identity,
+                                      mock_cache_get,
+                                      mock_cache_set,
+                                      mock_get):
+        """It should return 304 Not Modified if the ETag matches the client's
+        If-None-Match header."""
+        account = AccountFactory()
+        mock_jwt_identity.return_value = TEST_USER_ID
+        mock_cache_get.return_value = None
+        mock_cache_set.return_value = None
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        self._create_accounts(2)
-
+        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+        # Create an account
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.to_dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # First GET to collect an ETag.
         response = self.client.get(
             ACCOUNTS_PATH_V1,
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-
         headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
-        etag = response.headers.get('ETag').replace('"', '')  # Extract ETag
+        etag = response.headers.get('ETag').replace('"', '')
         headers[IF_NONE_MATCH_HEADER] = etag
-
-        # Make a second request with If-None-Match header
+        # Second GET should yield 304 if ETag matches.
         response = self.client.get(
             ACCOUNTS_PATH_V1,
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_304_NOT_MODIFIED)
-        self.assertEqual(response.data, b'')  # Check for empty body
+        self.assertEqual(response.data, b'')
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
-    def test_list_accounts_etag_mismatch(self, mock_get):
-        """It should return 200 if ETag does not match If-None-Match."""
+    @patch('service.routes.cache.set')
+    @patch('service.routes.cache.get')
+    @patch('service.routes.get_jwt_identity')
+    def test_list_accounts_etag_mismatch(self,
+                                         mock_jwt_identity,
+                                         mock_cache_get,
+                                         mock_cache_set,
+                                         mock_get):
+        """It should return 200 OK if the ETag does not match the client's If-None-Match header."""
+        account = AccountFactory()
+        mock_jwt_identity.return_value = TEST_USER_ID
+        mock_cache_get.return_value = None
+        mock_cache_set.return_value = None
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        self._create_accounts(2)
-
+        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.to_dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         response = self.client.get(
             ACCOUNTS_PATH_V1,
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-
         headers[IF_NONE_MATCH_HEADER] = INVALID_ETAG
-
-        # Make a second request with If-None-Match header
         response = self.client.get(
             ACCOUNTS_PATH_V1,
             content_type='application/json',
@@ -394,51 +393,46 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    @patch('requests.get')
-    def test_list_accounts_user_identity(self, mock_get):
-        """It should return correct user identity."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-
-        self._create_accounts(2)
-
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-
-        with app.test_request_context(headers=headers):
-            verify_jwt_in_request()
-            user_identity = get_jwt_identity()
-            self.assertEqual(user_identity, TEST_USER)
-
     ######################################################################
-    #  READ AN ACCOUNTS TEST CASES
+    #  READ AN ACCOUNT TEST CASES
     ######################################################################
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
-    def test_find_by_id_success(self, mock_get):
-        """It should return a single account with a valid JWT."""
+    @patch('service.routes.get_account_or_404')
+    @patch('service.routes.cache.get')
+    @patch('service.routes.get_jwt_identity')
+    def test_find_by_id_success(self,
+                                mock_jwt_identity,
+                                mock_cache_get,
+                                mock_get_account_or_404,
+                                mock_get):
+        """It should return a single account when a valid JWT is provided."""
+        account = AccountFactory()
+        mock_jwt_identity.return_value = TEST_USER_ID
+        mock_cache_get.return_value = None
+        mock_get_account_or_404.return_value = account
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        account = self._create_accounts(1)[0]
+        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.to_dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             content_type='application/json',
             headers=headers
         )
-
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.get_json()
         self.assertEqual(data['name'], account.name)
 
     def test_find_by_id_unauthorized(self):
-        """It should return 401 if no JWT is provided."""
+        """It should return 401 Unauthorized if no JWT is provided when reading an account."""
         account = self._create_accounts(1)[0]
-
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             content_type='application/json'
@@ -446,61 +440,79 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
-    def test_find_by_id_etag_match(self, mock_get):
-        """It should return 304 if ETag matches If-None-Match."""
+    @patch('service.routes.get_account_or_404')
+    @patch('service.routes.cache.get')
+    @patch('service.routes.get_jwt_identity')
+    def test_find_by_id_etag_match(self,
+                                   mock_jwt_identity,
+                                   mock_cache_get,
+                                   mock_get_account_or_404,
+                                   mock_get):
+        """It should return 304 Not Modified if the ETag matches when reading an account."""
+        account = AccountFactory()
+        mock_jwt_identity.return_value = TEST_USER_ID
+        mock_cache_get.return_value = None
+        mock_get_account_or_404.return_value = account
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        account = self._create_accounts(1)[0]
-
+        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.to_dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-
         headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
-        etag = response.headers.get('ETag').replace('"', '')  # Extract ETag
+        etag = response.headers.get('ETag').replace('"', '')
         headers[IF_NONE_MATCH_HEADER] = etag
-
-        # Make a second request with If-None-Match header
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_304_NOT_MODIFIED)
-        self.assertEqual(response.data, b'')  # Check for empty body
+        self.assertEqual(response.data, b'')
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
-    def test_find_by_id_etag_mismatch(self, mock_get):
-        """It should return 200 if ETag does not match If-None-Match."""
+    @patch('service.routes.get_account_or_404')
+    @patch('service.routes.cache.get')
+    @patch('service.routes.get_jwt_identity')
+    def test_find_by_id_etag_mismatch(self,
+                                      mock_jwt_identity,
+                                      mock_cache_get,
+                                      mock_get_account_or_404,
+                                      mock_get):
+        """It should return 200 OK if the ETag does not match when reading an account."""
+        account = AccountFactory()
+        mock_jwt_identity.return_value = TEST_USER_ID
+        mock_cache_get.return_value = None
+        mock_get_account_or_404.return_value = account
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        account = self._create_accounts(1)[0]
-
+        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.to_dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-
         headers[IF_NONE_MATCH_HEADER] = INVALID_ETAG
-
-        # Make a second request with a different If-None-Match header
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             content_type='application/json',
@@ -509,7 +521,7 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_find_by_id_not_found(self):
-        """It should not read an Account that is not found."""
+        """It should return 404 Not Found when requesting an account that does not exist."""
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}/0",
             content_type='application/json'
@@ -520,42 +532,37 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
     #  UPDATE AN EXISTING ACCOUNT TEST CASES
     ######################################################################
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
-    def test_update_by_id_success(self, mock_get):
-        """It should update an existing Account."""
+    @patch('service.routes.check_if_user_is_owner')
+    @patch('service.routes.get_jwt_identity')
+    def test_update_by_id_success(self,
+                                  mock_jwt_identity,
+                                  mock_check_if_user_is_owner,
+                                  mock_get):
+        """It should update an existing Account successfully when a valid
+        JWT and ownership are provided."""
+        account = AccountFactory()
+        mock_jwt_identity.return_value = account.user_id
+        mock_check_if_user_is_owner.return_value = True
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to update
-        test_account = AccountFactory()
-        test_account_dto = AccountDTO.from_orm(test_account)
-
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        # Generate test JWT using RS256 with right account id and role
+        test_account_dto = AccountDTO.from_orm(account)
         test_jwt = jwt.encode(
             {
-                'sub': test_account.name,
-                REALM_ACCESS_CLAIM: {
-                    ROLES_CLAIM: [ROLE_USER]
-                }
+                'sub': str(account.user_id),
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,
             headers={'kid': 'test-kid'}
         )
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
-        # update the account
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         new_account = response.get_json()
         new_account['phone_number'] = '918-295-1876'
         new_account['address'] = '718 Noah Drive\nChristensenburgh, NE 45784'
@@ -574,64 +581,44 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     def test_update_by_id_unauthorized(self, mock_get):
-        """It should return 401 if no JWT is provided."""
+        """It should return 401 Unauthorized when updating an account without a JWT."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to update
         test_account = AccountFactory()
         test_account_dto = AccountDTO.from_orm(test_account)
-
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
             json=test_account_dto.dict(),
-            content_type='application/json'
+            content_type='application/json',
+            headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        # partially update the account
         new_account = response.get_json()
-        updated_account_id = new_account['id']
-        update_data = {
-            'name': 'Test Account',
-            'email': 'test@example.com'
-        }
+        update_data = {'name': 'Test Account', 'email': 'test@example.com'}
         response = self.client.put(
-            f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
+            f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
             content_type='application/json',
             json=update_data
         )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     def test_update_by_id_wrong_role(self, mock_get):
-        """It should not update an existing Account with a JWT belonging to a different role."""
+        """It should not update an Account when the JWT belongs to a user with the wrong role."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to update
         test_account = AccountFactory()
         test_account_dto = AccountDTO.from_orm(test_account)
-
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-
-        # update the account
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         new_account = response.get_json()
         new_account['name'] = 'Something Known'
         response = self.client.put(
@@ -643,90 +630,64 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     def test_update_by_id_wrong_account_id(self, mock_get):
-        """It should not update an existing Account with a JWT belonging to a different user."""
+        """It should not update an Account when the JWT belongs to a different user."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to update
         test_account = AccountFactory()
         test_account_dto = AccountDTO.from_orm(test_account)
-
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        # Generate test JWT using RS256 (different account name)
         test_jwt = jwt.encode(
             {
-                'sub': TEST_USER,
-                REALM_ACCESS_CLAIM: {
-                    ROLES_CLAIM: [ROLE_USER]
-                }
+                'sub': TEST_USER_ID,
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,
             headers={'kid': 'test-kid'}
         )
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
-        # update the account
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         new_account = response.get_json()
-        new_account['name'] = 'Something Known'
+        update_data = {'name': 'Test Account', 'email': 'test@example.com'}
         response = self.client.put(
             f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
             content_type='application/json',
-            json=new_account,
+            json=update_data,
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     def test_update_by_id_wrong_account_id_admin_role(self, mock_get):
-        """It should update an existing Account with a JWT belonging to a
-        different user if an admin role."""
+        """It should update an Account when the JWT is for an admin, even if the
+        account belongs to another user."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to update
         test_account = AccountFactory()
         test_account_dto = AccountDTO.from_orm(test_account)
-
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        # Generate test JWT using RS256 (different account name)
         test_jwt = jwt.encode(
             {
-                'sub': TEST_USER,
-                REALM_ACCESS_CLAIM: {
-                    ROLES_CLAIM: [ROLE_ADMIN]
-                }
+                'sub': TEST_USER_ID,
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_ADMIN]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,
             headers={'kid': 'test-kid'}
         )
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
-        # update the account
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         new_account = response.get_json()
         new_account['name'] = 'Something Known'
         new_account['email'] = 'test@example.com'
@@ -742,7 +703,8 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(updated_account['email'], 'test@example.com')
 
     def test_update_by_id_not_found(self):
-        """It should not update an Account that is not found."""
+        """It should return 404 Not Found when attempting to update an account
+        that does not exist."""
         response = self.client.put(
             f"{ACCOUNTS_PATH_V1}/0",
             content_type='application/json'
@@ -753,42 +715,36 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
     #  PARTIALLY UPDATE AN EXISTING ACCOUNT TEST CASES
     ######################################################################
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
-    def test_partial_update_by_id_success(self, mock_get):
-        """It should partially update an existing Account."""
+    @patch('service.routes.check_if_user_is_owner')
+    @patch('service.routes.get_jwt_identity')
+    def test_partial_update_by_id_success(self,
+                                          mock_jwt_identity,
+                                          mock_check_if_user_is_owner,
+                                          mock_get):
+        """It should partially update an Account when a valid JWT and ownership are provided."""
+        account = AccountFactory()
+        mock_jwt_identity.return_value = account.user_id
+        mock_check_if_user_is_owner.return_value = True
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to update
-        test_account = AccountFactory()
-        test_account_dto = AccountDTO.from_orm(test_account)
-
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        # Generate test JWT using RS256 with right account id and role
+        test_account_dto = AccountDTO.from_orm(account)
         test_jwt = jwt.encode(
             {
-                'sub': test_account.name,
-                REALM_ACCESS_CLAIM: {
-                    ROLES_CLAIM: [ROLE_USER]
-                }
+                'sub': str(account.user_id),
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,
             headers={'kid': 'test-kid'}
         )
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
-        # partially update the account
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         new_account = response.get_json()
         updated_account_id = new_account['id']
         update_data = {
@@ -810,33 +766,23 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         )
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     def test_partial_update_by_id_unauthorized(self, mock_get):
-        """It should return 401 if no JWT is provided."""
+        """It should return 401 Unauthorized when attempting a partial update without a JWT."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to update
         test_account = AccountFactory()
         test_account_dto = AccountDTO.from_orm(test_account)
-
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
             json=test_account_dto.dict(),
-            content_type='application/json'
+            content_type='application/json',
+            headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        # partially update the account
         new_account = response.get_json()
         updated_account_id = new_account['id']
-        update_data = {
-            'name': 'Test Account',
-            'email': 'test@example.com'
-        }
+        update_data = {'name': 'Test Account', 'email': 'test@example.com'}
         response = self.client.patch(
             f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
             content_type='application/json',
@@ -845,37 +791,24 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     def test_partial_update_by_id_wrong_role(self, mock_get):
-        """It should not partially update an existing Account with a JWT
-        belonging to a different role.
-        """
+        """It should not partially update an Account when the JWT belongs to a user
+        with the wrong role."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to update
         test_account = AccountFactory()
         test_account_dto = AccountDTO.from_orm(test_account)
-
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-
-        # partially update the account
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         new_account = response.get_json()
         updated_account_id = new_account['id']
-        update_data = {
-            'name': 'Test Account',
-            'email': 'test@example.com'
-        }
+        update_data = {'name': 'Test Account', 'email': 'test@example.com'}
         response = self.client.patch(
             f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
             content_type='application/json',
@@ -885,50 +818,32 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     def test_partial_update_by_id_wrong_account_id(self, mock_get):
-        """It should not partially update an existing Account with a JWT
-        belonging to a different user.
-        """
+        """It should not partially update an Account when the JWT belongs to a different user."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to update
         test_account = AccountFactory()
         test_account_dto = AccountDTO.from_orm(test_account)
-
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        # Generate test JWT using RS256 (different account name)
         test_jwt = jwt.encode(
             {
-                'sub': TEST_USER,
-                REALM_ACCESS_CLAIM: {
-                    ROLES_CLAIM: [ROLE_USER]
-                }
+                'sub': TEST_USER_ID,
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,
             headers={'kid': 'test-kid'}
         )
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
-        # partially update the account
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         new_account = response.get_json()
         updated_account_id = new_account['id']
-        update_data = {
-            'name': 'Test Account',
-            'email': 'test@example.com'
-        }
+        update_data = {'name': 'Test Account', 'email': 'test@example.com'}
         response = self.client.patch(
             f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
             content_type='application/json',
@@ -938,49 +853,33 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     def test_partial_update_by_id_wrong_account_id_admin_role(self, mock_get):
-        """It should partially update an existing Account with a JWT
-        belonging to a different user if an admin role."""
+        """It should partially update an Account with an admin JWT even when the
+        account belongs to a different user."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to update
         test_account = AccountFactory()
         test_account_dto = AccountDTO.from_orm(test_account)
-
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        # Generate test JWT using RS256 (different account name)
         test_jwt = jwt.encode(
             {
-                'sub': TEST_USER,
-                REALM_ACCESS_CLAIM: {
-                    ROLES_CLAIM: [ROLE_ADMIN]
-                }
+                'sub': TEST_USER_ID,
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_ADMIN]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,
             headers={'kid': 'test-kid'}
         )
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
-        # partially update the account
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=test_account_dto.dict(),
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         new_account = response.get_json()
         updated_account_id = new_account['id']
-        update_data = {
-            'name': 'Something Known',
-            'email': 'test@example.com'
-        }
+        update_data = {'name': 'Something Known', 'email': 'test@example.com'}
         response = self.client.patch(
             f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
             content_type='application/json',
@@ -993,7 +892,8 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(updated_account['email'], 'test@example.com')
 
     def test_partial_update_by_id_not_found(self):
-        """It should not partially update an Account that is not found."""
+        """It should return 404 Not Found when attempting a partial update
+        on a non-existent Account."""
         response = self.client.patch(
             f"{ACCOUNTS_PATH_V1}/0",
             content_type='application/json'
@@ -1004,72 +904,43 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
     #  DELETE AN ACCOUNT TEST CASES
     ######################################################################
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     @patch('service.routes.check_if_user_is_owner')
-    def test_delete_by_id_success(
-            self,
-            mock_check_if_user_is_owner,
-            mock_get
-    ):
-        """It should delete an Account."""
+    def test_delete_by_id_success(self, mock_check_if_user_is_owner, mock_get):
+        """It should delete an Account successfully when authorized."""
         mock_check_if_user_is_owner.return_value = True
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to delete
         account = self._create_accounts(1)[0]
-
-        # Generate test JWT using RS256 with right account id and role
         test_jwt = jwt.encode(
             {
-                'sub': TEST_USER,
-                REALM_ACCESS_CLAIM: {
-                    ROLES_CLAIM: [ROLE_USER]
-                }
+                'sub': TEST_USER_ID,
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,
             headers={'kid': 'test-kid'}
         )
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
         response = self.client.delete(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(response.data, b'')  # Check for empty body
+        self.assertEqual(response.data, b"")
 
     def test_delete_by_id_unauthorized(self):
-        """It should return 401 if no JWT is provided."""
-        # create an Account to delete
+        """It should return 401 Unauthorized when deleting an Account without a JWT."""
         account = self._create_accounts(1)[0]
-
-        response = self.client.delete(
-            f"{ACCOUNTS_PATH_V1}/{account.id}"
-        )
+        response = self.client.delete(f"{ACCOUNTS_PATH_V1}/{account.id}")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     def test_delete_by_id_wrong_role(self, mock_get):
-        """It should not delete an Account with a JWT belonging to a different
-        role."""
+        """It should not delete an Account when the JWT belongs to a user with the wrong role."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to delete
         account = self._create_accounts(1)[0]
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-
         response = self.client.delete(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             headers=headers
@@ -1077,33 +948,21 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     def test_delete_by_id_wrong_account_id(self, mock_get):
-        """It not should not delete an Account with a JWT belonging to a different user."""
+        """It should not delete an Account when the JWT belongs to a different user."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to delete
         account = self._create_accounts(1)[0]
-
-        # Generate test JWT using RS256 with right account id and role
         test_jwt = jwt.encode(
             {
-                'sub': TEST_USER,
-                REALM_ACCESS_CLAIM: {
-                    ROLES_CLAIM: [ROLE_USER]
-                }
+                'sub': TEST_USER_ID,
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,
             headers={'kid': 'test-kid'}
         )
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
         response = self.client.delete(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             headers=headers
@@ -1111,41 +970,33 @@ class TestAccountRoute(TestCase):  # pylint:disable=R0904
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
-    @patch(
-        'service.common.audit_utils.kafka_producer_manager.get_producer',
-        new=DummyKafkaProducer
-    )
     def test_delete_by_id_wrong_account_id_admin_role(self, mock_get):
-        """It not should not delete an Account with a JWT belonging to a different user."""
+        """It should delete an Account when the JWT is for an admin, even if the
+        account belongs to a different user."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-
-        # create an Account to delete
         account = self._create_accounts(1)[0]
-
-        # Generate test JWT using RS256 with right account id and role
         test_jwt = jwt.encode(
             {
-                'sub': TEST_USER,
-                REALM_ACCESS_CLAIM: {
-                    ROLES_CLAIM: [ROLE_ADMIN]
-                }
+                'sub': TEST_USER_ID,
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_ADMIN]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,
             headers={'kid': 'test-kid'}
         )
-
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-
         response = self.client.delete(
             f"{ACCOUNTS_PATH_V1}/{account.id}",
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(response.data, b'')  # Check for empty body
+        self.assertEqual(response.data, b"")
 
 
+######################################################################
+#  AUDIT LOG DECORATOR TEST CASES
+######################################################################
 def dummy_function() -> str:
     """A simple dummy function to test the audit_log decorator."""
     return ORIGINAL

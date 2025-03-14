@@ -28,7 +28,8 @@ class TestAccountDTO(TestCase):
             'gender': 'Male',
             'address': '123 Main St',
             'phone_number': '123-456-7890',
-            'date_joined': '2024-07-26'
+            'date_joined': '2024-07-26',
+            'user_id': '77cb6dfd-c8fc-4ef0-b35c-8c76a216d274',
         }
         account_dto = AccountDTO(**data)
         self.assertEqual(account_dto.name, 'John Doe')
@@ -37,6 +38,10 @@ class TestAccountDTO(TestCase):
         self.assertEqual(account_dto.address, '123 Main St')
         self.assertEqual(account_dto.phone_number, '123-456-7890')
         self.assertEqual(account_dto.date_joined.isoformat(), '2024-07-26')
+        self.assertEqual(
+            str(account_dto.user_id),
+            '77cb6dfd-c8fc-4ef0-b35c-8c76a216d274'
+        )
 
     def test_invalid_email(self):
         """It should raise ValidationError, invalid email."""
@@ -46,7 +51,8 @@ class TestAccountDTO(TestCase):
             'gender': 'Male',
             'address': '123 Main St',
             'phone_number': '123-456-7890',
-            'date_joined': '2024-07-26'
+            'date_joined': '2024-07-26',
+            'user_id': '77cb6dfd-c8fc-4ef0-b35c-8c76a216d274',
         }
         with self.assertRaises(ValidationError) as context:
             AccountDTO(**data)
@@ -63,7 +69,8 @@ class TestAccountDTO(TestCase):
             'gender': 'Male',
             'address': '123 Main St',
             'phone_number': '123-456-7890',
-            'date_joined': '26-07-2024'  # Invalid date format
+            'date_joined': '26-07-2024',  # Invalid date format
+            'user_id': '77cb6dfd-c8fc-4ef0-b35c-8c76a216d274',
         }
         with self.assertRaises(ValidationError) as context:
             AccountDTO(**data)
@@ -71,6 +78,24 @@ class TestAccountDTO(TestCase):
             'date_joined',
             str(context.exception)
         )  # Check if date error is present
+
+    def test_invalid_uuid_format(self):
+        """It should raise ValidationError, invalid uuid format."""
+        data = {
+            'name': 'John Doe',
+            'email': 'john.doe@example.com',
+            'gender': 'Male',
+            'address': '123 Main St',
+            'phone_number': '123-456-7890',
+            'date_joined': '2024-07-26',
+            'user_id': '77cb6dfd-c',  # Invalid uuid format
+        }
+        with self.assertRaises(ValidationError) as context:
+            AccountDTO(**data)
+        self.assertIn(
+            'user_id',
+            str(context.exception)
+        )  # Check if user_id error is present
 
     def test_missing_required_field(self):
         """It should raise ValidationError, missing required field."""
@@ -86,8 +111,12 @@ class TestAccountDTO(TestCase):
             'name',
             str(context.exception)
         )  # Check if name error is present
+        self.assertIn(
+            'user_id',
+            str(context.exception)
+        )  # Check if user_id error is present
 
-    def test_empty_name(self):
+    def test_empty_field(self):
         """It should raise ValidationError, missing required value."""
         data = {
             'name': '',  # Empty name
@@ -95,7 +124,8 @@ class TestAccountDTO(TestCase):
             'gender': 'Male',
             'address': '123 Main St',
             'phone_number': '123-456-7890',
-            'date_joined': '2024-07-26'
+            'date_joined': '2024-07-26',
+            'user_id': '',  # Empty user_id
         }
         with self.assertRaises(ValidationError) as context:
             AccountDTO(**data)
@@ -103,6 +133,10 @@ class TestAccountDTO(TestCase):
             'name',
             str(context.exception)
         )  # Check if name error is present
+        self.assertIn(
+            'user_id',
+            str(context.exception)
+        )  # Check if user_id error is present
 
     def test_from_orm(self):
         """It should return valid AccountDTO."""
@@ -115,3 +149,4 @@ class TestAccountDTO(TestCase):
         self.assertEqual(account_dto.address, account.address)
         self.assertEqual(account_dto.phone_number, account.phone_number)
         self.assertEqual(account_dto.date_joined, account.date_joined)
+        self.assertEqual(account_dto.user_id, account.user_id)

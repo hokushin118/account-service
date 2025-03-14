@@ -30,6 +30,7 @@ class AccountDTO(BaseModel):
     address: Optional[constr(max_length=ADDRESS_MAX_LENGTH)] = None
     phone_number: Optional[constr(max_length=PHONE_MAX_LENGTH)] = None
     date_joined: date
+    user_id: UUID
 
     @validator('name')
     # pylint: disable=no-self-argument

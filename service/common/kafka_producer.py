@@ -25,7 +25,7 @@ from kafka.errors import (  # pylint: disable=E0401
     KafkaConnectionError,
 )
 
-from service.configs.kafka_config import KafkaProducerConfig
+from service.configs import KafkaProducerConfig
 
 logger = logging.getLogger(__name__)
 

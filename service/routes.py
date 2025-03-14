@@ -9,7 +9,6 @@ import os
 from typing import Callable
 from uuid import UUID
 
-import redis  # pylint: disable=E0401
 from flasgger import swag_from
 # pylint: disable=unused-import
 from flask import (
@@ -27,9 +26,7 @@ from service import (
     cache,
     VERSION,
     NAME,
-    CACHE_REDIS_HOST,
-    CACHE_REDIS_PORT,
-    CACHE_REDIS_DB, metrics
+    metrics
 )
 from service.common import status
 from service.common.constants import (
@@ -60,13 +57,6 @@ CACHE_DEFAULT_TIMEOUT = int(os.environ.get('CACHE_DEFAULT_TIMEOUT', 3600))
 AUDIT_ENABLED = os.environ.get(
     'AUDIT_ENABLED', 'False'
 ).lower() == 'true'
-
-# Initialize Redis client
-redis_client = redis.Redis(
-    host=CACHE_REDIS_HOST,
-    port=CACHE_REDIS_PORT,
-    db=CACHE_REDIS_DB
-)
 
 
 ######################################################################
@@ -146,9 +136,11 @@ def audit_log(function: Callable) -> Callable:
     if AUDIT_ENABLED:
         # pylint:disable=C0415
         from service.common.audit_utils import audit_log_kafka
+        logger.info('Audit is enabled.')
         logger.debug("Auditing Kafka log for %s", function.__name__)
         return audit_log_kafka(function)
     # Skip audit logging if audit is not enabled
+    logger.info('Audit is disabled.')
     return function
 
 
@@ -244,7 +236,8 @@ def info() -> Response:
     'operationId': 'createAccountV1',
     'tags': ['Accounts V1'],
     'summary': 'Create a New Account',
-    'description': 'Creates a new account based on the provided JSON data.',
+    'description': 'Creates a new account based on the provided JSON data.</br></br>'
+                   'Only authenticated users can access this endpoint.',
     'security': [{'oauth2': ['openid', 'profile', 'email']}],
     'requestBody': {
         'content': {
@@ -278,16 +271,24 @@ def info() -> Response:
     }
 })
 @app.route(ACCOUNTS_PATH_V1, methods=['POST'])
+@jwt_required()
 @audit_log
 @count_requests
 def create() -> Response:
     """Create a New Account"""
     app.logger.info('Request to create an Account...')
 
+    # Get the user identity from the JWT token
+    current_user_id = get_jwt_identity()
+    app.logger.debug('Current user ID: %s', current_user_id)
+
     check_content_type('application/json')
 
+    account_data = request.get_json()
+    account_data['user_id'] = current_user_id
+
     account = Account()
-    account.deserialize(request.get_json())
+    account.deserialize(account_data)
     account.create()
 
     # Convert SQLAlchemy model to DTO
@@ -363,8 +364,8 @@ def list_accounts() -> Response:
     app.logger.info('Request to list Accounts')
 
     # Get the user identity from the JWT token
-    current_user = get_jwt_identity()
-    app.logger.debug('Current user: %s', current_user)
+    current_user_id = get_jwt_identity()
+    app.logger.debug('Current user ID: %s', current_user_id)
 
     page = request.args.get('page', default=1, type=int)
     per_page = request.args.get('per_page', default=10, type=int)
@@ -471,8 +472,8 @@ def find_by_id(account_id: UUID) -> Response:
     app.logger.info("Request to read an Account with id: %s", account_id)
 
     # Get the user identity from the JWT token
-    current_user = get_jwt_identity()
-    app.logger.debug('Current user: %s', current_user)
+    current_user_id = get_jwt_identity()
+    app.logger.debug('Current user ID: %s', current_user_id)
 
     cache_key = f"{ACCOUNT_CACHE_KEY}:{account_id}"
 
@@ -591,8 +592,11 @@ def update_by_id(account_id: UUID) -> Response:
     app.logger.info("Request to update an Account with id: %s", account_id)
 
     # Get the user identity from the JWT token
-    current_user = get_jwt_identity()
-    app.logger.debug('Current user: %s', current_user)
+    current_user_id = get_jwt_identity()
+    app.logger.debug('Current user ID: %s', current_user_id)
+
+    # Retrieve the account to be updated or return a 404 error if not found
+    account = get_account_or_404(account_id)
 
     # Retrieve user roles
     roles = get_user_roles()
@@ -601,18 +605,44 @@ def update_by_id(account_id: UUID) -> Response:
     if ROLE_ADMIN not in roles:
         # If not ROLE_ADMIN, check ownership шf admin, then skip ownership check.
         # Check if the logged-in user is the owner of the resource
-        if not check_if_user_is_owner(current_user, account_id):
+        if not check_if_user_is_owner(current_user_id, account.user_id):
+            app.logger.warning(
+                "User %s is not authorized to delete account %s.",
+                current_user_id,
+                account.user_id
+            )
             abort(
                 status.HTTP_403_FORBIDDEN,
                 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
             )
 
-    # Retrieve the account to be updated or return a 404 error if not found
-    account = get_account_or_404(account_id)
+    # Get the data payload from the request
+    data = request.get_json()
+    if not data:
+        app.logger.warning(
+            "No data provided for update of account %s.",
+            account_id
+        )
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            'No data provided for update.'
+        )
 
     # Update account with provided JSON payload
-    account.deserialize(request.get_json())
-    account.update()
+    try:
+        account.deserialize(data)
+        account.update()
+        app.logger.info("Account with id %s updated successfully.", account_id)
+    except Exception as err:  # pylint: disable=W0703
+        app.logger.error(
+            "Unexpected error updating account %s: %s",
+            account_id,
+            err
+        )
+        abort(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "An unexpected error occurred during account updating."
+        )
 
     # Convert SQLAlchemy model to DTO
     account_dto = AccountDTO.from_orm(account)
@@ -687,8 +717,11 @@ def partial_update_by_id(account_id: UUID) -> Response:
     )
 
     # Get the user identity from the JWT token
-    current_user = get_jwt_identity()
-    app.logger.debug('Current user: %s', current_user)
+    current_user_id = get_jwt_identity()
+    app.logger.debug('Current user ID: %s', current_user_id)
+
+    # Retrieve the account to be updated or return a 404 error if not found
+    account = get_account_or_404(account_id)
 
     # Retrieve user roles
     roles = get_user_roles()
@@ -697,26 +730,44 @@ def partial_update_by_id(account_id: UUID) -> Response:
     if ROLE_ADMIN not in roles:
         # If not ROLE_ADMIN, check ownership шf admin, then skip ownership check.
         # Check if the logged-in user is the owner of the resource
-        if not check_if_user_is_owner(current_user, account_id):
+        if not check_if_user_is_owner(current_user_id, account.user_id):
+            app.logger.warning(
+                "User %s is not authorized to delete account %s.",
+                current_user_id,
+                account.user_id
+            )
             abort(
                 status.HTTP_403_FORBIDDEN,
                 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
             )
 
-    # Retrieve the account to be updated or return a 404 error if not found
-    account = get_account_or_404(account_id)
-
     # Get the data payload from the request
     data = request.get_json()
     if not data:
+        app.logger.warning(
+            "No data provided for update of account %s.",
+            account_id
+        )
         abort(
             status.HTTP_400_BAD_REQUEST,
-            'No data provided for update'
+            'No data provided for update.'
         )
 
     # Partially update account with provided JSON payload
-    account.partial_update(data)
-    account.update()
+    try:
+        account.partial_update(data)
+        account.update()
+        app.logger.info("Account with id %s updated successfully.", account_id)
+    except Exception as err:  # pylint: disable=W0703
+        app.logger.error(
+            "Unexpected error updating account %s: %s",
+            account_id,
+            err
+        )
+        abort(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "An unexpected error occurred during account updating."
+        )
 
     # Convert SQLAlchemy model to DTO
     account_dto = AccountDTO.from_orm(account)
@@ -772,28 +823,51 @@ def delete_by_id(account_id: UUID) -> Response:
     )
 
     # Get the user identity from the JWT token
-    current_user = get_jwt_identity()
-    app.logger.debug('Current user: %s', current_user)
+    current_user_id = get_jwt_identity()
+    app.logger.debug('Current user ID: %s', current_user_id)
 
     # Retrieve user roles
     roles = get_user_roles()
     app.logger.debug('Roles: %s', roles)
 
+    # Attempt to find the account by its ID
+    account = Account.find(account_id)
+
+    if not account:
+        app.logger.warning("Account with id %s not found.", account_id)
+        return make_response("", status.HTTP_204_NO_CONTENT)
+
     if ROLE_ADMIN not in roles:
         # If not ROLE_ADMIN, check ownership шf admin, then skip ownership check.
         # Check if the logged-in user is the owner of the resource
-        if not check_if_user_is_owner(current_user, account_id):
+        if not check_if_user_is_owner(current_user_id, account.user_id):
+            app.logger.warning(
+                "User %s is not authorized to delete account %s.",
+                current_user_id,
+                account.user_id
+            )
             abort(
                 status.HTTP_403_FORBIDDEN,
                 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
             )
 
-    # Attempt to find the account by its ID.
-    account = Account.find(account_id)
-    if account:
+    # Delete the account
+    try:
         account.delete()
-        # Invalidate specific cache key(s)
-        invalidate_all_account_pages()
-        app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
+        app.logger.info("Account with id %s deleted successfully.", account_id)
+    except Exception as err:  # pylint: disable=W0703
+        app.logger.error(
+            "Unexpected error deleting account %s: %s",
+            account_id,
+            err
+        )
+        abort(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "An unexpected error occurred during account deletion."
+        )
+
+    # Invalidate specific cache key(s)
+    invalidate_all_account_pages()
+    app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
     return make_response("", status.HTTP_204_NO_CONTENT)

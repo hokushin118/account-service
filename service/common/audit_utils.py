@@ -18,7 +18,7 @@ from kafka.producer.future import RecordMetadata  # pylint: disable=E0401
 
 from service.common.kafka_producer import KafkaProducerManager
 from service.common.utils import generate_correlation_id
-from service.configs.kafka_config import KafkaProducerConfig
+from service.configs import KafkaProducerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -173,8 +173,9 @@ def audit_log_kafka(
         try:
             # Verify the JWT token and get the current user identity.
             verify_jwt_in_request()
-            current_user: Optional[str] = get_jwt_identity() or ANONYMOUS_USER
-            logger.debug("Current user: %s", current_user)
+            current_user_id: Optional[
+                str] = get_jwt_identity() or ANONYMOUS_USER
+            logger.debug("Current user ID: %s", current_user_id)
 
             # Prepare headers without sensitive authorization information
             request_headers = dict(request.headers)
@@ -206,7 +207,7 @@ def audit_log_kafka(
             # Build audit log entry
             audit_data = {
                 'timestamp': datetime.utcnow().isoformat(),
-                'user': current_user,
+                'user_id': current_user_id,
                 'method': request.method,
                 'url': request.url,
                 'request_headers': request_headers,
@@ -219,7 +220,7 @@ def audit_log_kafka(
 
             # Use the current user as the key (encoded as UTF-8) to help
             # with ordered partitioning
-            key_value = f"{current_user}-{request_method}".encode('utf-8')
+            key_value = f"{current_user_id}-{request_method}".encode('utf-8')
 
             # Create a Kafka producer on-demand, or return the cached producer
             producer = kafka_producer_manager.get_producer()
