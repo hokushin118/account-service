@@ -374,3 +374,16 @@ class Account(db.Model, PersistentBase):
         """
         logger.info("Finding accounts by name: %s ...", name)
         return cls.query.filter(cls.name == name).all()
+
+    @classmethod
+    def find_by_user_id(cls, user_id: uuid.UUID) -> Optional['Account']:
+        """Finds and returns an Account by its user_id.
+
+        Args:
+            user_id: The user_id to search for.
+
+        Returns:
+            An Account object matching the given user_id, or None if not found.
+        """
+        logger.info("Finding account by user_id: %s ...", user_id)
+        return cls.query.filter(cls.user_id == user_id).first()

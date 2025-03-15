@@ -80,18 +80,31 @@ def get_account_or_404(account_id: UUID) -> Account:
     return account
 
 
-def check_if_user_is_owner(user: str, account_id: UUID) -> bool:
-    """Checks if the logged-in user is the owner of the specified account.
+def check_if_user_is_owner(user_id: str, account_user_id: UUID) -> bool:
+    """Checks if the given user ID matches the account's user ID, indicating ownership.
+
+    This method efficiently determines if a user, identified by their user ID, is the
+    owner of an account. It retrieves the account associated with the
+    provided user ID and directly compares the account's user ID with the
+    provided account user ID.
 
     Args:
-        user: The username of the logged-in user.
-        account_id: The UUID of the account to check.
+        user_id (str): The user ID of the potential owner (as a string).
+        account_user_id (UUID): The UUID of the account's user ID to verify ownership.
 
     Returns:
-        True if the user is the owner, False otherwise.
+        bool: True if the user is the owner of the account, False otherwise.
     """
-    users = Account.find_by_name(user)
-    return bool(users and str(users[0].id) == str(account_id))
+    try:
+        account = Account.find_by_user_id(UUID(user_id))
+    except ValueError as err:
+        logger.error("Invalid UUID string provided: %s", err)
+        return False
+    except Exception as err:  # pylint: disable=W0703
+        logger.error("An error occurred: %s", err)
+        return False
+
+    return account is not None and account.user_id == account_user_id
 
 
 def invalidate_all_account_pages() -> None:
