@@ -1,5 +1,5 @@
 """
-Account Service
+Account Routes.
 
 This microservice handles the lifecycle of Accounts
 """
@@ -41,6 +41,7 @@ from service.common.utils import (
 )
 from service.models import Account
 from service.schemas import AccountDTO
+from service.services import AccountService
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,9 @@ CACHE_DEFAULT_TIMEOUT = int(os.environ.get('CACHE_DEFAULT_TIMEOUT', 3600))
 AUDIT_ENABLED = os.environ.get(
     'AUDIT_ENABLED', 'False'
 ).lower() == 'true'
+
+# Initialize the AccountService
+account_service = AccountService()
 
 
 ######################################################################
@@ -376,60 +380,22 @@ def list_accounts() -> Response:
     """Lists all Accounts."""
     app.logger.info('Request to list Accounts')
 
-    # Get the user identity from the JWT token
+    # Validate JWT token and obtain user identity.
     current_user_id = get_jwt_identity()
     app.logger.debug('Current user ID: %s', current_user_id)
 
     page = request.args.get('page', default=1, type=int)
     per_page = request.args.get('per_page', default=10, type=int)
 
-    # Cache key for paginated results (include page and per_page)
-    cache_key = f"{ACCOUNT_CACHE_KEY}:{page}:{per_page}"
+    # Retrieve account data and ETag.
+    paginated_data, etag_hash = account_service.list_accounts(page, per_page)
 
-    # Attempt to retrieve cached data
-    cached_data = cache.get(cache_key)
-
-    if cached_data:
-        app.logger.debug('Retrieving Accounts (page %d) from cache.', page)
-        paginated_data, etag_hash = cached_data
-    else:
-        app.logger.debug('Fetching Accounts (page %d) from database.', page)
-
-        accounts = Account.all_paginated(page=page, per_page=per_page)
-        account_list = [
-            AccountDTO.from_orm(account).dict() for account in accounts
-        ]
-
-        total_accounts = Account.query.count()
-
-        # Paginate the results
-        paginated_data = {
-            'items': account_list,
-            'page': page,
-            'per_page': per_page,
-            'total': total_accounts
-        }
-
-        # 1. Generate the ETag:
-        etag_hash = generate_etag_hash(paginated_data)
-        cache.set(
-            cache_key, (paginated_data, etag_hash),
-            timeout=CACHE_DEFAULT_TIMEOUT
-        )
-
-    if paginated_data['items']:
-        app.logger.debug(
-            "Returning %d accounts (page %d)",
-            len(paginated_data['items']),
-            page
-        )
-
-    # 2. Check If-None-Match:
+    # Check If-None-Match:
     if_none_match = request.headers.get(IF_NONE_MATCH_HEADER)
     if if_none_match and if_none_match == etag_hash:
         return make_response('', status.HTTP_304_NOT_MODIFIED)
 
-    # 3. Create the response with the ETag:
+    # Create the response with the ETag:
     response = make_response(jsonify(paginated_data), status.HTTP_200_OK)
     response.headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
     response.set_etag(etag_hash)  # Set the ETag header

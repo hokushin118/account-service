@@ -1,11 +1,11 @@
 # pylint:disable=C0302
 """
-Account API Service Test Suite.
+Account Routes Test Suite.
+
 Test cases can be run with:
   nosetests -v --with-spec --spec-color
   coverage report -m
 """
-
 from unittest import TestCase
 from unittest.mock import patch
 from uuid import UUID, uuid4
@@ -31,7 +31,8 @@ from service.routes import (
 from service.schemas import AccountDTO
 from tests.factories import AccountFactory
 from tests.test_base import BaseTestCase
-from tests.test_constants import TEST_USER_ID
+from tests.test_constants import TEST_USER_ID, TEST_ETAG, TEST_PAGE, \
+    TEST_PER_PAGE, TEST_TOTAL
 
 HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
 JWT_ALGORITHM = 'RS256'
@@ -46,6 +47,8 @@ ORIGINAL = 'original'
 ######################################################################
 class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     """Account Route Tests."""
+    paginated_data = None
+    test_account_dto = None
 
     def setUp(self):
         """It should run before each test to set up the testing environment."""
@@ -54,6 +57,22 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         db.session.commit()
 
         self.client = app.test_client()
+
+        account = AccountFactory()
+        self.test_account_dto = AccountDTO.from_orm(account)
+        self.paginated_data = {
+            'items': [{
+                'id': account.id,
+                'name': account.name,
+                'email': account.email,
+                'address': account.address,
+                'phone_number': account.phone_number,
+                'user_id': account.user_id
+            }],
+            'page': TEST_PAGE,
+            'per_page': TEST_PER_PAGE,
+            'total': TEST_TOTAL
+        }
 
         # Generate a private/public key pair.
         # For example:
@@ -228,27 +247,26 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     #  LIST ALL ACCOUNTS TEST CASES
     ######################################################################
     @patch('requests.get')
-    @patch('service.routes.cache.set')
-    @patch('service.routes.cache.get')
+    @patch('service.services.cache')
+    @patch("service.services.AccountService")
     @patch('service.routes.get_jwt_identity')
     def test_list_accounts_success(self,
                                    mock_jwt_identity,
-                                   mock_cache_get,
-                                   mock_cache_set,
+                                   mock_account_service,
+                                   mock_cache,
                                    mock_get):
         """It should return a list of accounts when a valid JWT is provided."""
-        account = AccountFactory()
         mock_jwt_identity.return_value = TEST_USER_ID
-        mock_cache_get.return_value = None
-        mock_cache_set.return_value = None
+        mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
+        mock_cache.get.return_value = None
+        mock_cache.set.return_value = None
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         # Create account first.
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.to_dict(),
+            json=self.test_account_dto.to_dict(),
             content_type='application/json',
             headers=headers
         )
@@ -264,28 +282,27 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         self.assertEqual(len(data['items']), 1)
 
     @patch('requests.get')
-    @patch('service.routes.cache.set')
-    @patch('service.routes.cache.get')
+    @patch('service.services.cache')
+    @patch("service.services.AccountService")
     @patch('service.routes.get_jwt_identity')
     def test_list_accounts_paginated(self,
                                      mock_jwt_identity,
-                                     mock_cache_get,
-                                     mock_cache_set,
+                                     mock_account_service,
+                                     mock_cache,
                                      mock_get):
         """It should return paginated account results when valid pagination
         parameters are provided."""
-        account = AccountFactory()
         mock_jwt_identity.return_value = TEST_USER_ID
-        mock_cache_get.return_value = None
-        mock_cache_set.return_value = None
+        mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
+        mock_cache.get.return_value = None
+        mock_cache.set.return_value = None
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         # Create account first.
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.to_dict(),
+            json=self.test_account_dto.to_dict(),
             content_type='application/json',
             headers=headers
         )
@@ -312,28 +329,27 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
-    @patch('service.routes.cache.set')
-    @patch('service.routes.cache.get')
+    @patch('service.services.cache')
+    @patch("service.services.AccountService")
     @patch('service.routes.get_jwt_identity')
     def test_list_accounts_etag_match(self,
                                       mock_jwt_identity,
-                                      mock_cache_get,
-                                      mock_cache_set,
+                                      mock_account_service,
+                                      mock_cache,
                                       mock_get):
         """It should return 304 Not Modified if the ETag matches the client's
         If-None-Match header."""
-        account = AccountFactory()
         mock_jwt_identity.return_value = TEST_USER_ID
-        mock_cache_get.return_value = None
-        mock_cache_set.return_value = None
+        mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
+        mock_cache.get.return_value = None
+        mock_cache.set.return_value = None
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         # Create an account
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.to_dict(),
+            json=self.test_account_dto.to_dict(),
             content_type='application/json',
             headers=headers
         )
@@ -358,26 +374,25 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         self.assertEqual(response.data, b'')
 
     @patch('requests.get')
-    @patch('service.routes.cache.set')
-    @patch('service.routes.cache.get')
+    @patch('service.services.cache')
+    @patch("service.services.AccountService")
     @patch('service.routes.get_jwt_identity')
     def test_list_accounts_etag_mismatch(self,
                                          mock_jwt_identity,
-                                         mock_cache_get,
-                                         mock_cache_set,
+                                         mock_account_service,
+                                         mock_cache,
                                          mock_get):
         """It should return 200 OK if the ETag does not match the client's If-None-Match header."""
-        account = AccountFactory()
         mock_jwt_identity.return_value = TEST_USER_ID
-        mock_cache_get.return_value = None
-        mock_cache_set.return_value = None
+        mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
+        mock_cache.get.return_value = None
+        mock_cache.set.return_value = None
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.to_dict(),
+            json=self.test_account_dto.to_dict(),
             content_type='application/json',
             headers=headers
         )
