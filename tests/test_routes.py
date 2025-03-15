@@ -8,6 +8,7 @@ Test cases can be run with:
 
 from unittest import TestCase
 from unittest.mock import patch
+from uuid import UUID, uuid4
 
 from cryptography.hazmat.primitives import serialization
 from flask_jwt_extended import JWTManager
@@ -25,7 +26,7 @@ from service.routes import (
     HEALTH_PATH,
     IF_NONE_MATCH_HEADER,
     CACHE_CONTROL_HEADER,
-    audit_log
+    audit_log, check_if_user_is_owner
 )
 from service.schemas import AccountDTO
 from tests.factories import AccountFactory
@@ -131,8 +132,10 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
                 json=account.to_dict(),
                 headers=headers
             )
-            self.assertEqual(response.status_code, status.HTTP_201_CREATED,
-                             'Could not create test Account')
+            self.assertEqual(
+                response.status_code, status.HTTP_201_CREATED,
+                'Could not create test Account'
+            )
             new_account = response.get_json()
             account.id = new_account['id']
             accounts.append(account)
@@ -605,11 +608,18 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
-    def test_update_by_id_wrong_role(self, mock_get):
+    @patch('service.routes.get_account_or_404')
+    @patch('service.routes.check_if_user_is_owner')
+    def test_update_by_id_wrong_role(self,
+                                     mock_check_if_user_is_owner,
+                                     mock_get_account_or_404,
+                                     mock_get):
         """It should not update an Account when the JWT belongs to a user with the wrong role."""
+        test_account = AccountFactory()
+        mock_check_if_user_is_owner.return_value = False
+        mock_get_account_or_404.return_value = test_account
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account = AccountFactory()
         test_account_dto = AccountDTO.from_orm(test_account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
@@ -630,8 +640,12 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
-    def test_update_by_id_wrong_account_id(self, mock_get):
+    @patch('service.routes.check_if_user_is_owner')
+    def test_update_by_id_wrong_account_id(self,
+                                           mock_check_if_user_is_owner,
+                                           mock_get):
         """It should not update an Account when the JWT belongs to a different user."""
+        mock_check_if_user_is_owner.return_value = False
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
         test_account = AccountFactory()
@@ -791,9 +805,13 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
-    def test_partial_update_by_id_wrong_role(self, mock_get):
+    @patch('service.routes.check_if_user_is_owner')
+    def test_partial_update_by_id_wrong_role(self,
+                                             mock_check_if_user_is_owner,
+                                             mock_get):
         """It should not partially update an Account when the JWT belongs to a user
         with the wrong role."""
+        mock_check_if_user_is_owner.return_value = False
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
         test_account = AccountFactory()
@@ -818,8 +836,12 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('requests.get')
-    def test_partial_update_by_id_wrong_account_id(self, mock_get):
+    @patch('service.routes.check_if_user_is_owner')
+    def test_partial_update_by_id_wrong_account_id(self,
+                                                   mock_check_if_user_is_owner,
+                                                   mock_get):
         """It should not partially update an Account when the JWT belongs to a different user."""
+        mock_check_if_user_is_owner.return_value = False
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
         test_account = AccountFactory()
@@ -1020,3 +1042,61 @@ class TestAuditLogDecorator(TestCase):
             result_function = audit_log(dummy_function)
             self.assertIs(result_function, dummy_function)
             self.assertEqual(result_function(), ORIGINAL)
+
+
+class DummyAccount:
+    """DummyAccount is a helper class used for testing purposes.
+
+     This class represents a simplified account object that stores
+     a user's unique identifier.
+
+     Attributes:
+         user_id (UUID): A unique identifier for the user associated with the account.
+     """
+
+    def __init__(self, user_id: UUID) -> None:
+        """Initializes a new DummyAccount instance.
+
+       Args:
+           user_id (UUID): The unique identifier for the user.
+       """
+        self.user_id = user_id
+
+
+class TestCheckIfUserIsOwner(TestCase):
+    """The check_if_user_is_owner Function Tests."""
+
+    def setUp(self):
+        """It should set up valid user IDs for testing."""
+        # Prepare a valid UUID string for tests.
+        self.valid_uuid_str = str(uuid4())
+        self.valid_uuid = UUID(self.valid_uuid_str)
+
+    def test_is_owner_true(self):
+        """It should return True when the account exists and the user_id matches
+        the account's user_id."""
+        # Create a dummy account with the same user_id.
+        dummy_account = DummyAccount(self.valid_uuid)
+        with patch(
+                'service.models.Account.find_by_user_id',
+                return_value=dummy_account
+        ):
+            is_owner = check_if_user_is_owner(
+                self.valid_uuid_str,
+                self.valid_uuid
+            )
+            self.assertTrue(is_owner)
+
+    def test_is_owner_false_due_to_different_account(self):
+        """It should return False when the account exists but the user_id does not match."""
+        # Create a dummy account with a different user_id.
+        dummy_account = DummyAccount(uuid4())  # Different UUID
+        with patch(
+                'service.models.Account.find_by_user_id',
+                return_value=dummy_account
+        ):
+            is_owner = check_if_user_is_owner(
+                self.valid_uuid_str,
+                self.valid_uuid
+            )
+            self.assertFalse(is_owner)

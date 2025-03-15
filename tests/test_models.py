@@ -5,12 +5,14 @@ Test cases can be run with the following:
   nosetests -v --with-spec --spec-color
   coverage report -m
 """
+from uuid import UUID
 
 from sqlalchemy.sql.expression import desc
 
 from service.models import Account, DataValidationError
 from tests.factories import AccountFactory
 from tests.test_base import BaseTestCase
+from tests.test_constants import TEST_USER_ID
 
 
 ######################################################################
@@ -239,3 +241,37 @@ class TestAccount(BaseTestCase):  # pylint:disable=R0904
         account.partial_update(data)  # Should not raise error
         self.assertEqual(account.name, 'Test Account')
         self.assertEqual(account.email, 'test@example.com')
+
+    def test_find_by_user_id_success(self):
+        """It should find an Account by user id."""
+        account = AccountFactory()
+        account.create()
+        test_uuid = account.user_id
+
+        # Fetch it back by user id
+        actual = Account.find_by_user_id(test_uuid)
+        self.assertEqual(actual.id, account.id)
+        self.assertEqual(actual.user_id, account.user_id)
+        self.assertEqual(actual.name, account.name)
+        self.assertEqual(actual.email, account.email)
+        self.assertEqual(actual.address, account.address)
+
+    def test_find_by_user_id_not_exist(self):
+        """It should return None when no account is found for a given user_id."""
+        test_uuid = UUID(TEST_USER_ID)
+
+        # Attempt to fetch an account using a user_id that doesn't exist.
+        actual = Account.find_by_user_id(test_uuid)
+        self.assertIsNone(
+            actual,
+            'Expected None when no account is found.'
+        )
+
+    def test_find_by_user_id_none(self):
+        """It should return None when None is provided as a user_id."""
+        # Pass None to the find_by_user_id method.
+        actual = Account.find_by_user_id(None)
+        self.assertIsNone(
+            actual,
+            'Expected None when None is provided as user_id.'
+        )
