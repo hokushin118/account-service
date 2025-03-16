@@ -9,8 +9,12 @@ hashes for cache validation.
 import logging
 import os
 from typing import Any, Dict, Tuple
+from uuid import UUID
+
+from flask import abort
 
 from service import app, cache
+from service.common import status
 from service.common.constants import ACCOUNT_CACHE_KEY
 from service.common.utils import generate_etag_hash
 from service.models import Account
@@ -23,6 +27,35 @@ CACHE_DEFAULT_TIMEOUT = int(os.environ.get('CACHE_DEFAULT_TIMEOUT', 3600))
 
 class AccountService:
     """Service class for handling Account operations."""
+
+    ######################################################################
+    # HELPER METHODS
+    ######################################################################
+    @staticmethod
+    def get_account_or_404(account_id: UUID) -> Account:
+        """Retrieves an account by its UUID or aborts the request with a 404 error if not found.
+
+        This method attempts to find an account in the database using the provided `account_id`.
+        If the account is found, it is returned. If not, the request is immediately aborted
+        with an HTTP 404 Not Found status, and an error message is displayed indicating
+        that the account could not be found.
+
+        Args:
+            account_id (UUID): The unique identifier of the account to retrieve.
+
+        Returns:
+            Account: The found account object.
+
+        Raises:
+            NotFound: If the account with the given `account_id` does not exist.
+        """
+        account = Account.find(account_id)
+        if not account:
+            abort(
+                status.HTTP_404_NOT_FOUND,
+                f"Account with id {account_id} could not be found."
+            )
+        return account
 
     ######################################################################
     # LIST ALL ACCOUNTS
@@ -86,3 +119,57 @@ class AccountService:
                 page
             )
         return paginated_data, etag_hash
+
+    ######################################################################
+    # READ AN ACCOUNT
+    ######################################################################
+    @staticmethod
+    def get_account_by_id(account_id: UUID) -> (Dict, str):
+        """Retrieves an account by its ID, using cache if available."""
+        cache_key = f"{ACCOUNT_CACHE_KEY}:{account_id}"
+
+        # Attempt to retrieve cached data
+        cached_data = cache.get(cache_key)
+
+        if cached_data:
+            app.logger.debug('Retrieving Account from cache...')
+            data, etag_hash = cached_data
+        else:
+            app.logger.debug('Fetching Account from database...')
+            account = AccountService.get_account_or_404(account_id)
+
+            # Convert SQLAlchemy model to DTO
+            account_dto = AccountDTO.from_orm(account)
+            data = account_dto.dict()
+
+            # Generate the ETag:
+            etag_hash = generate_etag_hash(data)
+
+        # Cache the data
+        try:
+            cache.set(
+                cache_key,
+                (data, etag_hash),
+                timeout=CACHE_DEFAULT_TIMEOUT
+            )
+        except TypeError as type_err:
+            app.logger.error(
+                "Failed to cache account due to type error: %s",
+                type_err
+            )
+        except ValueError as value_err:
+            app.logger.error(
+                "Failed to cache account due to value error: %s",
+                value_err
+            )
+        except AttributeError as attr_err:
+            app.logger.error(
+                "Failed to cache account due to attribute error: %s",
+                attr_err
+            )
+        except Exception as err:  # pylint: disable=W0703
+            app.logger.error("Failed to cache account: %s", err)
+
+        app.logger.debug(f"Account returned: {data}")
+
+        return data, etag_hash
