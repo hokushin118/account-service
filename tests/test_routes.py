@@ -47,7 +47,10 @@ ORIGINAL = 'original'
 ######################################################################
 class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     """Account Route Tests."""
+
+    account_data = None
     paginated_data = None
+    account = None
     test_account_dto = None
 
     def setUp(self):
@@ -58,17 +61,20 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
 
         self.client = app.test_client()
 
-        account = AccountFactory()
-        self.test_account_dto = AccountDTO.from_orm(account)
+        self.account = AccountFactory()
+        self.test_account_dto = AccountDTO.from_orm(self.account)
+
+        self.account_data = {
+            'id': self.account.id,
+            'name': self.account.name,
+            'email': self.account.email,
+            'address': self.account.address,
+            'phone_number': self.account.phone_number,
+            'user_id': self.account.user_id
+        }
+
         self.paginated_data = {
-            'items': [{
-                'id': account.id,
-                'name': account.name,
-                'email': account.email,
-                'address': account.address,
-                'phone_number': account.phone_number,
-                'user_id': account.user_id
-            }],
+            'items': [self.account_data],
             'page': TEST_PAGE,
             'per_page': TEST_PER_PAGE,
             'total': TEST_TOTAL
@@ -415,38 +421,39 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     #  READ AN ACCOUNT TEST CASES
     ######################################################################
     @patch('requests.get')
-    @patch('service.routes.get_account_or_404')
-    @patch('service.routes.cache.get')
+    @patch('service.services.cache')
+    @patch("service.services.AccountService")
     @patch('service.routes.get_jwt_identity')
     def test_find_by_id_success(self,
                                 mock_jwt_identity,
-                                mock_cache_get,
-                                mock_get_account_or_404,
+                                mock_account_service,
+                                mock_cache,
                                 mock_get):
         """It should return a single account when a valid JWT is provided."""
-        account = AccountFactory()
         mock_jwt_identity.return_value = TEST_USER_ID
-        mock_cache_get.return_value = None
-        mock_get_account_or_404.return_value = account
+        mock_account_service.get_account_or_404.return_value = self.account
+        mock_account_service.get_account_by_id.return_value = self.account_data, TEST_ETAG
+        mock_cache.get.return_value = None
+        mock_cache.set.return_value = None
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.to_dict(),
+            json=self.test_account_dto.to_dict(),
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{account.id}",
+            f"{ACCOUNTS_PATH_V1}/{self.account.id}",
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.get_json()
-        self.assertEqual(data['name'], account.name)
+        self.assertEqual(data['name'], self.account.name)
+        mock_account_service.get_account_or_404.assert_called_once()
 
     def test_find_by_id_unauthorized(self):
         """It should return 401 Unauthorized if no JWT is provided when reading an account."""
@@ -458,32 +465,32 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
-    @patch('service.routes.get_account_or_404')
-    @patch('service.routes.cache.get')
+    @patch('service.services.cache')
+    @patch("service.services.AccountService")
     @patch('service.routes.get_jwt_identity')
     def test_find_by_id_etag_match(self,
                                    mock_jwt_identity,
-                                   mock_cache_get,
-                                   mock_get_account_or_404,
+                                   mock_account_service,
+                                   mock_cache,
                                    mock_get):
         """It should return 304 Not Modified if the ETag matches when reading an account."""
-        account = AccountFactory()
         mock_jwt_identity.return_value = TEST_USER_ID
-        mock_cache_get.return_value = None
-        mock_get_account_or_404.return_value = account
+        mock_account_service.get_account_or_404.return_value = self.account
+        mock_account_service.get_account_by_id.return_value = self.account_data, TEST_ETAG
+        mock_cache.get.return_value = None
+        mock_cache.set.return_value = None
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.to_dict(),
+            json=self.test_account_dto.to_dict(),
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{account.id}",
+            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
             content_type='application/json',
             headers=headers
         )
@@ -492,7 +499,7 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         etag = response.headers.get('ETag').replace('"', '')
         headers[IF_NONE_MATCH_HEADER] = etag
         response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{account.id}",
+            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
             content_type='application/json',
             headers=headers
         )
@@ -500,39 +507,39 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         self.assertEqual(response.data, b'')
 
     @patch('requests.get')
-    @patch('service.routes.get_account_or_404')
-    @patch('service.routes.cache.get')
+    @patch('service.services.cache')
+    @patch("service.services.AccountService")
     @patch('service.routes.get_jwt_identity')
     def test_find_by_id_etag_mismatch(self,
                                       mock_jwt_identity,
-                                      mock_cache_get,
-                                      mock_get_account_or_404,
+                                      mock_account_service,
+                                      mock_cache,
                                       mock_get):
         """It should return 200 OK if the ETag does not match when reading an account."""
-        account = AccountFactory()
         mock_jwt_identity.return_value = TEST_USER_ID
-        mock_cache_get.return_value = None
-        mock_get_account_or_404.return_value = account
+        mock_account_service.get_account_or_404.return_value = self.account
+        mock_account_service.get_account_by_id.return_value = self.account_data, TEST_ETAG
+        mock_cache.get.return_value = None
+        mock_cache.set.return_value = None
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.to_dict(),
+            json=self.test_account_dto.to_dict(),
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{account.id}",
+            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         headers[IF_NONE_MATCH_HEADER] = INVALID_ETAG
         response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{account.id}",
+            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
             content_type='application/json',
             headers=headers
         )

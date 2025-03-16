@@ -36,7 +36,6 @@ from service.common.constants import (
 from service.common.keycloak_utils import has_roles, get_user_roles
 from service.common.utils import (
     check_content_type,
-    generate_etag_hash,
     count_requests
 )
 from service.models import Account
@@ -450,62 +449,19 @@ def find_by_id(account_id: UUID) -> Response:
     """Retrieve Account by ID."""
     app.logger.info("Request to read an Account with id: %s", account_id)
 
-    # Get the user identity from the JWT token
+    # Validate JWT token and obtain user identity.
     current_user_id = get_jwt_identity()
     app.logger.debug('Current user ID: %s', current_user_id)
 
-    cache_key = f"{ACCOUNT_CACHE_KEY}:{account_id}"
+    # Retrieve account data and ETag.
+    data, etag_hash = account_service.get_account_by_id(account_id)
 
-    # Attempt to retrieve cached data
-    cached_data = cache.get(cache_key)
-
-    if cached_data:
-        app.logger.debug('Retrieving Account from cache...')
-        data, etag_hash = cached_data
-    else:
-        app.logger.debug('Fetching Account from database...')
-        account = get_account_or_404(account_id)
-
-        # Convert SQLAlchemy model to DTO
-        account_dto = AccountDTO.from_orm(account)
-        data = account_dto.dict()
-
-        # 1. Generate the ETag:
-        etag_hash = generate_etag_hash(data)
-
-        # Cache the data
-        try:
-            cache.set(
-                cache_key,
-                (data, etag_hash),
-                timeout=CACHE_DEFAULT_TIMEOUT
-            )
-        except TypeError as type_err:
-            app.logger.error(
-                "Failed to cache account due to type error: %s",
-                type_err
-            )
-        except ValueError as value_err:
-            app.logger.error(
-                "Failed to cache account due to value error: %s",
-                value_err
-            )
-        except AttributeError as attr_err:
-            app.logger.error(
-                "Failed to cache account due to attribute error: %s",
-                attr_err
-            )
-        except Exception as err:  # pylint: disable=W0703
-            app.logger.error("Failed to cache account: %s", err)
-
-    app.logger.debug(f"Account returned: {data}")
-
-    # 2. Check for If-None-Match header:
+    # Check for If-None-Match header:
     if_none_match = request.headers.get(IF_NONE_MATCH_HEADER)
     if if_none_match and if_none_match == etag_hash:
         return make_response('', status.HTTP_304_NOT_MODIFIED)
 
-    # 3. Create the response with the ETag:
+    # Create the response with the ETag:
     response = make_response(jsonify(data), status.HTTP_200_OK)
     response.headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
     response.set_etag(etag_hash)  # Set the ETag header
