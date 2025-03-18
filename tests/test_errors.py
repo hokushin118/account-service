@@ -5,14 +5,13 @@ Test cases can be run with the following:
   nosetests -v --with-spec --spec-color
   coverage report -m
 """
-import unittest
 from unittest import TestCase
 from uuid import uuid4
 
 from service.common.constants import ROLE_USER, ROLE_ADMIN
 from service.errors import (
     AccountError,
-    AccountNotFound,
+    AccountNotFoundError,
     AccountAuthorizationError
 )
 
@@ -35,32 +34,32 @@ class TestAccountError(TestCase):
         self.assertEqual(error.to_dict(), {'error': None})
 
 
-class TestAccountNotFound(TestCase):
-    """The AccountNotFound Exception Class Tests."""
+class TestAccountNotFoundError(TestCase):
+    """The AccountNotFoundError Exception Class Tests."""
 
-    def test_account_not_found_default_message(self):
+    def test_account_not_found_error_default_message(self):
         """It should generate a default error message when no custom message is provided."""
         account_id = uuid4()
-        error = AccountNotFound(account_id)
+        error = AccountNotFoundError(account_id)
         expected_msg = f"Account with id {account_id} could not be found."
         self.assertEqual(str(error), expected_msg)
         result_dict = error.to_dict()
         self.assertEqual(result_dict.get('error'), expected_msg)
         self.assertEqual(result_dict.get('account_id'), str(account_id))
 
-    def test_account_not_found_custom_message(self):
+    def test_account_not_found_error_custom_message(self):
         """It should use the provided custom error message and include the account ID
         in the dictionary."""
         account_id = uuid4()
         custom_message = 'Custom not found message.'
-        error = AccountNotFound(account_id, custom_message)
+        error = AccountNotFoundError(account_id, custom_message)
         self.assertEqual(str(error), custom_message)
         result_dict = error.to_dict()
         self.assertEqual(result_dict.get('error'), custom_message)
         self.assertEqual(result_dict.get('account_id'), str(account_id))
 
 
-class TestAccountAuthorizationError(unittest.TestCase):
+class TestAccountAuthorizationError(TestCase):
     """The AccountAuthorizationError Exception Class Tests."""
 
     def test_account_authorization_error_default_message_no_roles(self):

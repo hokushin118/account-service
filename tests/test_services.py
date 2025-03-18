@@ -10,6 +10,7 @@ from unittest.mock import patch
 from uuid import UUID, uuid4
 
 from service.common.constants import ACCOUNT_CACHE_KEY
+from service.errors import AccountError, AccountNotFoundError
 from service.schemas import AccountDTO
 from service.services import AccountService
 from tests.factories import AccountFactory
@@ -41,12 +42,15 @@ class TestAccountService(TestCase):
     ######################################################################
     @patch('service.services.cache')
     @patch('service.services.generate_etag_hash')
+    @patch('service.services.get_jwt_identity')
     def test_list_accounts_with_cache(
             self,
+            mock_get_jwt_identity,
             mock_generate_etag_hash,
             mock_cache
     ):
         """It should return a list of accounts from cache."""
+        mock_get_jwt_identity.return_value = TEST_USER_ID
         mock_generate_etag_hash.return_value = TEST_ETAG
         mock_cache.get.return_value = (
             {'items': [{'id': 1}],
@@ -65,8 +69,10 @@ class TestAccountService(TestCase):
     @patch('service.services.cache')
     @patch('service.services.Account')
     @patch('service.services.generate_etag_hash')
+    @patch('service.services.get_jwt_identity')
     def test_list_accounts_cache_miss(
             self,
+            mock_get_jwt_identity,
             mock_generate_etag_hash,
             mock_account,
             mock_cache
@@ -76,6 +82,7 @@ class TestAccountService(TestCase):
         account2 = AccountFactory()
         accounts = [account1, account2]
         total = len(accounts)
+        mock_get_jwt_identity.return_value = TEST_USER_ID
         mock_account.all_paginated.return_value = accounts
         mock_account.query.count.return_value = total
         mock_generate_etag_hash.return_value = NEW_ETAG
@@ -99,13 +106,16 @@ class TestAccountService(TestCase):
     @patch('service.services.cache')
     @patch('service.services.Account')
     @patch('service.services.generate_etag_hash')
+    @patch('service.services.get_jwt_identity')
     def test_list_accounts_empty_list(
             self,
+            mock_get_jwt_identity,
             mock_generate_etag_hash,
             mock_account,
             mock_cache
     ):
         """It should return an empty list."""
+        mock_get_jwt_identity.return_value = TEST_USER_ID
         mock_cache.get.return_value = None
         mock_account.all_paginated.return_value = []
         mock_account.query.count.return_value = 0
@@ -127,8 +137,13 @@ class TestAccountService(TestCase):
     # READ AN ACCOUNT
     ######################################################################
     @patch('service.services.cache')
-    def test_get_account_by_id_with_cache(self, mock_cache):
+    @patch('service.services.get_jwt_identity')
+    def test_get_account_by_id_with_cache(self,
+                                          mock_get_jwt_identity,
+                                          mock_cache):
         """It should return cached account data if available."""
+        mock_get_jwt_identity.get_jwt_identity.return_value = TEST_USER_ID
+
         account = AccountFactory()
         cached_value = account, TEST_ETAG
         mock_cache.get.return_value = cached_value
@@ -141,11 +156,15 @@ class TestAccountService(TestCase):
     @patch('service.services.generate_etag_hash')
     @patch('service.services.AccountService')
     @patch('service.services.cache')
+    @patch('service.services.get_jwt_identity')
     def test_get_account_by_id_cache_miss(self,
+                                          mock_get_jwt_identity,
                                           mock_cache,
                                           mock_account_service,
                                           mock_generate_etag_hash):
         """It should fetch the account from the database if not cached and return its data."""
+        mock_get_jwt_identity.get_jwt_identity.return_value = TEST_USER_ID
+
         mock_cache.get.return_value = None
         mock_account_service.get_account_or_404.return_value = self.account
         mock_generate_etag_hash.return_value = TEST_ETAG
@@ -203,8 +222,28 @@ class TestGetAccountOr404(TestCase):
         error_message = f"Account with id {self.account_id} could not be found."
         mock_abort.side_effect = Exception(error_message)
 
-        with self.assertRaises(Exception) as context:
+        with self.assertRaises(AccountNotFoundError) as context:
             AccountService.get_account_or_404(self.account_id)
 
         self.assertIn(error_message, str(context.exception))
         mock_account.find.assert_called_once_with(self.account_id)
+
+
+class TestHandleCacheError(TestCase):
+    """The _handle_cache_error Function Tests."""
+
+    def test_handle_cache_error_raises_account_error(self):
+        """It should log the error and raise an AccountError with the appropriate error message."""
+        error_message = 'cache failure occurred'
+        test_exception = Exception(error_message)
+        error_type = "type error"
+
+        # Assert that AccountError is raised when the static method is called.
+        with self.assertRaises(AccountError) as context:
+            # pylint: disable=W0212
+            AccountService._handle_cache_error(
+                test_exception,
+                error_type
+            )
+
+        self.assertEqual(str(context.exception), error_message)

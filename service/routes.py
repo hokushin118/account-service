@@ -44,7 +44,7 @@ from service.services import AccountService
 
 logger = logging.getLogger(__name__)
 
-FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE = 'You are not authorized to update this resource.'
+FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE = 'You are not authorized to modify this resource.'
 ACCOUNT_NOT_FOUND_MESSAGE = "Account with id [{account_id}] could not be found."
 IF_NONE_MATCH_HEADER = 'If-None-Match'
 CACHE_CONTROL_HEADER = 'Cache-Control'
@@ -379,10 +379,6 @@ def list_accounts() -> Response:
     """Lists all Accounts."""
     app.logger.info('Request to list Accounts')
 
-    # Validate JWT token and obtain user identity.
-    current_user_id = get_jwt_identity()
-    app.logger.debug('Current user ID: %s', current_user_id)
-
     page = request.args.get('page', default=1, type=int)
     per_page = request.args.get('per_page', default=10, type=int)
 
@@ -448,10 +444,6 @@ def list_accounts() -> Response:
 def find_by_id(account_id: UUID) -> Response:
     """Retrieve Account by ID."""
     app.logger.info("Request to read an Account with id: %s", account_id)
-
-    # Validate JWT token and obtain user identity.
-    current_user_id = get_jwt_identity()
-    app.logger.debug('Current user ID: %s', current_user_id)
 
     # Retrieve account data and ETag.
     data, etag_hash = account_service.get_account_by_id(account_id)
