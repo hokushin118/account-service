@@ -255,14 +255,11 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     @patch('requests.get')
     @patch('service.services.cache')
     @patch("service.services.AccountService")
-    @patch('service.routes.get_jwt_identity')
     def test_list_accounts_success(self,
-                                   mock_jwt_identity,
                                    mock_account_service,
                                    mock_cache,
                                    mock_get):
         """It should return a list of accounts when a valid JWT is provided."""
-        mock_jwt_identity.return_value = TEST_USER_ID
         mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
         mock_cache.get.return_value = None
         mock_cache.set.return_value = None
@@ -290,15 +287,12 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     @patch('requests.get')
     @patch('service.services.cache')
     @patch("service.services.AccountService")
-    @patch('service.routes.get_jwt_identity')
     def test_list_accounts_paginated(self,
-                                     mock_jwt_identity,
                                      mock_account_service,
                                      mock_cache,
                                      mock_get):
         """It should return paginated account results when valid pagination
         parameters are provided."""
-        mock_jwt_identity.return_value = TEST_USER_ID
         mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
         mock_cache.get.return_value = None
         mock_cache.set.return_value = None
@@ -337,15 +331,12 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     @patch('requests.get')
     @patch('service.services.cache')
     @patch("service.services.AccountService")
-    @patch('service.routes.get_jwt_identity')
     def test_list_accounts_etag_match(self,
-                                      mock_jwt_identity,
                                       mock_account_service,
                                       mock_cache,
                                       mock_get):
         """It should return 304 Not Modified if the ETag matches the client's
         If-None-Match header."""
-        mock_jwt_identity.return_value = TEST_USER_ID
         mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
         mock_cache.get.return_value = None
         mock_cache.set.return_value = None
@@ -382,14 +373,11 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     @patch('requests.get')
     @patch('service.services.cache')
     @patch("service.services.AccountService")
-    @patch('service.routes.get_jwt_identity')
     def test_list_accounts_etag_mismatch(self,
-                                         mock_jwt_identity,
                                          mock_account_service,
                                          mock_cache,
                                          mock_get):
         """It should return 200 OK if the ETag does not match the client's If-None-Match header."""
-        mock_jwt_identity.return_value = TEST_USER_ID
         mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
         mock_cache.get.return_value = None
         mock_cache.set.return_value = None
@@ -423,14 +411,11 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     @patch('requests.get')
     @patch('service.services.cache')
     @patch("service.services.AccountService")
-    @patch('service.routes.get_jwt_identity')
     def test_find_by_id_success(self,
-                                mock_jwt_identity,
                                 mock_account_service,
                                 mock_cache,
                                 mock_get):
         """It should return a single account when a valid JWT is provided."""
-        mock_jwt_identity.return_value = TEST_USER_ID
         mock_account_service.get_account_or_404.return_value = self.account
         mock_account_service.get_account_by_id.return_value = self.account_data, TEST_ETAG
         mock_cache.get.return_value = None
@@ -467,14 +452,11 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     @patch('requests.get')
     @patch('service.services.cache')
     @patch("service.services.AccountService")
-    @patch('service.routes.get_jwt_identity')
     def test_find_by_id_etag_match(self,
-                                   mock_jwt_identity,
                                    mock_account_service,
                                    mock_cache,
                                    mock_get):
         """It should return 304 Not Modified if the ETag matches when reading an account."""
-        mock_jwt_identity.return_value = TEST_USER_ID
         mock_account_service.get_account_or_404.return_value = self.account
         mock_account_service.get_account_by_id.return_value = self.account_data, TEST_ETAG
         mock_cache.get.return_value = None
@@ -509,14 +491,11 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     @patch('requests.get')
     @patch('service.services.cache')
     @patch("service.services.AccountService")
-    @patch('service.routes.get_jwt_identity')
     def test_find_by_id_etag_mismatch(self,
-                                      mock_jwt_identity,
                                       mock_account_service,
                                       mock_cache,
                                       mock_get):
         """It should return 200 OK if the ETag does not match when reading an account."""
-        mock_jwt_identity.return_value = TEST_USER_ID
         mock_account_service.get_account_or_404.return_value = self.account
         mock_account_service.get_account_by_id.return_value = self.account_data, TEST_ETAG
         mock_cache.get.return_value = None

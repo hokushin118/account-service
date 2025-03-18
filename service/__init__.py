@@ -571,6 +571,12 @@ def create_app() -> Flask:
 
 app = create_app()
 
+# Registering error handlers
+# pylint:disable=C0413
+from service.common.error_handlers import register_error_handlers
+
+register_error_handlers(app)
+
 # Configure monitoring with Prometheus
 metrics = configure_monitoring(app)
 

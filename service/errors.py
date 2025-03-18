@@ -47,7 +47,7 @@ class AccountError(Exception):
         return self.message or ''
 
 
-class AccountNotFound(AccountError):
+class AccountNotFoundError(AccountError):
     """Exception raised when an account is not found.
 
     Indicates that an account with the specified ID could not be located.
@@ -62,7 +62,7 @@ class AccountNotFound(AccountError):
             account_id: UUID,
             message: Optional[str] = None
     ) -> None:
-        """Initialize a new AccountNotFound exception.
+        """Initialize a new AccountNotFoundError exception.
 
         Args:
             account_id (UUID): The ID of the account that was not found.

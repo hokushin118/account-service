@@ -11,12 +11,12 @@ import os
 from typing import Any, Dict, Tuple
 from uuid import UUID
 
-from flask import abort
+from flask_jwt_extended import get_jwt_identity
 
 from service import app, cache
-from service.common import status
 from service.common.constants import ACCOUNT_CACHE_KEY
 from service.common.utils import generate_etag_hash
+from service.errors import AccountNotFoundError, AccountError
 from service.models import Account
 from service.schemas import AccountDTO
 
@@ -47,15 +47,33 @@ class AccountService:
             Account: The found account object.
 
         Raises:
-            NotFound: If the account with the given `account_id` does not exist.
+            AccountNotFoundError: If the account with the given `account_id` does not exist.
         """
         account = Account.find(account_id)
         if not account:
-            abort(
-                status.HTTP_404_NOT_FOUND,
+            app.logger.warning(
                 f"Account with id {account_id} could not be found."
             )
+            raise AccountNotFoundError(account_id)
         return account
+
+    @staticmethod
+    def _handle_cache_error(err: Exception, error_type: str) -> None:
+        """Handles and logs cache-related errors, then raises an AccountError.
+
+        Args:
+            err (Exception): The exception that occurred.
+            error_type (str): A string describing the type of error (e.g., 'type error').
+        Raises:
+            AccountError: An exception indicating a caching failure.
+        """
+        error_message = str(err)
+        app.logger.error(
+            "Failed to cache account due to %s: %s",
+            error_type,
+            error_message
+        )
+        raise AccountError(error_message)
 
     ######################################################################
     # LIST ALL ACCOUNTS
@@ -73,6 +91,10 @@ class AccountService:
             and the ETag hash as a string.
         """
         app.logger.info('Service - Request to list Accounts...')
+
+        # Validate JWT token and obtain user identity.
+        current_user_id = get_jwt_identity()
+        app.logger.debug('Current user ID: %s', current_user_id)
 
         # Cache key for paginated results (include page and per_page)
         cache_key = f"{ACCOUNT_CACHE_KEY}:{page}:{per_page}"
@@ -126,6 +148,14 @@ class AccountService:
     @staticmethod
     def get_account_by_id(account_id: UUID) -> (Dict, str):
         """Retrieves an account by its ID, using cache if available."""
+        app.logger.info(
+            "Service - Request to read an Account with id: %s", account_id
+        )
+
+        # Validate JWT token and obtain user identity.
+        current_user_id = get_jwt_identity()
+        app.logger.debug('Current user ID: %s', current_user_id)
+
         cache_key = f"{ACCOUNT_CACHE_KEY}:{account_id}"
 
         # Attempt to retrieve cached data
@@ -152,23 +182,26 @@ class AccountService:
                 (data, etag_hash),
                 timeout=CACHE_DEFAULT_TIMEOUT
             )
-        except TypeError as type_err:
-            app.logger.error(
-                "Failed to cache account due to type error: %s",
-                type_err
+        except TypeError as err:
+            AccountService._handle_cache_error(
+                err,
+                'type error'
             )
-        except ValueError as value_err:
-            app.logger.error(
-                "Failed to cache account due to value error: %s",
-                value_err
+        except ValueError as err:
+            AccountService._handle_cache_error(
+                err,
+                'value error'
             )
-        except AttributeError as attr_err:
-            app.logger.error(
-                "Failed to cache account due to attribute error: %s",
-                attr_err
+        except AttributeError as err:
+            AccountService._handle_cache_error(
+                err,
+                'attribute error'
             )
         except Exception as err:  # pylint: disable=W0703
-            app.logger.error("Failed to cache account: %s", err)
+            AccountService._handle_cache_error(
+                err,
+                'unknown error'
+            )
 
         app.logger.debug(f"Account returned: {data}")
 

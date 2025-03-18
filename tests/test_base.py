@@ -13,7 +13,7 @@ from flask import Flask, Response
 from flask_jwt_extended import JWTManager
 from kafka.errors import KafkaConnectionError  # pylint: disable=E0401
 
-from service import app_config
+from service import app_config, register_error_handlers
 from service.common import status
 from service.common.kafka_producer import KafkaProducerManager
 from service.configs import KafkaProducerConfig
@@ -222,6 +222,11 @@ class BaseTestCase(TestCase):
         cls.app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
         cls.app.logger.setLevel(logging.CRITICAL)
         JWTManager(cls.app)
+
+        # Disable exception propagation so error handlers can catch errors
+        cls.app.config['PROPAGATE_EXCEPTIONS'] = False
+        register_error_handlers(cls.app)
+
         cls.app.app_context().push()
 
         if app_config.database_uri:
