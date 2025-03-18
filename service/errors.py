@@ -95,21 +95,21 @@ class AccountAuthorizationError(AccountError):
     permissions to execute a requested operation.
 
     Attributes:
-        account_id (UUID): The ID of the account that is not authorized.
+        user_id (UUID): The user ID of the account that is not authorized.
         roles (Optional[List[str]]): A list of roles associated with the account,
             representing the permissions or roles needed for the action.
     """
 
     def __init__(
             self,
-            account_id: UUID,
+            user_id: str,
             message: Optional[str] = None,
             roles: Optional[List[str]] = None
     ) -> None:
         """Initialize a new AccountAuthorizationError exception.
 
         Args:
-            account_id (UUID): The ID of the account that is not authorized.
+            user_id (str): The ID of the account that is not authorized.
             message (Optional[str]): An optional custom error message.
                 If None, a default message is used.
             roles (Optional[List[str]]): An optional list of roles associated with the account.
@@ -117,9 +117,9 @@ class AccountAuthorizationError(AccountError):
                 or associated with this error.
         """
         if message is None:
-            message = f"Account with id {account_id} is not authorized to perform this action."
+            message = f"Account with user id {user_id} is not authorized to perform this action."
         super().__init__(message)
-        self.account_id = account_id
+        self.user_id = user_id
         self.roles = roles
 
     def to_dict(self) -> Dict[str, Any]:
@@ -128,11 +128,11 @@ class AccountAuthorizationError(AccountError):
         Includes the error message, account ID as a string, and associated roles if provided.
 
         Returns:
-            Dict[str, Any]: A dictionary containing the error message, account ID, and roles.
+            Dict[str, Any]: A dictionary containing the error message, user ID, and roles.
         """
         error_dict = {
             'error': self.message,
-            'account_id': str(self.account_id)
+            'user_id': self.user_id
         }
         if self.roles is not None:
             error_dict['roles'] = self.roles

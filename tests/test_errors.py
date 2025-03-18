@@ -65,24 +65,24 @@ class TestAccountAuthorizationError(TestCase):
     def test_account_authorization_error_default_message_no_roles(self):
         """It should generate a default error message and return a dictionary
         without roles when none are provided."""
-        account_id = uuid4()
-        error = AccountAuthorizationError(account_id)
-        expected_msg = f"Account with id {account_id} is not authorized to perform this action."
+        user_id = str(uuid4())
+        error = AccountAuthorizationError(user_id)
+        expected_msg = f"Account with user id {user_id} is not authorized to perform this action."
         self.assertEqual(str(error), expected_msg)
         result_dict = error.to_dict()
         self.assertEqual(result_dict.get('error'), expected_msg)
-        self.assertEqual(result_dict.get('account_id'), str(account_id))
+        self.assertEqual(result_dict.get('user_id'), str(user_id))
         self.assertNotIn('roles', result_dict)
 
     def test_account_authorization_error_custom_message_with_roles(self):
         """It should use the provided custom error message and include roles in
         the returned dictionary."""
-        account_id = uuid4()
+        user_id = str(uuid4())
         custom_message = 'Custom authorization failure message.'
         roles = [ROLE_USER, ROLE_ADMIN]
-        error = AccountAuthorizationError(account_id, custom_message, roles)
+        error = AccountAuthorizationError(user_id, custom_message, roles)
         self.assertEqual(str(error), custom_message)
         result_dict = error.to_dict()
         self.assertEqual(result_dict.get('error'), custom_message)
-        self.assertEqual(result_dict.get('account_id'), str(account_id))
+        self.assertEqual(result_dict.get('user_id'), str(user_id))
         self.assertEqual(result_dict.get('roles'), roles)

@@ -82,3 +82,44 @@ class AccountDTO(BaseModel):
         """Config class."""
         # pylint: disable=too-few-public-methods
         from_attributes = True
+
+
+class UpdateAccountDTO(BaseModel):
+    """Update Account DTO."""
+    name: constr(
+        min_length=NAME_MIN_LENGTH,
+        max_length=NAME_MAX_LENGTH
+    )  # Constrained name
+    email: EmailStr  # Validated email
+    gender: Optional[constr(max_length=GENDER_MAX_LENGTH)] = None
+    address: Optional[constr(max_length=ADDRESS_MAX_LENGTH)] = None
+    phone_number: Optional[constr(max_length=PHONE_MAX_LENGTH)] = None
+
+    @validator('name')
+    # pylint: disable=no-self-argument
+    def validate_name(cls, value: str) -> str:
+        """Validates the name.
+
+        Args:
+            value: The name string to validate.
+
+        Returns:
+            The validated name string.
+
+        Raises:
+            ValueError: If the name is blank (empty or None).
+        """
+        if not value:
+            raise ValueError(
+                'Name can not be blank'
+            )
+        return value
+
+    def to_dict(self) -> dict:
+        """Serializes an AccountDTO into a dictionary."""
+        return self.model_dump()
+
+    class Config:
+        """Config class."""
+        # pylint: disable=too-few-public-methods
+        from_attributes = True

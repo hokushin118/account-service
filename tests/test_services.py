@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 
 from service.common.constants import ACCOUNT_CACHE_KEY
 from service.errors import AccountError, AccountNotFoundError
-from service.schemas import AccountDTO
+from service.schemas import AccountDTO, UpdateAccountDTO
 from service.services import AccountService
 from tests.factories import AccountFactory
 from tests.test_constants import (
@@ -36,6 +36,9 @@ class TestAccountService(TestCase):
         self.account = AccountFactory()
         self.test_account_dto = AccountDTO.from_orm(self.account)
         self.cache_key = f"{ACCOUNT_CACHE_KEY}:{TEST_PAGE}:{TEST_PER_PAGE}"
+
+        self.updated_account = AccountFactory()
+        self.updated_account_dto = AccountDTO.from_orm(self.updated_account)
 
     ######################################################################
     #  LIST ALL ACCOUNTS TEST CASES
@@ -178,6 +181,47 @@ class TestAccountService(TestCase):
         mock_generate_etag_hash.assert_called_once()
         mock_cache.set.assert_called_once()
         self.assertEqual(etag, TEST_ETAG)
+
+    ######################################################################
+    # UPDATE AN EXISTING ACCOUNT
+    ######################################################################
+    @patch('service.services.AccountDTO')
+    @patch('service.services.AccountService')
+    @patch('service.services.get_jwt_identity')
+    def test_update_by_id_success(
+            self,
+            mock_account_dto,
+            mock_account_service,
+            mock_get_jwt_identity
+    ):
+        """It should update an account’s attributes and return its dict representation."""
+        mock_get_jwt_identity.get_jwt_identity.return_value = self.account.user_id
+        mock_account_service.get_account_or_404.return_value = self.account
+        mock_account_service.authorize_account.return_value = True
+        mock_account_service.invalidate_all_account_pages.return_value = None
+        mock_account_dto.from_orm.return_value = self.updated_account_dto
+
+        update_dto = UpdateAccountDTO(
+            name=self.updated_account.name,
+            email=self.updated_account.email,
+            address=self.updated_account.address,
+            gender=self.updated_account.gender,
+            phone_number=self.updated_account.phone_number
+        )
+
+        # Call the method under test.
+        result = AccountService.update_by_id(self.account.id, update_dto)
+
+        self.assertIsNotNone(result)
+
+        # Verify that the account is existed
+        mock_account_service.get_account_or_404.assert_called_once()
+        # Verify that the user is authorized
+        mock_account_service.authorize_account.assert_called_once()
+        # Verify that the cache invalidation function was called
+        mock_account_service.invalidate_all_account_pages.assert_called_once()
+        # Verify that AccountDTO.from_orm was called with the updated account
+        mock_account_dto.assert_called_once()
 
 
 ######################################################################

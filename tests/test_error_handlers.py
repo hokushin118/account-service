@@ -19,7 +19,7 @@ from service.errors import (
     AccountAuthorizationError
 )
 from service.models import DataValidationError
-from tests.test_constants import TEST_ACCOUNT_ID
+from tests.test_constants import TEST_ACCOUNT_ID, TEST_USER_ID
 
 
 class RegisterErrorHandlersTests(TestCase):
@@ -52,7 +52,7 @@ class RegisterErrorHandlersTests(TestCase):
         @self.app.route('/test/account-authorization')
         def account_authorization_error():
             raise AccountAuthorizationError(
-                TEST_ACCOUNT_ID,
+                TEST_USER_ID,
                 'Account authorization error occurred'
             )
 

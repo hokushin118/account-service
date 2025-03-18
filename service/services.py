@@ -14,15 +14,18 @@ from uuid import UUID
 from flask_jwt_extended import get_jwt_identity
 
 from service import app, cache
-from service.common.constants import ACCOUNT_CACHE_KEY
+from service.common.constants import ACCOUNT_CACHE_KEY, ROLE_ADMIN
+from service.common.keycloak_utils import get_user_roles
 from service.common.utils import generate_etag_hash
-from service.errors import AccountNotFoundError, AccountError
+from service.errors import AccountNotFoundError, AccountError, \
+    AccountAuthorizationError
 from service.models import Account
-from service.schemas import AccountDTO
+from service.schemas import AccountDTO, UpdateAccountDTO
 
 logger = logging.getLogger(__name__)
 
 CACHE_DEFAULT_TIMEOUT = int(os.environ.get('CACHE_DEFAULT_TIMEOUT', 3600))
+FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE = 'You are not authorized to modify this resource.'
 
 
 class AccountService:
@@ -48,14 +51,120 @@ class AccountService:
 
         Raises:
             AccountNotFoundError: If the account with the given `account_id` does not exist.
+            AccountError: if the UUID format is invalid.
         """
-        account = Account.find(account_id)
-        if not account:
-            app.logger.warning(
-                f"Account with id {account_id} could not be found."
+        try:
+            account = Account.find(account_id)
+
+            if not account:
+                app.logger.warning(
+                    f"Account with id {account_id} could not be found."
+                )
+                raise AccountNotFoundError(account_id)
+            return account
+        except ValueError as err:
+            logger.error("Invalid UUID %s provided: %s", account_id, err)
+            raise AccountError(
+                f"Invalid account ID format: {account_id}"
+            ) from err
+
+    @staticmethod
+    def check_if_user_is_owner(
+            user_id: str,
+            account_user_id: UUID
+    ) -> bool:
+        """Checks if the given user ID matches the account's user ID, indicating ownership.
+
+        This method efficiently determines if a user, identified by their user ID, is the
+        owner of an account. It retrieves the account associated with the
+        provided user ID and directly compares the account's user ID with the
+        provided account user ID.
+
+        Args:
+            user_id (str): The user ID of the potential owner (as a string).
+            account_user_id (UUID): The UUID of the account's user ID to verify ownership.
+
+        Returns:
+            bool: True if the user is the owner of the account, False otherwise.
+
+        Raises:
+            AccountError: If an error occurs during the ownership check.
+        """
+        try:
+            user_uuid = UUID(user_id)
+            account = Account.find_by_user_id(user_uuid)
+            return account is not None and account.user_id == account_user_id
+        except ValueError as err:
+            logger.error("Invalid UUID %s string provided: %s", user_uuid, err)
+            raise AccountError(f"Invalid user ID format: {user_id}") from err
+        except Exception as err:  # pylint: disable=W0703
+            logger.error(
+                "An unexpected error occurred during ownership check: %s", err
             )
-            raise AccountNotFoundError(account_id)
-        return account
+            raise AccountError(
+                f"Error checking ownership for user ID: {user_id}"
+            ) from err
+
+    @staticmethod
+    def authorize_account(
+            current_user_id: str,
+            account_user_id: UUID
+    ) -> None:
+        """Authorizes a user to access and modify an account.
+
+        This function checks if the user has the necessary permissions to access
+        and modify the specified account. It first checks for the 'admin' role.
+        If the user is not an admin, it checks if the user is the owner of the account.
+
+        Args:
+            current_user_id (str): The ID of the currently logged-in user.
+            account_user_id (UUID): The ID of the account's owner.
+
+        Raises:
+            AccountAuthorizationError: If the user does not have permission.
+        """
+        # Retrieve user roles
+        roles = get_user_roles()
+        app.logger.debug('Roles: %s', roles)
+
+        if ROLE_ADMIN not in roles:
+            # If not ROLE_ADMIN, check ownership шf admin, then skip ownership check.
+            # Check if the logged-in user is the owner of the resource
+            if not AccountService.check_if_user_is_owner(
+                    current_user_id,
+                    account_user_id
+            ):
+                app.logger.warning(
+                    "User %s does not have permission to access resource %s for modification.",
+                    current_user_id,
+                    account_user_id
+                )
+                raise AccountAuthorizationError(
+                    current_user_id,
+                    FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE,
+                    roles
+                )
+
+    @staticmethod
+    def invalidate_all_account_pages() -> None:
+        """Invalidate all cached results.
+
+        This function clears the cache and logs the process. If a Redis connection error occurs,
+        it logs an error message indicating the connection issue. Any unexpected
+        exceptions will also be logged.
+        """
+        app.logger.debug('Invalidating all cached results...')
+
+        try:
+            cache.clear()
+            app.logger.debug('All cache has been successfully invalidated.')
+        except ConnectionError as err:
+            app.logger.error(
+                'Redis connection error during cache invalidation: %s',
+                err
+            )
+        except Exception as err:  # pylint: disable=W0703
+            app.logger.error('Error invalidating cache: %s', err)
 
     @staticmethod
     def _handle_cache_error(err: Exception, error_type: str) -> None:
@@ -206,3 +315,49 @@ class AccountService:
         app.logger.debug(f"Account returned: {data}")
 
         return data, etag_hash
+
+    ######################################################################
+    # UPDATE AN EXISTING ACCOUNT
+    ######################################################################
+    @staticmethod
+    def update_by_id(
+            account_id: UUID,
+            update_account_dto: UpdateAccountDTO
+    ) -> Dict[str, str]:
+        """Updates an existing account with full data payload."""
+        app.logger.info(
+            "Service - Request to update an Account with id: %s",
+            account_id
+        )
+
+        # Get the user identity from the JWT token
+        current_user_id = get_jwt_identity()
+        app.logger.debug('Current user ID: %s', current_user_id)
+
+        # Retrieve the account to be updated or return a 404 error if not found
+        account = AccountService.get_account_or_404(account_id)
+
+        # Authorizes a user to access and modify an account
+        AccountService.authorize_account(
+            current_user_id,
+            account.user_id
+        )
+
+        # Update account with provided JSON payload
+        account.name = update_account_dto.name
+        account.email = update_account_dto.email
+        account.address = update_account_dto.address
+        account.gender = update_account_dto.gender
+        account.phone_number = update_account_dto.phone_number
+
+        account.update()
+        app.logger.info(
+            "Account with id %s updated successfully.",
+            account_id
+        )
+
+        # Invalidate specific cache key(s)
+        AccountService.invalidate_all_account_pages()
+        app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
+
+        return AccountDTO.from_orm(account).dict()
