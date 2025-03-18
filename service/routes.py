@@ -39,7 +39,7 @@ from service.common.utils import (
     count_requests
 )
 from service.models import Account
-from service.schemas import AccountDTO
+from service.schemas import AccountDTO, UpdateAccountDTO
 from service.services import AccountService
 
 logger = logging.getLogger(__name__)
@@ -485,7 +485,7 @@ def find_by_id(account_id: UUID) -> Response:
         'content': {
             'application/json': {
                 'schema': {
-                    '$ref': '#/components/schemas/CreateUpdateAccountDTO'}
+                    '$ref': '#/components/schemas/UpdateAccountDTO'}
             }
         }
     },
@@ -518,31 +518,6 @@ def update_by_id(account_id: UUID) -> Response:
     """Update Account by ID."""
     app.logger.info("Request to update an Account with id: %s", account_id)
 
-    # Get the user identity from the JWT token
-    current_user_id = get_jwt_identity()
-    app.logger.debug('Current user ID: %s', current_user_id)
-
-    # Retrieve the account to be updated or return a 404 error if not found
-    account = get_account_or_404(account_id)
-
-    # Retrieve user roles
-    roles = get_user_roles()
-    app.logger.debug('Roles: %s', roles)
-
-    if ROLE_ADMIN not in roles:
-        # If not ROLE_ADMIN, check ownership шf admin, then skip ownership check.
-        # Check if the logged-in user is the owner of the resource
-        if not check_if_user_is_owner(current_user_id, account.user_id):
-            app.logger.warning(
-                "User %s is not authorized to delete account %s.",
-                current_user_id,
-                account.user_id
-            )
-            abort(
-                status.HTTP_403_FORBIDDEN,
-                FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
-            )
-
     # Get the data payload from the request
     data = request.get_json()
     if not data:
@@ -555,31 +530,14 @@ def update_by_id(account_id: UUID) -> Response:
             'No data provided for update.'
         )
 
-    # Update account with provided JSON payload
-    try:
-        account.deserialize(data)
-        account.update()
-        app.logger.info("Account with id %s updated successfully.", account_id)
-    except Exception as err:  # pylint: disable=W0703
-        app.logger.error(
-            "Unexpected error updating account %s: %s",
-            account_id,
-            err
-        )
-        abort(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "An unexpected error occurred during account updating."
-        )
+    update_account_dto = UpdateAccountDTO(**data)
 
-    # Convert SQLAlchemy model to DTO
-    account_dto = AccountDTO.from_orm(account)
-
-    # Invalidate specific cache key(s)
-    invalidate_all_account_pages()
-    app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
-
+    result = account_service.update_by_id(
+        account_id,
+        update_account_dto
+    )
     # Return the updated account DTO as a JSON response with a 200 status code
-    return make_response(jsonify(account_dto.dict()), status.HTTP_200_OK)
+    return make_response(jsonify(result), status.HTTP_200_OK)
 
 
 ######################################################################

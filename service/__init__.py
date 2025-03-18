@@ -355,6 +355,38 @@ def configure_swagger(current_app: Flask) -> None:
                     },
                     'required': ['name', 'email', 'date_joined']
                 },
+                'UpdateAccountDTO': {
+                    'type': 'object',
+                    'properties': {
+                        'name': {
+                            'type': 'string',
+                            'description': 'The account name',
+                            'minLength': NAME_MIN_LENGTH,
+                            'maxLength': NAME_MAX_LENGTH
+                        },
+                        'email': {
+                            'type': 'string',
+                            'format': 'email',
+                            'description': 'The account email address'
+                        },
+                        'gender': {
+                            'type': 'string',
+                            'description': 'Gender',
+                            'maxLength': GENDER_MAX_LENGTH
+                        },
+                        'address': {
+                            'type': 'string',
+                            'description': 'The account address',
+                            'maxLength': ADDRESS_MAX_LENGTH
+                        },
+                        'phone_number': {
+                            'type': 'string',
+                            'description': 'The account phone number',
+                            'maxLength': PHONE_MAX_LENGTH
+                        }
+                    },
+                    'required': ['name', 'email']
+                },
                 'ListOfAccountDTO': {
                     'type': 'object',
                     'properties': {

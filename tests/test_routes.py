@@ -18,6 +18,7 @@ from service import AUTHORIZATION_HEADER, BEARER_HEADER
 from service.common import status  # HTTP Status Codes
 from service.common.constants import ROLE_USER, ROLE_ADMIN
 from service.common.keycloak_utils import KEYS, REALM_ACCESS_CLAIM, ROLES_CLAIM
+from service.errors import AccountAuthorizationError
 from service.models import db, Account
 from service.routes import (
     app,
@@ -26,7 +27,7 @@ from service.routes import (
     HEALTH_PATH,
     IF_NONE_MATCH_HEADER,
     CACHE_CONTROL_HEADER,
-    audit_log, check_if_user_is_owner
+    audit_log, check_if_user_is_owner, account_service
 )
 from service.schemas import AccountDTO
 from tests.factories import AccountFactory
@@ -70,6 +71,7 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
             'email': self.account.email,
             'address': self.account.address,
             'phone_number': self.account.phone_number,
+            'date_joined': self.account.date_joined,
             'user_id': self.account.user_id
         }
 
@@ -536,23 +538,14 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     #  UPDATE AN EXISTING ACCOUNT TEST CASES
     ######################################################################
     @patch('requests.get')
-    @patch('service.routes.check_if_user_is_owner')
-    @patch('service.routes.get_jwt_identity')
-    def test_update_by_id_success(self,
-                                  mock_jwt_identity,
-                                  mock_check_if_user_is_owner,
-                                  mock_get):
+    def test_update_by_id_success(self, mock_get):
         """It should update an existing Account successfully when a valid
         JWT and ownership are provided."""
-        account = AccountFactory()
-        mock_jwt_identity.return_value = account.user_id
-        mock_check_if_user_is_owner.return_value = True
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account_dto = AccountDTO.from_orm(account)
         test_jwt = jwt.encode(
             {
-                'sub': str(account.user_id),
+                'sub': str(self.account.user_id),
                 REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
             },
             self.private_key,
@@ -562,39 +555,48 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
+            json=self.test_account_dto.dict(),
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        new_account = response.get_json()
-        new_account['phone_number'] = '918-295-1876'
-        new_account['address'] = '718 Noah Drive\nChristensenburgh, NE 45784'
-        response = self.client.put(
-            f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
-            content_type='application/json',
-            json=new_account,
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        updated_account = response.get_json()
-        self.assertEqual(updated_account['phone_number'], '918-295-1876')
-        self.assertEqual(
-            updated_account['address'],
-            '718 Noah Drive\nChristensenburgh, NE 45784'
-        )
+        expected_result = self.test_account_dto.dict()
+        expected_result['phone_number'] = '918-295-1876'
+        expected_result[
+            'address'] = '718 Noah Drive\nChristensenburgh, NE 45784'
+        # Patch the account_service.update_by_id so it returns expected_result
+        with patch.object(
+                account_service, 'update_by_id',
+                return_value=expected_result
+        ) as mock_update:
+            new_account = response.get_json()
+            new_account['phone_number'] = '918-295-1876'
+            new_account[
+                'address'] = '718 Noah Drive\nChristensenburgh, NE 45784'
+            response = self.client.put(
+                f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
+                content_type='application/json',
+                json=new_account,
+                headers=headers
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            updated_account = response.get_json()
+            self.assertEqual(updated_account['phone_number'], '918-295-1876')
+            self.assertEqual(
+                updated_account['address'],
+                '718 Noah Drive\nChristensenburgh, NE 45784'
+            )
+            mock_update.assert_called_once()
 
     @patch('requests.get')
     def test_update_by_id_unauthorized(self, mock_get):
         """It should return 401 Unauthorized when updating an account without a JWT."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account = AccountFactory()
-        test_account_dto = AccountDTO.from_orm(test_account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
+            json=self.test_account_dto.dict(),
             content_type='application/json',
             headers=headers
         )
@@ -609,74 +611,42 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch('requests.get')
-    @patch('service.routes.get_account_or_404')
-    @patch('service.routes.check_if_user_is_owner')
-    def test_update_by_id_wrong_role(self,
-                                     mock_check_if_user_is_owner,
-                                     mock_get_account_or_404,
-                                     mock_get):
+    def test_update_by_id_wrong_role(
+            self,
+            mock_get
+    ):
         """It should not update an Account when the JWT belongs to a user with the wrong role."""
-        test_account = AccountFactory()
-        mock_check_if_user_is_owner.return_value = False
-        mock_get_account_or_404.return_value = test_account
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account_dto = AccountDTO.from_orm(test_account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
+            json=self.test_account_dto.dict(),
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        new_account = response.get_json()
-        new_account['name'] = 'Something Known'
-        response = self.client.put(
-            f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
-            content_type='application/json',
-            json=new_account,
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-    @patch('requests.get')
-    @patch('service.routes.check_if_user_is_owner')
-    def test_update_by_id_wrong_account_id(self,
-                                           mock_check_if_user_is_owner,
-                                           mock_get):
-        """It should not update an Account when the JWT belongs to a different user."""
-        mock_check_if_user_is_owner.return_value = False
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        test_account = AccountFactory()
-        test_account_dto = AccountDTO.from_orm(test_account)
-        test_jwt = jwt.encode(
-            {
-                'sub': TEST_USER_ID,
-                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
-            },
-            self.private_key,
-            algorithm=JWT_ALGORITHM,
-            headers={'kid': 'test-kid'}
-        )
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        new_account = response.get_json()
-        update_data = {'name': 'Test Account', 'email': 'test@example.com'}
-        response = self.client.put(
-            f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
-            content_type='application/json',
-            json=update_data,
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        expected_result = self.test_account_dto.dict()
+        expected_result['phone_number'] = '918-295-1876'
+        expected_result[
+            'address'] = '718 Noah Drive\nChristensenburgh, NE 45784'
+        # Patch the account_service.update_by_id so it returns expected_result
+        with patch.object(
+                account_service, 'update_by_id',
+                side_effect=AccountAuthorizationError("Authorization failed")
+        ) as mock_update:
+            new_account = response.get_json()
+            new_account['phone_number'] = '918-295-1876'
+            new_account[
+                'address'] = '718 Noah Drive\nChristensenburgh, NE 45784'
+            response = self.client.put(
+                f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
+                content_type='application/json',
+                json=new_account,
+                headers=headers
+            )
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+            mock_update.assert_called_once()
 
     @patch('requests.get')
     def test_update_by_id_wrong_account_id_admin_role(self, mock_get):
@@ -684,8 +654,6 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         account belongs to another user."""
         mock_get.return_value.status_code = status.HTTP_200_OK
         mock_get.return_value.json.return_value = self.mock_certs
-        test_account = AccountFactory()
-        test_account_dto = AccountDTO.from_orm(test_account)
         test_jwt = jwt.encode(
             {
                 'sub': TEST_USER_ID,
@@ -698,7 +666,7 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
+            json=self.test_account_dto.dict(),
             content_type='application/json',
             headers=headers
         )

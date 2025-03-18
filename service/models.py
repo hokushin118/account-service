@@ -79,11 +79,27 @@ class PersistentBase:
         db.session.add(self)
         try:
             db.session.commit()
-        except IntegrityError as error:
-            db.session.rollback()
+            logger.debug("Successfully created %s", self)
+        except IntegrityError as err:
+            self.session.rollback()
+            logger.error(
+                "Integrity error during creation of %s: {%s}",
+                self,
+                err
+            )
             raise DataValidationError(
-                f"Error creating record: {error}"
-            ) from error
+                f"Integrity error creating record: {err}"
+            ) from err
+        except Exception as err:  # pylint: disable=W0703
+            self.session.rollback()
+            logger.error(
+                "Unexpected error during creation of %s: %s",
+                self,
+                err
+            )
+            raise DataValidationError(
+                f"Unexpected error creating record: {err}"
+            ) from err
         return self
 
     def partial_update(self, data: Dict[str, Any]) -> None:
@@ -138,11 +154,27 @@ class PersistentBase:
         logger.info("Updating %s", self)
         try:
             db.session.commit()
-        except IntegrityError as error:
-            db.session.rollback()
+            logger.debug("Successfully updated %s", self)
+        except IntegrityError as err:
+            self.session.rollback()
+            logger.error(
+                "Integrity error during update of %s: {%s}",
+                self,
+                err
+            )
             raise DataValidationError(
-                f"Error updating record: {error}"
-            ) from error
+                f"Integrity error updating record: {err}"
+            ) from err
+        except Exception as err:  # pylint: disable=W0703
+            self.session.rollback()
+            logger.error(
+                "Unexpected error during update of %s: %s",
+                self,
+                err
+            )
+            raise DataValidationError(
+                f"Unexpected error updating record: {err}"
+            ) from err
         return self
 
     def delete(self) -> 'PersistentBase':
@@ -164,11 +196,27 @@ class PersistentBase:
         db.session.delete(self)
         try:
             db.session.commit()
-        except IntegrityError as error:
-            db.session.rollback()
+            logger.debug("Successfully deleted %s", self)
+        except IntegrityError as err:
+            self.session.rollback()
+            logger.error(
+                "Integrity error during delete of %s: {%s}",
+                self,
+                err
+            )
             raise DataValidationError(
-                f"Error deleting record: {error}"
-            ) from error
+                f"Integrity error deleting record: {err}"
+            ) from err
+        except Exception as err:  # pylint: disable=W0703
+            self.session.rollback()
+            logger.error(
+                "Unexpected error during delete of %s: %s",
+                self,
+                err
+            )
+            raise DataValidationError(
+                f"Unexpected error deleting record: {err}"
+            ) from err
         return self
 
     @classmethod

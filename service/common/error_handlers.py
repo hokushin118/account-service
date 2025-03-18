@@ -21,8 +21,11 @@ from typing import Any, Dict, Tuple
 from flask import Flask, jsonify
 
 from service.common import status
-from service.errors import AccountNotFoundError, AccountError, \
+from service.errors import (
+    AccountNotFoundError,
+    AccountError,
     AccountAuthorizationError
+)
 from service.models import DataValidationError
 
 
