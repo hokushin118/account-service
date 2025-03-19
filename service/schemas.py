@@ -19,7 +19,7 @@ from service.common.utils import account_to_dict
 
 
 class AccountDTO(BaseModel):
-    """Account DTO."""
+    """Data Transfer Object for an account."""
     id: UUID  # UUID
     name: constr(
         min_length=NAME_MIN_LENGTH,
@@ -82,6 +82,8 @@ class AccountDTO(BaseModel):
         """Config class."""
         # pylint: disable=too-few-public-methods
         from_attributes = True
+        # Allows the DTO to be populated by aliases
+        populate_by_name = True
 
 
 class UpdateAccountDTO(BaseModel):
@@ -116,10 +118,35 @@ class UpdateAccountDTO(BaseModel):
         return value
 
     def to_dict(self) -> dict:
-        """Serializes an AccountDTO into a dictionary."""
+        """Serializes an UpdateAccountDTO into a dictionary."""
         return self.model_dump()
 
     class Config:
         """Config class."""
         # pylint: disable=too-few-public-methods
         from_attributes = True
+        # Allows the DTO to be populated by aliases
+        populate_by_name = True
+
+
+class PartialUpdateAccountDTO(BaseModel):
+    """Data Transfer Object for partially updating an account."""
+    name: Optional[constr(
+        min_length=NAME_MIN_LENGTH,
+        max_length=NAME_MAX_LENGTH
+    )] = None  # Constrained name
+    email: Optional[EmailStr] = None  # Validated email
+    gender: Optional[constr(max_length=GENDER_MAX_LENGTH)] = None
+    address: Optional[constr(max_length=ADDRESS_MAX_LENGTH)] = None
+    phone_number: Optional[constr(max_length=PHONE_MAX_LENGTH)] = None
+
+    def to_dict(self) -> dict:
+        """Serializes an PartialUpdateAccountDTO into a dictionary."""
+        return self.model_dump()
+
+    class Config:
+        """Config class."""
+        # pylint: disable=too-few-public-methods
+        from_attributes = True
+        # Allows the DTO to be populated by aliases
+        populate_by_name = True
