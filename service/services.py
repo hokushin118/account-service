@@ -26,7 +26,7 @@ from service.models import Account
 from service.schemas import (
     AccountDTO,
     UpdateAccountDTO,
-    PartialUpdateAccountDTO
+    PartialUpdateAccountDTO, CreateAccountDTO
 )
 
 logger = logging.getLogger(__name__)
@@ -214,6 +214,46 @@ class AccountService:
         raise AccountError(error_message)
 
     ######################################################################
+    # CREATE A NEW ACCOUNT
+    ######################################################################
+    @staticmethod
+    def create(create_account_dto: CreateAccountDTO) -> Dict[str, str]:
+        """Creates a new account using the given data and current user ID.
+
+        Args:
+            create_account_dto (CreateAccountDTO): The data transfer object containing
+                the account creation data.
+
+        Returns:
+            Dict[str, str]: A dictionary representing the created account.
+
+        Raises:
+            ValidationError: If the provided data is invalid.
+            DatabaseError: If an error occurs while creating the account in the database.
+        """
+        app.logger.info('Service - Request to create an Account...')
+
+        # Get the user identity from the JWT token
+        current_user_id = get_jwt_identity()
+        app.logger.debug('Current user ID: %s', current_user_id)
+
+        # Create account with provided JSON payload
+        account = Account()
+        account.deserialize(create_account_dto.to_dict())
+        account.user_id = current_user_id
+        account.create()
+
+        app.logger.info(
+            'Account created successfully.'
+        )
+
+        # Invalidate specific cache key(s)
+        AccountService.invalidate_all_account_pages()
+        app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
+
+        return AccountDTO.from_orm(account).to_dict()
+
+    ######################################################################
     # LIST ALL ACCOUNTS
     ######################################################################
     @staticmethod
@@ -263,7 +303,7 @@ class AccountService:
 
             accounts = Account.all_paginated(page=page, per_page=per_page)
             account_list = [
-                AccountDTO.from_orm(account).dict() for account in accounts
+                AccountDTO.from_orm(account).to_dict() for account in accounts
             ]
 
             total_accounts = Account.query.count()
@@ -337,7 +377,7 @@ class AccountService:
 
             # Convert SQLAlchemy model to DTO
             account_dto = AccountDTO.from_orm(account)
-            data = account_dto.dict()
+            data = account_dto.to_dict()
 
             # Generate the ETag:
             etag_hash = generate_etag_hash(data)
@@ -435,7 +475,7 @@ class AccountService:
         AccountService.invalidate_all_account_pages()
         app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
-        return AccountDTO.from_orm(account).dict()
+        return AccountDTO.from_orm(account).to_dict()
 
     ######################################################################
     # PARTIAL UPDATE AN EXISTING ACCOUNT
@@ -493,7 +533,7 @@ class AccountService:
         AccountService.invalidate_all_account_pages()
         app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
-        return AccountDTO.from_orm(account).dict()
+        return AccountDTO.from_orm(account).to_dict()
 
     ######################################################################
     # DELETE AN ACCOUNT

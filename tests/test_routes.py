@@ -230,29 +230,27 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     #  CREATE ACCOUNTS TEST CASES
     ######################################################################
     @patch('requests.get')
-    @patch('service.routes.get_jwt_identity')
-    def test_create_accounts_success(self, mock_jwt_identity, mock_get):
+    def test_create_accounts_success(self, mock_get):
         """It should create a new Account successfully."""
-        mock_jwt_identity.return_value = TEST_USER_ID
         mock_get.return_value.status_code = status.HTTP_201_CREATED
         mock_get.return_value.json.return_value = self.mock_certs
-        account = AccountFactory()
-        test_account_dto = AccountDTO.from_orm(account)
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=test_account_dto.to_dict(),
+            json=self.test_account_dto.to_dict(),
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIsNotNone(response.headers.get('Location'))
         new_account = response.get_json()
-        self.assertEqual(new_account['name'], test_account_dto.name)
-        self.assertEqual(new_account['email'], test_account_dto.email)
-        self.assertEqual(new_account['address'], test_account_dto.address)
-        self.assertEqual(new_account['phone_number'],
-                         test_account_dto.phone_number)
+        self.assertEqual(new_account['name'], self.test_account_dto.name)
+        self.assertEqual(new_account['email'], self.test_account_dto.email)
+        self.assertEqual(new_account['address'], self.test_account_dto.address)
+        self.assertEqual(
+            new_account['phone_number'],
+            self.test_account_dto.phone_number
+        )
         self.assertEqual(new_account['user_id'], TEST_USER_ID)
 
     ######################################################################

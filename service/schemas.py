@@ -7,7 +7,11 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, validator, EmailStr, constr
+from pydantic import (
+    BaseModel,
+    validator,
+    EmailStr, constr
+)
 
 from service.common.constants import (
     NAME_MIN_LENGTH,
@@ -15,7 +19,6 @@ from service.common.constants import (
     ADDRESS_MAX_LENGTH,
     PHONE_MAX_LENGTH, GENDER_MAX_LENGTH
 )
-from service.common.utils import account_to_dict
 
 
 class AccountDTO(BaseModel):
@@ -69,14 +72,20 @@ class AccountDTO(BaseModel):
         try:
             date.fromisoformat(str(value))
             return value
-        except ValueError as error:
+        except ValueError as err:
             raise ValueError(
                 'Invalid date format. Use ISO 8601 (YYYY-MM-DD).'
-            ) from error
+            ) from err
 
     def to_dict(self) -> dict:
-        """Serializes an AccountDTO into a dictionary."""
-        return account_to_dict(self)
+        """Serializes an AccountDTO into a dictionary.
+
+        This method converts the AccountDTO instance into a Python dictionary,
+        omitting any fields that have a value of None. This is useful for
+        generating clean JSON responses or for data serialization where
+        null values are not desired.
+        """
+        return self.model_dump(exclude_none=True)
 
     class Config:
         """Config class."""
@@ -119,8 +128,14 @@ class CreateAccountDTO(BaseModel):
         return value
 
     def to_dict(self) -> dict:
-        """Serializes an CreateAccountDTO into a dictionary."""
-        return self.model_dump()
+        """Serializes an CreateAccountDTO into a dictionary.
+
+        This method converts the CreateAccountDTO instance into a Python
+        dictionary, omitting any fields that have a value of None. This is
+        useful for generating clean JSON responses or for data serialization
+        where null values are not desired.
+        """
+        return self.model_dump(exclude_none=True)
 
     class Config:
         """Config class."""
@@ -162,8 +177,14 @@ class UpdateAccountDTO(BaseModel):
         return value
 
     def to_dict(self) -> dict:
-        """Serializes an UpdateAccountDTO into a dictionary."""
-        return self.model_dump()
+        """Serializes an UpdateAccountDTO into a dictionary.
+
+        This method converts the UpdateAccountDTO instance into a Python
+        dictionary, omitting any fields that have a value of None. This is
+        useful for generating clean JSON responses or for data serialization
+        where null values are not desired.
+        """
+        return self.model_dump(exclude_none=True)
 
     class Config:
         """Config class."""
@@ -185,8 +206,14 @@ class PartialUpdateAccountDTO(BaseModel):
     phone_number: Optional[constr(max_length=PHONE_MAX_LENGTH)] = None
 
     def to_dict(self) -> dict:
-        """Serializes an PartialUpdateAccountDTO into a dictionary."""
-        return self.model_dump()
+        """Serializes an PartialUpdateAccountDTO into a dictionary.
+
+        This method converts the PartialUpdateAccountDTO instance into a Python
+        dictionary, omitting any fields that have a value of None. This is
+        useful for generating clean JSON responses or for data serialization
+        where null values are not desired.
+        """
+        return self.model_dump(exclude_none=True)
 
     class Config:
         """Config class."""

@@ -125,10 +125,10 @@ class PersistentBase:
                 if hasattr(self, key) and key != 'id':
                     try:
                         setattr(self, key, value)
-                    except ValueError as error:  # Handle type mismatches
+                    except ValueError as err:  # Handle type mismatches
                         raise DataValidationError(
-                            f"Invalid value for {key}: {error}"
-                        ) from error
+                            f"Invalid value for {key}: {err}"
+                        ) from err
                 elif key == 'id':
                     raise DataValidationError("Cannot update primary key 'id'")
                 else:
@@ -386,25 +386,16 @@ class Account(db.Model, PersistentBase):
             self.name = data['name']
             self.email = data['email']
             self.gender = data.get('gender')
-            self.address = data.get('address')  # Address is optional
+            self.address = data.get('address')
             self.phone_number = data.get('phone_number')
-            user_id_data = data['user_id']
-            if isinstance(user_id_data, uuid.UUID):
-                self.user_id = user_id_data
-            elif isinstance(user_id_data, str):
-                self.user_id = uuid.UUID(user_id_data)
-            else:
-                raise DataValidationError(
-                    'Invalid user_id format. Must be a UUID or string.'
-                )
-        except KeyError as error:
+        except KeyError as err:
             raise DataValidationError(
-                f"Invalid Account: missing {error.args[0]}"
-            ) from error
-        except (ValueError, TypeError) as error:
+                f"Invalid Account: missing {err.args[0]}"
+            ) from err
+        except (ValueError, TypeError) as err:
             raise DataValidationError(
-                f"Invalid Account data: {error}"
-            ) from error
+                f"Invalid Account data: {err}"
+            ) from err
         return self
 
     @classmethod

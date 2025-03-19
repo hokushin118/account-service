@@ -19,28 +19,25 @@ from flask import (
     abort,
     url_for
 )  # noqa; F401
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 
 from service import (
     app,
-    cache,
     VERSION,
     NAME,
     metrics
 )
 from service.common import status
 from service.common.constants import (
-    ROLE_USER, ROLE_ADMIN,
-    ACCOUNT_CACHE_KEY
+    ROLE_USER, ROLE_ADMIN
 )
 from service.common.keycloak_utils import has_roles
 from service.common.utils import (
     check_content_type,
     count_requests
 )
-from service.models import Account
-from service.schemas import AccountDTO, UpdateAccountDTO, \
-    PartialUpdateAccountDTO
+from service.schemas import UpdateAccountDTO, \
+    PartialUpdateAccountDTO, CreateAccountDTO
 from service.services import AccountService
 
 logger = logging.getLogger(__name__)
@@ -51,7 +48,6 @@ ROOT_PATH = '/api'
 HEALTH_PATH = f"{ROOT_PATH}/health"
 INFO_PATH = f"{ROOT_PATH}/info"
 ACCOUNTS_PATH_V1 = f"{ROOT_PATH}/v1/accounts"
-CACHE_DEFAULT_TIMEOUT = int(os.environ.get('CACHE_DEFAULT_TIMEOUT', 3600))
 # Enable audit logging if AUDIT_ENABLED is set to "true"
 AUDIT_ENABLED = os.environ.get(
     'AUDIT_ENABLED', 'False'
@@ -64,26 +60,6 @@ account_service = AccountService()
 ######################################################################
 # HELPER METHODS
 ######################################################################
-def invalidate_all_account_pages() -> None:
-    """Invalidate all cached results.
-
-    This function clears the cache and logs the process. If a Redis connection error occurs,
-    it logs an error message indicating the connection issue. Any unexpected exceptions will also
-    be logged.
-    """
-    app.logger.debug('Invalidating all cached results...')
-    try:
-        cache.clear()
-        app.logger.debug('All cache has been successfully invalidated.')
-    except ConnectionError as conn_err:
-        app.logger.error(
-            'Redis connection error during cache invalidation: %s',
-            conn_err
-        )
-    except Exception as err:  # pylint: disable=W0703
-        app.logger.error('Error invalidating cache: %s', err)
-
-
 def audit_log(function: Callable) -> Callable:
     """Conditionally apply Kafka-based audit logging to a function based on the audit configuration.
 
@@ -248,35 +224,32 @@ def create() -> Response:
     """Create a New Account"""
     app.logger.info('Request to create an Account...')
 
-    # Get the user identity from the JWT token
-    current_user_id = get_jwt_identity()
-    app.logger.debug('Current user ID: %s', current_user_id)
-
     check_content_type('application/json')
 
-    account_data = request.get_json()
-    account_data['user_id'] = current_user_id
+    # Get the data payload from the request
+    data = request.get_json()
+    if not data:
+        app.logger.warning(
+            "No data provided to create an account..."
+        )
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            'No data provided for create.'
+        )
 
-    account = Account()
-    account.deserialize(account_data)
-    account.create()
+    create_account_dto = CreateAccountDTO(**data)
 
-    # Convert SQLAlchemy model to DTO
-    account_dto = AccountDTO.from_orm(account)
-    message = account_dto.dict()
+    # Create account with provided JSON payload
+    result = account_service.create(create_account_dto)
 
     location_url = url_for(
         'find_by_id',
-        account_id=account.id,
+        account_id=result['id'],
         _external=True
     )
 
-    # Invalidate specific cache key(s)
-    invalidate_all_account_pages()
-    app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
-
     return make_response(
-        jsonify(message), status.HTTP_201_CREATED, {'Location': location_url}
+        jsonify(result), status.HTTP_201_CREATED, {'Location': location_url}
     )
 
 
