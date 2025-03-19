@@ -318,7 +318,7 @@ def configure_swagger(current_app: Flask) -> None:
                     },
                     'required': ['id', 'name', 'email', 'date_joined']
                 },
-                'CreateUpdateAccountDTO': {
+                'CreateAccountDTO': {
                     'type': 'object',
                     'properties': {
                         'name': {
@@ -346,14 +346,9 @@ def configure_swagger(current_app: Flask) -> None:
                             'type': 'string',
                             'description': 'The account phone number',
                             'maxLength': PHONE_MAX_LENGTH
-                        },
-                        'date_joined': {
-                            'type': 'string',
-                            'format': 'date',
-                            'description': 'The date the account was created (ISO 8601 format)'
-                        },
+                        }
                     },
-                    'required': ['name', 'email', 'date_joined']
+                    'required': ['name', 'email']
                 },
                 'UpdateAccountDTO': {
                     'type': 'object',

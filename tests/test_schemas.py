@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from service import NAME_MIN_LENGTH, NAME_MAX_LENGTH
 from service.schemas import AccountDTO, PartialUpdateAccountDTO, \
-    UpdateAccountDTO
+    UpdateAccountDTO, CreateAccountDTO
 from tests.factories import AccountFactory
 
 
@@ -152,6 +152,94 @@ class TestAccountDTO(TestCase):
         self.assertEqual(account_dto.phone_number, account.phone_number)
         self.assertEqual(account_dto.date_joined, account.date_joined)
         self.assertEqual(account_dto.user_id, account.user_id)
+
+
+class TestCreateAccountDTO(TestCase):
+    """CreateAccountDTO Tests."""
+
+    def test_valid_create_account_dto(self):
+        """It should create a valid CreateAccountDTO when all required fields are
+        provided correctly."""
+        data = {
+            'name': 'John Doe',
+            'email': 'john.doe@example.com',
+            'gender': 'Male',  # Optional field
+            'address': '123 Main St',  # Optional field
+            'phone_number': '123-456-7890'  # Optional field
+        }
+        create_account_dto = CreateAccountDTO(**data)
+        self.assertEqual(create_account_dto.name, data['name'])
+        self.assertEqual(create_account_dto.email, data['email'])
+        self.assertEqual(create_account_dto.gender, data['gender'])
+        self.assertEqual(create_account_dto.address, data['address'])
+        self.assertEqual(create_account_dto.phone_number, data['phone_number'])
+
+    def test_blank_name(self):
+        """It should raise a ValidationError when the name is blank (empty string)."""
+        data = {
+            'name': '',
+            'email': 'john.doe@example.com'
+        }
+        with self.assertRaises(ValidationError) as context:
+            CreateAccountDTO(**data)
+        self.assertIn(
+            f"String should have at least {NAME_MIN_LENGTH} characters",
+            str(context.exception)
+        )
+
+    def test_invalid_email(self):
+        """It should raise a ValidationError when an invalid email is provided."""
+        data = {
+            'name': 'John Doe',
+            'email': 'invalid_email'  # Invalid email
+        }
+        with self.assertRaises(ValidationError) as context:
+            CreateAccountDTO(**data)
+        self.assertIn(
+            'value is not a valid email address',
+            str(context.exception)
+        )
+
+    def test_missing_required_field(self):
+        """It should raise a ValidationError when a required field (name or email) is missing."""
+        # Missing name and email required field; at least one test case per missing required field.
+        data1 = {
+            'email': 'john.doe@example.com'
+        }
+        with self.assertRaises(ValidationError) as context:
+            CreateAccountDTO(**data1)
+        self.assertIn('Field required', str(context.exception))
+
+        data2 = {
+            'name': 'John Doe'
+        }
+        with self.assertRaises(ValidationError) as context:
+            CreateAccountDTO(**data2)
+        self.assertIn('Field required', str(context.exception))
+
+    def test_to_dict_serialization(self):
+        """It should serialize the DTO to a dictionary using to_dict()."""
+        data = {
+            'name': 'John Doe',
+            'email': 'john.doe@example.com',
+            'gender': 'Male',
+            'address': '123 Main St',
+            'phone_number': '123-456-7890'
+        }
+        create_account_dto = CreateAccountDTO(**data)
+        create_account_dto_dict = create_account_dto.to_dict()
+        self.assertIsInstance(create_account_dto_dict, dict)
+        self.assertEqual(create_account_dto_dict['name'], data['name'])
+        self.assertEqual(create_account_dto_dict['email'], data['email'])
+        self.assertEqual(create_account_dto_dict.get('gender'), data['gender'])
+        self.assertEqual(
+            create_account_dto_dict.get('address'),
+            data['address']
+        )
+        self.assertEqual(
+            create_account_dto_dict.get('phone_number'),
+            data['phone_number']
+        )
 
 
 class TestUpdateAccountDTO(TestCase):
