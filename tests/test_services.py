@@ -11,7 +11,8 @@ from uuid import UUID, uuid4
 
 from service.common.constants import ACCOUNT_CACHE_KEY
 from service.errors import AccountError, AccountNotFoundError
-from service.schemas import AccountDTO, UpdateAccountDTO
+from service.schemas import AccountDTO, UpdateAccountDTO, \
+    PartialUpdateAccountDTO
 from service.services import AccountService
 from tests.factories import AccountFactory
 from tests.test_constants import (
@@ -140,35 +141,43 @@ class TestAccountService(TestCase):
     # READ AN ACCOUNT
     ######################################################################
     @patch('service.services.cache')
+    @patch('service.services.AccountService')
     @patch('service.services.get_jwt_identity')
-    def test_get_account_by_id_with_cache(self,
-                                          mock_get_jwt_identity,
-                                          mock_cache):
+    def test_get_account_by_id_with_cache(
+            self,
+            mock_cache,
+            mock_account_service,
+            mock_get_jwt_identity
+    ):
         """It should return cached account data if available."""
         mock_get_jwt_identity.get_jwt_identity.return_value = TEST_USER_ID
 
         account = AccountFactory()
         cached_value = account, TEST_ETAG
         mock_cache.get.return_value = cached_value
+        # pylint: disable=W0212
+        mock_account_service._get_cached_data.return_value = cached_value
 
         data, etag = AccountService.get_account_by_id(TEST_ACCOUNT_ID)
 
+        mock_account_service._get_cached_data.assert_called_once()
         self.assertEqual(data, account)
         self.assertEqual(etag, TEST_ETAG)
 
     @patch('service.services.generate_etag_hash')
     @patch('service.services.AccountService')
-    @patch('service.services.cache')
     @patch('service.services.get_jwt_identity')
-    def test_get_account_by_id_cache_miss(self,
-                                          mock_get_jwt_identity,
-                                          mock_cache,
-                                          mock_account_service,
-                                          mock_generate_etag_hash):
+    def test_get_account_by_id_cache_miss(
+            self,
+            mock_get_jwt_identity,
+            mock_account_service,
+            mock_generate_etag_hash
+    ):
         """It should fetch the account from the database if not cached and return its data."""
         mock_get_jwt_identity.get_jwt_identity.return_value = TEST_USER_ID
 
-        mock_cache.get.return_value = None
+        # pylint: disable=W0212
+        mock_account_service._get_cached_data.return_value = None
         mock_account_service.get_account_or_404.return_value = self.account
         mock_generate_etag_hash.return_value = TEST_ETAG
 
@@ -179,7 +188,8 @@ class TestAccountService(TestCase):
         )
 
         mock_generate_etag_hash.assert_called_once()
-        mock_cache.set.assert_called_once()
+        # pylint: disable=W0212
+        mock_account_service._get_cached_data.assert_called_once()
         self.assertEqual(etag, TEST_ETAG)
 
     ######################################################################
@@ -211,6 +221,51 @@ class TestAccountService(TestCase):
 
         # Call the method under test.
         result = AccountService.update_by_id(self.account.id, update_dto)
+
+        self.assertIsNotNone(result)
+
+        # Verify that the account is existed
+        mock_account_service.get_account_or_404.assert_called_once()
+        # Verify that the user is authorized
+        mock_account_service.authorize_account.assert_called_once()
+        # Verify that the cache invalidation function was called
+        mock_account_service.invalidate_all_account_pages.assert_called_once()
+        # Verify that AccountDTO.from_orm was called with the updated account
+        mock_account_dto.assert_called_once()
+
+    ######################################################################
+    # PARTIAL UPDATE AN EXISTING ACCOUNT
+    ######################################################################
+    @patch('service.services.AccountDTO')
+    @patch('service.services.AccountService')
+    @patch('service.services.get_jwt_identity')
+    def test_partial_update_by_id_success(
+            self,
+            mock_account_dto,
+            mock_account_service,
+            mock_get_jwt_identity
+    ):
+        """It should partially update an account’s attributes and return its
+        dict representation."""
+        mock_get_jwt_identity.get_jwt_identity.return_value = self.account.user_id
+        mock_account_service.get_account_or_404.return_value = self.account
+        mock_account_service.authorize_account.return_value = True
+        mock_account_service.invalidate_all_account_pages.return_value = None
+        mock_account_dto.from_orm.return_value = self.updated_account_dto
+
+        partial_update_dto = PartialUpdateAccountDTO(
+            name=self.updated_account.name,
+            email=self.updated_account.email,
+            address=self.updated_account.address,
+            gender=self.updated_account.gender,
+            phone_number=self.updated_account.phone_number
+        )
+
+        # Call the method under test.
+        result = AccountService.partial_update_by_id(
+            self.account.id,
+            partial_update_dto
+        )
 
         self.assertIsNotNone(result)
 
@@ -291,3 +346,39 @@ class TestHandleCacheError(TestCase):
             )
 
         self.assertEqual(str(context.exception), error_message)
+
+
+class TestGetCachedData(TestCase):
+    """The _get_cached_data Function Tests."""
+
+    def test_get_cached_data_success(self):
+        """It should return the cached data when cache.get succeeds."""
+        expected_value = 'cached_result'
+
+        with patch("service.services.cache") as mock_cache:
+            mock_cache.get.return_value = expected_value
+
+            # pylint: disable=W0212
+            result = AccountService._get_cached_data(ACCOUNT_CACHE_KEY)
+
+            self.assertEqual(result, expected_value)
+            mock_cache.get.assert_called_once_with(ACCOUNT_CACHE_KEY)
+
+    def test_get_cached_data_error(self):
+        """It should log an error and raise AccountError when cache.get raises an exception."""
+        exception_message = "Simulated cache failure"
+
+        with patch("service.services.cache") as mock_cache, \
+                patch("service.services.app") as mock_app:
+            # Configure cache.get to raise an exception.
+            mock_cache.get.side_effect = AccountError(exception_message)
+
+            with self.assertRaises(AccountError) as context:
+                # pylint: disable=W0212
+                AccountService._get_cached_data(ACCOUNT_CACHE_KEY)
+
+            self.assertIn(exception_message, str(context.exception))
+
+            mock_app.logger.error.assert_called_once()
+            log_call_arg = mock_app.logger.error.call_args[0][0]
+            self.assertIn(exception_message, log_call_arg)

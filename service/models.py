@@ -81,7 +81,7 @@ class PersistentBase:
             db.session.commit()
             logger.debug("Successfully created %s", self)
         except IntegrityError as err:
-            self.session.rollback()
+            db.session.rollback()
             logger.error(
                 "Integrity error during creation of %s: {%s}",
                 self,
@@ -91,7 +91,7 @@ class PersistentBase:
                 f"Integrity error creating record: {err}"
             ) from err
         except Exception as err:  # pylint: disable=W0703
-            self.session.rollback()
+            db.session.rollback()
             logger.error(
                 "Unexpected error during creation of %s: %s",
                 self,
@@ -121,21 +121,21 @@ class PersistentBase:
         """
         logger.info("Partially updating %s", data)
         for key, value in data.items():
-            # Check if attribute exists and is not the primary key
-            if hasattr(self,
-                       key) and key != 'id':
-                try:
-                    setattr(self, key, value)
-                except ValueError as error:  # Handle type mismatches
+            if value is not None:
+                # Check if attribute exists and is not the primary key
+                if hasattr(self, key) and key != 'id':
+                    try:
+                        setattr(self, key, value)
+                    except ValueError as error:  # Handle type mismatches
+                        raise DataValidationError(
+                            f"Invalid value for {key}: {error}"
+                        ) from error
+                elif key == 'id':
+                    raise DataValidationError("Cannot update primary key 'id'")
+                else:
                     raise DataValidationError(
-                        f"Invalid value for {key}: {error}"
-                    ) from error
-            elif key == 'id':
-                raise DataValidationError("Cannot update primary key 'id'")
-            else:
-                raise DataValidationError(
-                    f"Attribute '{key}' is not valid for Account"
-                )
+                        f"Attribute '{key}' is not valid for Account"
+                    )
 
     def update(self) -> 'PersistentBase':
         """Updates an existing record in the database.
@@ -156,7 +156,7 @@ class PersistentBase:
             db.session.commit()
             logger.debug("Successfully updated %s", self)
         except IntegrityError as err:
-            self.session.rollback()
+            db.session.rollback()
             logger.error(
                 "Integrity error during update of %s: {%s}",
                 self,
@@ -166,7 +166,7 @@ class PersistentBase:
                 f"Integrity error updating record: {err}"
             ) from err
         except Exception as err:  # pylint: disable=W0703
-            self.session.rollback()
+            db.session.rollback()
             logger.error(
                 "Unexpected error during update of %s: %s",
                 self,
@@ -198,7 +198,7 @@ class PersistentBase:
             db.session.commit()
             logger.debug("Successfully deleted %s", self)
         except IntegrityError as err:
-            self.session.rollback()
+            db.session.rollback()
             logger.error(
                 "Integrity error during delete of %s: {%s}",
                 self,
@@ -208,7 +208,7 @@ class PersistentBase:
                 f"Integrity error deleting record: {err}"
             ) from err
         except Exception as err:  # pylint: disable=W0703
-            self.session.rollback()
+            db.session.rollback()
             logger.error(
                 "Unexpected error during delete of %s: %s",
                 self,

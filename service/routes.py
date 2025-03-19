@@ -39,13 +39,13 @@ from service.common.utils import (
     count_requests
 )
 from service.models import Account
-from service.schemas import AccountDTO, UpdateAccountDTO
+from service.schemas import AccountDTO, UpdateAccountDTO, \
+    PartialUpdateAccountDTO
 from service.services import AccountService
 
 logger = logging.getLogger(__name__)
 
 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE = 'You are not authorized to modify this resource.'
-ACCOUNT_NOT_FOUND_MESSAGE = "Account with id [{account_id}] could not be found."
 IF_NONE_MATCH_HEADER = 'If-None-Match'
 CACHE_CONTROL_HEADER = 'Cache-Control'
 ROOT_PATH = '/api'
@@ -65,24 +65,6 @@ account_service = AccountService()
 ######################################################################
 # HELPER METHODS
 ######################################################################
-def get_account_or_404(account_id: UUID) -> Account:
-    """Helper function to find an account or return a 404 error.
-
-        Args:
-            account_id: The UUID of the account to check.
-
-        Returns:
-            Found user profile.
-    """
-    account = Account.find(account_id)
-    if not account:
-        abort(
-            status.HTTP_404_NOT_FOUND,
-            ACCOUNT_NOT_FOUND_MESSAGE.format(account_id=account_id)
-        )
-    return account
-
-
 def check_if_user_is_owner(user_id: str, account_user_id: UUID) -> bool:
     """Checks if the given user ID matches the account's user ID, indicating ownership.
 
@@ -532,6 +514,7 @@ def update_by_id(account_id: UUID) -> Response:
 
     update_account_dto = UpdateAccountDTO(**data)
 
+    # Update account with provided JSON payload
     result = account_service.update_by_id(
         account_id,
         update_account_dto
@@ -565,7 +548,7 @@ def update_by_id(account_id: UUID) -> Response:
         'content': {
             'application/json': {
                 'schema': {
-                    '$ref': '#/components/schemas/CreateUpdateAccountDTO'}
+                    '$ref': '#/components/schemas/PartialUpdateAccountDTO'}
             }
         }
     },
@@ -601,31 +584,6 @@ def partial_update_by_id(account_id: UUID) -> Response:
         account_id
     )
 
-    # Get the user identity from the JWT token
-    current_user_id = get_jwt_identity()
-    app.logger.debug('Current user ID: %s', current_user_id)
-
-    # Retrieve the account to be updated or return a 404 error if not found
-    account = get_account_or_404(account_id)
-
-    # Retrieve user roles
-    roles = get_user_roles()
-    app.logger.debug('Roles: %s', roles)
-
-    if ROLE_ADMIN not in roles:
-        # If not ROLE_ADMIN, check ownership шf admin, then skip ownership check.
-        # Check if the logged-in user is the owner of the resource
-        if not check_if_user_is_owner(current_user_id, account.user_id):
-            app.logger.warning(
-                "User %s is not authorized to delete account %s.",
-                current_user_id,
-                account.user_id
-            )
-            abort(
-                status.HTTP_403_FORBIDDEN,
-                FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
-            )
-
     # Get the data payload from the request
     data = request.get_json()
     if not data:
@@ -638,31 +596,16 @@ def partial_update_by_id(account_id: UUID) -> Response:
             'No data provided for update.'
         )
 
+    partial_update_account_dto = PartialUpdateAccountDTO(**data)
+
     # Partially update account with provided JSON payload
-    try:
-        account.partial_update(data)
-        account.update()
-        app.logger.info("Account with id %s updated successfully.", account_id)
-    except Exception as err:  # pylint: disable=W0703
-        app.logger.error(
-            "Unexpected error updating account %s: %s",
-            account_id,
-            err
-        )
-        abort(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "An unexpected error occurred during account updating."
-        )
-
-    # Convert SQLAlchemy model to DTO
-    account_dto = AccountDTO.from_orm(account)
-
-    # Invalidate specific cache key(s)
-    invalidate_all_account_pages()
-    app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
+    result = account_service.partial_update_by_id(
+        account_id,
+        partial_update_account_dto
+    )
 
     # Return the updated account DTO as a JSON response with a 200 status code
-    return make_response(jsonify(account_dto.dict()), status.HTTP_200_OK)
+    return make_response(jsonify(result), status.HTTP_200_OK)
 
 
 ######################################################################
