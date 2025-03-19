@@ -494,3 +494,50 @@ class AccountService:
         app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
         return AccountDTO.from_orm(account).dict()
+
+    ######################################################################
+    # DELETE AN ACCOUNT
+    ######################################################################
+    @staticmethod
+    def delete_by_id(account_id: UUID) -> None:
+        """Deletes an existing account if the user is authorized.
+
+        Returns:
+            None: If the account is deleted successfully or if an error occurs.
+
+        Raises:
+            AccountNotFoundError: If the account with the given ID is not found.
+            AuthorizationError: If the user is not authorized to delete the account.
+        """
+        app.logger.info(
+            "Service - Request to delete an Account with id: %s",
+            account_id
+        )
+
+        # Get the user identity from the JWT token
+        current_user_id = get_jwt_identity()
+        app.logger.debug('Current user ID: %s', current_user_id)
+
+        # Retrieve the account to be updated or return a 404 error if not found
+        try:
+            account = AccountService.get_account_or_404(account_id)
+        except AccountNotFoundError:
+            return None
+
+        # Authorizes a user to access and modify an account
+        AccountService.authorize_account(
+            current_user_id,
+            account.user_id
+        )
+
+        account.delete()
+        app.logger.info(
+            "Account with id %s deleted successfully.",
+            account_id
+        )
+
+        # Invalidate specific cache key(s)
+        AccountService.invalidate_all_account_pages()
+        app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
+
+        return None

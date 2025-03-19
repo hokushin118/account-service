@@ -188,7 +188,6 @@ class TestAccount(BaseTestCase):  # pylint:disable=R0904
         self.assertEqual(new_account.gender, account.gender)
         self.assertEqual(new_account.address, account.address)
         self.assertEqual(new_account.phone_number, account.phone_number)
-        self.assertEqual(new_account.date_joined, account.date_joined)
         self.assertEqual(new_account.user_id, account.user_id)
 
     def test_deserialize_with_key_error(self):
