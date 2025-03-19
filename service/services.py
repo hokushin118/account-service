@@ -8,7 +8,7 @@ hashes for cache validation.
 """
 import logging
 import os
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Optional
 from uuid import UUID
 
 from flask_jwt_extended import get_jwt_identity
@@ -17,10 +17,17 @@ from service import app, cache
 from service.common.constants import ACCOUNT_CACHE_KEY, ROLE_ADMIN
 from service.common.keycloak_utils import get_user_roles
 from service.common.utils import generate_etag_hash
-from service.errors import AccountNotFoundError, AccountError, \
+from service.errors import (
+    AccountNotFoundError,
+    AccountError,
     AccountAuthorizationError
+)
 from service.models import Account
-from service.schemas import AccountDTO, UpdateAccountDTO
+from service.schemas import (
+    AccountDTO,
+    UpdateAccountDTO,
+    PartialUpdateAccountDTO
+)
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +174,28 @@ class AccountService:
             app.logger.error('Error invalidating cache: %s', err)
 
     @staticmethod
+    def _get_cached_data(cache_key: str) -> Optional[Any]:
+        """Retrieves data from the cache, handling potential errors.
+
+        Args:
+            cache_key (str): The key to retrieve from the cache.
+
+        Returns:
+            Optional[Any]: The cached data if successful, or None if an error occurred.
+
+        Raises:
+            AccountError: If there's an issue retrieving data from the cache.
+        """
+        try:
+            return cache.get(cache_key)
+        except Exception as err:  # pylint: disable=W0703
+            error_message = f"Failed to retrieve cached account data due to: {err}"
+            app.logger.error(error_message)
+            raise AccountError(
+                error_message
+            ) from err
+
+    @staticmethod
     def _handle_cache_error(err: Exception, error_type: str) -> None:
         """Handles and logs cache-related errors, then raises an AccountError.
 
@@ -191,13 +220,25 @@ class AccountService:
     def list_accounts(page: int, per_page: int) -> Tuple[Dict[str, Any], str]:
         """Lists accounts with pagination and returns data together with an ETag hash.
 
+        This method retrieves a paginated list of accounts, either from the cache
+        or from the database. It validates the JWT token, obtains the user identity,
+        and generates an ETag hash for the data.
+
         Args:
             page (int): The page number for pagination.
             per_page (int): The number of items per page.
 
         Returns:
-            Tuple[Dict[str, Any], str]: A tuple containing the paginated data as a dictionary
-            and the ETag hash as a string.
+            Tuple[Dict[str, Any], str]: A tuple containing:
+                - A dictionary with paginated account data:
+                    - 'items': A list of account dictionaries.
+                    - 'page': The current page number.
+                    - 'per_page': The number of items per page.
+                    - 'total': The total number of accounts.
+                - The ETag hash as a string.
+
+        Raises:
+            AccountError: If there's an issue retrieving data from the cache or database.
         """
         app.logger.info('Service - Request to list Accounts...')
 
@@ -209,7 +250,7 @@ class AccountService:
         cache_key = f"{ACCOUNT_CACHE_KEY}:{page}:{per_page}"
 
         # Attempt to retrieve cached data
-        cached_data = cache.get(cache_key)
+        cached_data = AccountService._get_cached_data(cache_key)
 
         if cached_data:
             app.logger.debug('Retrieving Accounts (page %d) from cache.', page)
@@ -256,7 +297,24 @@ class AccountService:
     ######################################################################
     @staticmethod
     def get_account_by_id(account_id: UUID) -> (Dict, str):
-        """Retrieves an account by its ID, using cache if available."""
+        """Retrieves an account by its ID, using cache if available.
+
+        This method first validates the JWT token and obtains the user identity.
+        It then attempts to retrieve the account data from the cache. If the data
+        is not found in the cache, it fetches the account from the database,
+        converts it to a DTO, generates an ETag hash, and caches the data.
+
+        Args:
+            account_id (UUID): The ID of the account to retrieve.
+
+        Returns:
+            Tuple[Dict, str]: A tuple containing the account data as a dictionary
+                              and the ETag hash as a string.
+
+        Raises:
+            AccountNotFound: If the account with the given ID is not found in the database.
+            CacheError: If an error occurs while interacting with the cache.
+        """
         app.logger.info(
             "Service - Request to read an Account with id: %s", account_id
         )
@@ -268,7 +326,7 @@ class AccountService:
         cache_key = f"{ACCOUNT_CACHE_KEY}:{account_id}"
 
         # Attempt to retrieve cached data
-        cached_data = cache.get(cache_key)
+        cached_data = AccountService._get_cached_data(cache_key)
 
         if cached_data:
             app.logger.debug('Retrieving Account from cache...')
@@ -324,7 +382,24 @@ class AccountService:
             account_id: UUID,
             update_account_dto: UpdateAccountDTO
     ) -> Dict[str, str]:
-        """Updates an existing account with full data payload."""
+        """Updates an existing account with the provided data payload.
+
+        Retrieves the account, authorizes the user, updates the account
+        with the data from the DTO, invalidates the cache, and returns
+        the updated account as a dictionary.
+
+        Args:
+            account_id (UUID): The ID of the account to update.
+            update_account_dto (UpdateAccountDTO): The DTO containing the update data.
+
+        Returns:
+            Dict[str, str]: A dictionary representation of the updated account.
+
+        Raises:
+            AccountNotFound: If the account with the given ID is not found.
+            AccountAuthorizationError: If the user is not authorized to update the account.
+            DataValidationError: If there's an error updating the account in the database.
+        """
         app.logger.info(
             "Service - Request to update an Account with id: %s",
             account_id
@@ -350,6 +425,64 @@ class AccountService:
         account.gender = update_account_dto.gender
         account.phone_number = update_account_dto.phone_number
 
+        account.update()
+        app.logger.info(
+            "Account with id %s updated successfully.",
+            account_id
+        )
+
+        # Invalidate specific cache key(s)
+        AccountService.invalidate_all_account_pages()
+        app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
+
+        return AccountDTO.from_orm(account).dict()
+
+    ######################################################################
+    # PARTIAL UPDATE AN EXISTING ACCOUNT
+    ######################################################################
+    @staticmethod
+    def partial_update_by_id(
+            account_id: UUID,
+            update_account_dto: PartialUpdateAccountDTO
+    ) -> Dict[str, str]:
+        """Partially updates an existing account with the provided data payload.
+
+        Retrieves the account, authorizes the user, updates the account
+        with the data from the DTO, invalidates the cache, and returns
+        the updated account as a dictionary.
+
+        Args:
+            account_id (UUID): The ID of the account to update.
+            update_account_dto (PartialUpdateAccountDTO): The DTO containing
+            the update data.
+
+        Returns:
+            Dict[str, str]: A dictionary representation of the updated account.
+
+        Raises:
+            AccountNotFound: If the account with the given ID is not found.
+            AccountAuthorizationError: If the user is not authorized to update the account.
+            DataValidationError: If there's an error updating the account in the database.
+        """
+        app.logger.info(
+            "Service - Request to partially update an Account with id: %s",
+            account_id
+        )
+
+        # Get the user identity from the JWT token
+        current_user_id = get_jwt_identity()
+        app.logger.debug('Current user ID: %s', current_user_id)
+
+        # Retrieve the account to be updated or return a 404 error if not found
+        account = AccountService.get_account_or_404(account_id)
+
+        # Authorizes a user to access and modify an account
+        AccountService.authorize_account(
+            current_user_id,
+            account.user_id
+        )
+
+        account.partial_update(update_account_dto.to_dict())
         account.update()
         app.logger.info(
             "Account with id %s updated successfully.",
