@@ -8,7 +8,6 @@ import uuid
 from datetime import date
 from typing import Any, Dict, List, Optional
 
-from dateutil import parser
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
@@ -389,7 +388,6 @@ class Account(db.Model, PersistentBase):
             self.gender = data.get('gender')
             self.address = data.get('address')  # Address is optional
             self.phone_number = data.get('phone_number')
-            self.date_joined = parser.parse(str(data['date_joined'])).date()
             user_id_data = data['user_id']
             if isinstance(user_id_data, uuid.UUID):
                 self.user_id = user_id_data

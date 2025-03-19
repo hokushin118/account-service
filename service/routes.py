@@ -33,7 +33,7 @@ from service.common.constants import (
     ROLE_USER, ROLE_ADMIN,
     ACCOUNT_CACHE_KEY
 )
-from service.common.keycloak_utils import has_roles, get_user_roles
+from service.common.keycloak_utils import has_roles
 from service.common.utils import (
     check_content_type,
     count_requests
@@ -45,7 +45,6 @@ from service.services import AccountService
 
 logger = logging.getLogger(__name__)
 
-FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE = 'You are not authorized to modify this resource.'
 IF_NONE_MATCH_HEADER = 'If-None-Match'
 CACHE_CONTROL_HEADER = 'Cache-Control'
 ROOT_PATH = '/api'
@@ -65,33 +64,6 @@ account_service = AccountService()
 ######################################################################
 # HELPER METHODS
 ######################################################################
-def check_if_user_is_owner(user_id: str, account_user_id: UUID) -> bool:
-    """Checks if the given user ID matches the account's user ID, indicating ownership.
-
-    This method efficiently determines if a user, identified by their user ID, is the
-    owner of an account. It retrieves the account associated with the
-    provided user ID and directly compares the account's user ID with the
-    provided account user ID.
-
-    Args:
-        user_id (str): The user ID of the potential owner (as a string).
-        account_user_id (UUID): The UUID of the account's user ID to verify ownership.
-
-    Returns:
-        bool: True if the user is the owner of the account, False otherwise.
-    """
-    try:
-        account = Account.find_by_user_id(UUID(user_id))
-    except ValueError as err:
-        logger.error("Invalid UUID string provided: %s", err)
-        return False
-    except Exception as err:  # pylint: disable=W0703
-        logger.error("An error occurred: %s", err)
-        return False
-
-    return account is not None and account.user_id == account_user_id
-
-
 def invalidate_all_account_pages() -> None:
     """Invalidate all cached results.
 
@@ -650,52 +622,8 @@ def delete_by_id(account_id: UUID) -> Response:
         "Request to delete an Account with id: %s", account_id
     )
 
-    # Get the user identity from the JWT token
-    current_user_id = get_jwt_identity()
-    app.logger.debug('Current user ID: %s', current_user_id)
-
-    # Retrieve user roles
-    roles = get_user_roles()
-    app.logger.debug('Roles: %s', roles)
-
-    # Attempt to find the account by its ID
-    account = Account.find(account_id)
-
-    if not account:
-        app.logger.warning("Account with id %s not found.", account_id)
-        return make_response("", status.HTTP_204_NO_CONTENT)
-
-    if ROLE_ADMIN not in roles:
-        # If not ROLE_ADMIN, check ownership шf admin, then skip ownership check.
-        # Check if the logged-in user is the owner of the resource
-        if not check_if_user_is_owner(current_user_id, account.user_id):
-            app.logger.warning(
-                "User %s is not authorized to delete account %s.",
-                current_user_id,
-                account.user_id
-            )
-            abort(
-                status.HTTP_403_FORBIDDEN,
-                FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE
-            )
-
     # Delete the account
-    try:
-        account.delete()
-        app.logger.info("Account with id %s deleted successfully.", account_id)
-    except Exception as err:  # pylint: disable=W0703
-        app.logger.error(
-            "Unexpected error deleting account %s: %s",
-            account_id,
-            err
-        )
-        abort(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "An unexpected error occurred during account deletion."
-        )
+    account_service.delete_by_id(account_id)
 
-    # Invalidate specific cache key(s)
-    invalidate_all_account_pages()
-    app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
-
-    return make_response("", status.HTTP_204_NO_CONTENT)
+    # Return the empty body with a 204 status code
+    return make_response('', status.HTTP_204_NO_CONTENT)

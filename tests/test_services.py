@@ -5,14 +5,22 @@ Test cases can be run with:
   nosetests -v --with-spec --spec-color
   coverage report -m
 """
+import logging
 from unittest import TestCase
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
 from service.common.constants import ACCOUNT_CACHE_KEY
-from service.errors import AccountError, AccountNotFoundError
-from service.schemas import AccountDTO, UpdateAccountDTO, \
+from service.errors import (
+    AccountError,
+    AccountNotFoundError,
+    AccountAuthorizationError
+)
+from service.schemas import (
+    AccountDTO,
+    UpdateAccountDTO,
     PartialUpdateAccountDTO
+)
 from service.services import AccountService
 from tests.factories import AccountFactory
 from tests.test_constants import (
@@ -23,6 +31,8 @@ from tests.test_constants import (
     TEST_TOTAL,
     TEST_USER_ID, TEST_ACCOUNT_ID
 )
+
+logger = logging.getLogger(__name__)
 
 
 ######################################################################
@@ -195,6 +205,7 @@ class TestAccountService(TestCase):
     ######################################################################
     # UPDATE AN EXISTING ACCOUNT
     ######################################################################
+    @patch('service.services.AccountService.invalidate_all_account_pages')
     @patch('service.services.AccountDTO')
     @patch('service.services.AccountService')
     @patch('service.services.get_jwt_identity')
@@ -202,14 +213,16 @@ class TestAccountService(TestCase):
             self,
             mock_account_dto,
             mock_account_service,
-            mock_get_jwt_identity
+            mock_get_jwt_identity,
+            mock_invalidate_cache
     ):
         """It should update an account’s attributes and return its dict representation."""
-        mock_get_jwt_identity.get_jwt_identity.return_value = self.account.user_id
-        mock_account_service.get_account_or_404.return_value = self.account
-        mock_account_service.authorize_account.return_value = True
-        mock_account_service.invalidate_all_account_pages.return_value = None
-        mock_account_dto.from_orm.return_value = self.updated_account_dto
+        account_id = uuid4()
+        dummy_account = DummyAccount(account_id, account_id)
+        mock_account_service.get_account_or_404.return_value = dummy_account
+
+        # Simulate the current user retrieved from the JWT token
+        mock_get_jwt_identity.return_value = TEST_USER_ID
 
         update_dto = UpdateAccountDTO(
             name=self.updated_account.name,
@@ -232,10 +245,96 @@ class TestAccountService(TestCase):
         mock_account_service.invalidate_all_account_pages.assert_called_once()
         # Verify that AccountDTO.from_orm was called with the updated account
         mock_account_dto.assert_called_once()
+        # Verify that cache invalidation was called
+        mock_invalidate_cache.assert_called_once()
+
+    @patch('service.services.get_jwt_identity')
+    @patch('service.services.AccountService')
+    def test_update_by_id_account_not_found(
+            self,
+            mock_account_service,
+            mock_get_jwt_identity
+    ):
+        """It should raise an AccountNotFoundError if the account is not found."""
+        account_id = uuid4()
+
+        # Simulate that get_account_or_404 raises an AccountNotFoundError
+        mock_account_service.get_account_or_404.side_effect = (
+            AccountNotFoundError(
+                account_id,
+                f"Account with id {account_id} could not be found."
+            )
+        )
+        mock_get_jwt_identity.return_value = TEST_USER_ID
+
+        update_dto = UpdateAccountDTO(
+            name=self.updated_account.name,
+            email=self.updated_account.email,
+            address=self.updated_account.address,
+            gender=self.updated_account.gender,
+            phone_number=self.updated_account.phone_number
+        )
+
+        with self.assertRaises(AccountNotFoundError):
+            AccountService.update_by_id(
+                account_id,
+                update_dto
+            )
+
+        mock_account_service.get_account_or_404.assert_called_once_with(
+            account_id
+        )
+
+    @patch('service.services.get_jwt_identity')
+    @patch('service.services.AccountService')
+    def test_update_by_id_unauthorized(
+            self,
+            mock_account_service,
+            mock_get_jwt_identity
+    ):
+        """It should raise an AccountAuthorizationError if the user is not
+        authorized to update the account."""
+        account_id = uuid4()
+        account_user_id = uuid4()
+        dummy_account = DummyAccount(account_id, account_user_id)
+        # Simulate successful account retrieval.
+        mock_account_service.get_account_or_404.return_value = dummy_account
+
+        # Simulate current user with an id that does not match the account's owner
+        mock_get_jwt_identity.return_value = TEST_USER_ID
+
+        # Simulate that authorize_account raises an AccountAuthorizationError
+        mock_account_service.authorize_account.side_effect = (
+            AccountAuthorizationError(
+                f"Account with user id {account_user_id} is not authorized to perform this action."
+            ))
+
+        update_dto = UpdateAccountDTO(
+            name=self.updated_account.name,
+            email=self.updated_account.email,
+            address=self.updated_account.address,
+            gender=self.updated_account.gender,
+            phone_number=self.updated_account.phone_number
+        )
+
+        with self.assertRaises(AccountAuthorizationError):
+            AccountService.update_by_id(
+                account_id,
+                update_dto
+            )
+
+        mock_account_service.get_account_or_404.assert_called_once_with(
+            account_id
+        )
+        mock_account_service.authorize_account.assert_called_once_with(
+            TEST_USER_ID,
+            dummy_account.user_id
+        )
 
     ######################################################################
     # PARTIAL UPDATE AN EXISTING ACCOUNT
     ######################################################################
+    @patch('service.services.AccountService.invalidate_all_account_pages')
     @patch('service.services.AccountDTO')
     @patch('service.services.AccountService')
     @patch('service.services.get_jwt_identity')
@@ -243,14 +342,18 @@ class TestAccountService(TestCase):
             self,
             mock_account_dto,
             mock_account_service,
-            mock_get_jwt_identity
+            mock_get_jwt_identity,
+            mock_invalidate_cache
     ):
         """It should partially update an account’s attributes and return its
         dict representation."""
-        mock_get_jwt_identity.get_jwt_identity.return_value = self.account.user_id
-        mock_account_service.get_account_or_404.return_value = self.account
-        mock_account_service.authorize_account.return_value = True
-        mock_account_service.invalidate_all_account_pages.return_value = None
+        account_id = uuid4()
+        dummy_account = DummyAccount(account_id, account_id)
+        mock_account_service.get_account_or_404.return_value = dummy_account
+
+        # Simulate the current user retrieved from the JWT token
+        mock_get_jwt_identity.return_value = TEST_USER_ID
+
         mock_account_dto.from_orm.return_value = self.updated_account_dto
 
         partial_update_dto = PartialUpdateAccountDTO(
@@ -277,22 +380,254 @@ class TestAccountService(TestCase):
         mock_account_service.invalidate_all_account_pages.assert_called_once()
         # Verify that AccountDTO.from_orm was called with the updated account
         mock_account_dto.assert_called_once()
+        # Verify that cache invalidation was called
+        mock_invalidate_cache.assert_called_once()
+
+    @patch('service.services.get_jwt_identity')
+    @patch('service.services.AccountService')
+    def test_partial_update_by_id_account_not_found(
+            self,
+            mock_account_service,
+            mock_get_jwt_identity
+    ):
+        """It should raise an AccountNotFoundError if the account is not found."""
+        account_id = uuid4()
+
+        # Simulate that get_account_or_404 raises an AccountNotFoundError
+        mock_account_service.get_account_or_404.side_effect = (
+            AccountNotFoundError(
+                account_id,
+                f"Account with id {account_id} could not be found."
+            )
+        )
+        mock_get_jwt_identity.return_value = TEST_USER_ID
+
+        partial_update_dto = PartialUpdateAccountDTO(
+            name=self.updated_account.name,
+            email=self.updated_account.email,
+            address=self.updated_account.address,
+            gender=self.updated_account.gender,
+            phone_number=self.updated_account.phone_number
+        )
+
+        with self.assertRaises(AccountNotFoundError):
+            AccountService.partial_update_by_id(
+                account_id,
+                partial_update_dto
+            )
+
+        mock_account_service.get_account_or_404.assert_called_once_with(
+            account_id
+        )
+
+    @patch('service.services.get_jwt_identity')
+    @patch('service.services.AccountService')
+    def test_partial_update_by_id_unauthorized(
+            self,
+            mock_account_service,
+            mock_get_jwt_identity
+    ):
+        """It should raise an AccountAuthorizationError if the user is not
+        authorized to partially update the account."""
+        account_id = uuid4()
+        account_user_id = uuid4()
+        dummy_account = DummyAccount(account_id, account_user_id)
+        # Simulate successful account retrieval.
+        mock_account_service.get_account_or_404.return_value = dummy_account
+
+        # Simulate current user with an id that does not match the account's owner
+        mock_get_jwt_identity.return_value = TEST_USER_ID
+
+        # Simulate that authorize_account raises an AccountAuthorizationError
+        mock_account_service.authorize_account.side_effect = (
+            AccountAuthorizationError(
+                f"Account with user id {account_user_id} is not authorized to perform this action."
+            ))
+
+        partial_update_dto = PartialUpdateAccountDTO(
+            name=self.updated_account.name,
+            email=self.updated_account.email,
+            address=self.updated_account.address,
+            gender=self.updated_account.gender,
+            phone_number=self.updated_account.phone_number
+        )
+
+        with self.assertRaises(AccountAuthorizationError):
+            AccountService.partial_update_by_id(
+                account_id,
+                partial_update_dto
+            )
+
+        mock_account_service.get_account_or_404.assert_called_once_with(
+            account_id
+        )
+        mock_account_service.authorize_account.assert_called_once_with(
+            TEST_USER_ID,
+            dummy_account.user_id
+        )
+
+    ######################################################################
+    # DELETE AN ACCOUNT
+    ######################################################################
+    @patch('service.services.AccountService.invalidate_all_account_pages')
+    @patch('service.services.get_jwt_identity')
+    @patch('service.services.AccountService')
+    def test_delete_by_id_success(
+            self,
+            mock_account_service,
+            mock_get_jwt_identity,
+            mock_invalidate_cache
+    ):
+        """It should delete the account if the user is authorized and invalidate the cache."""
+        # Create a dummy account id and dummy account instance
+        account_id = uuid4()
+        dummy_account = DummyAccount(account_id, account_id)
+        mock_account_service.get_account_or_404.return_value = dummy_account
+
+        # Simulate the current user retrieved from the JWT token
+        mock_get_jwt_identity.return_value = TEST_USER_ID
+
+        # Call the delete_by_id static method
+        AccountService.delete_by_id(account_id)
+
+        # Verify that the JWT identity was obtained
+        mock_get_jwt_identity.assert_called_once()
+
+        # Verify that get_account_or_404 was called with the correct account_id
+        mock_account_service.get_account_or_404.assert_called_once_with(
+            account_id
+        )
+
+        # Verify that the account authorization was performed
+        mock_account_service.authorize_account.assert_called_once_with(
+            TEST_USER_ID,
+            dummy_account.user_id
+        )
+
+        # Verify that the delete() method was called on the dummy account
+        self.assertTrue(dummy_account.deleted)
+
+        # Verify that cache invalidation was called
+        mock_invalidate_cache.assert_called_once()
+
+    @patch('service.services.get_jwt_identity')
+    @patch('service.services.AccountService')
+    def test_delete_by_id_account_not_found(
+            self,
+            mock_account_service,
+            mock_get_jwt_identity
+    ):
+        """It should not raise an AccountNotFoundError if the account is not
+        found."""
+        account_id = uuid4()
+
+        # Simulate that get_account_or_404 raises an AccountNotFoundError
+        mock_account_service.get_account_or_404.side_effect = (
+            AccountNotFoundError(
+                account_id,
+                f"Account with id {account_id} could not be found."
+            )
+        )
+        mock_get_jwt_identity.return_value = TEST_USER_ID
+
+        # Call the delete_by_id static method
+        AccountService.delete_by_id(account_id)
+
+        mock_account_service.get_account_or_404.assert_called_once_with(
+            account_id
+        )
+
+    @patch('service.services.get_jwt_identity')
+    @patch('service.services.AccountService')
+    def test_delete_by_id_unauthorized(
+            self,
+            mock_account_service,
+            mock_get_jwt_identity
+    ):
+        """It should raise an AccountAuthorizationError if the user is not authorized to delete
+        the account."""
+        account_id = uuid4()
+        account_user_id = uuid4()
+        dummy_account = DummyAccount(account_id, account_user_id)
+        # Simulate successful account retrieval.
+        mock_account_service.get_account_or_404.return_value = dummy_account
+
+        # Simulate current user with an id that does not match the account's owner
+        mock_get_jwt_identity.return_value = TEST_USER_ID
+
+        # Simulate that authorize_account raises an AccountAuthorizationError
+        mock_account_service.authorize_account.side_effect = (
+            AccountAuthorizationError(
+                f"Account with user id {account_user_id} is not authorized to perform this action."
+            ))
+
+        with self.assertRaises(AccountAuthorizationError):
+            AccountService.delete_by_id(account_id)
+
+        mock_account_service.get_account_or_404.assert_called_once_with(
+            account_id
+        )
+        mock_account_service.authorize_account.assert_called_once_with(
+            TEST_USER_ID,
+            dummy_account.user_id
+        )
 
 
 ######################################################################
 # HELPER METHODS
 ######################################################################
 class DummyAccount:
-    """
-    DummyAccount is a simple class used for testing purposes.
+    """DummyAccount is a simple class used for testing purposes.
 
     It should encapsulate basic account attributes needed during tests,
     including an account identifier and a test user identifier.
     """
 
-    def __init__(self, account_id: UUID) -> None:
+    def __init__(
+            self,
+            account_id: UUID,
+            user_id: UUID
+    ) -> None:
+        """Initializes a new DummyAccount instance.
+
+        Args:
+            account_id (UUID): The unique identifier for the dummy account.
+            user_id (UUID): The unique identifier for the test user associated with the account.
+        """
         self.id = account_id  # pylint: disable=C0103:
-        self.user_id = TEST_USER_ID
+        self.user_id = user_id
+        self.partial_updated = False
+        self.updated = False
+        self.deleted = False
+
+    def partial_update(
+            self,
+            data: dict
+    ) -> None:
+        """Simulates the partial update of the dummy account.
+
+        Sets the `partial_updated` flag to True to indicate that the account has been
+        partially updated. Logs the data used for the update.
+
+        Args:
+            data (dict): A dictionary containing the data used for the partial update.
+        """
+        logger.debug("Partial update called with data: %s", data)
+        self.partial_updated = True
+
+    def update(self) -> None:
+        """Simulates the update of the dummy account.
+
+        Sets the `updated` flag to True to indicate that the account has been updated.
+        """
+        self.updated = True
+
+    def delete(self) -> None:
+        """Simulates the deletion of the dummy account.
+
+        Sets the `deleted` flag to True to indicate that the account has been deleted.
+        """
+        self.deleted = True
 
 
 class TestGetAccountOr404(TestCase):
@@ -300,12 +635,14 @@ class TestGetAccountOr404(TestCase):
 
     def setUp(self):
         """It should set up a dummy account ID for testing."""
-        self.account_id = uuid4()
+        test_id = uuid4()
+        self.account_id = test_id
+        self.account_user_id = test_id
 
     @patch('service.services.Account')
     def test_get_account_success(self, mock_account):
         """It should return the account when a matching account is found."""
-        dummy_account = DummyAccount(self.account_id)
+        dummy_account = DummyAccount(self.account_id, self.account_user_id)
         mock_account.find.return_value = dummy_account
 
         result = AccountService.get_account_or_404(self.account_id)
@@ -382,3 +719,45 @@ class TestGetCachedData(TestCase):
             mock_app.logger.error.assert_called_once()
             log_call_arg = mock_app.logger.error.call_args[0][0]
             self.assertIn(exception_message, log_call_arg)
+
+
+class TestCheckIfUserIsOwner(TestCase):
+    """The check_if_user_is_owner Function Tests."""
+
+    def setUp(self):
+        """It should set up valid user IDs for testing."""
+        # Prepare a valid UUID string for tests.
+        self.valid_uuid_str = str(uuid4())
+        self.valid_uuid = UUID(self.valid_uuid_str)
+
+    def test_is_owner_true(self):
+        """It should return True when the account exists and the user_id matches
+        the account's user_id."""
+        # Create a dummy account with the same user_id.
+        dummy_account = DummyAccount(self.valid_uuid, self.valid_uuid)
+        with patch(
+                'service.models.Account.find_by_user_id',
+                return_value=dummy_account
+        ):
+            is_owner = AccountService.check_if_user_is_owner(
+                self.valid_uuid_str,
+                self.valid_uuid
+            )
+            self.assertTrue(is_owner)
+
+    def test_is_owner_false_due_to_different_account(self):
+        """It should return False when the account exists but the user_id does not match."""
+        # Create a dummy account with a different user_id.
+        dummy_account = DummyAccount(
+            self.valid_uuid,
+            uuid4()
+        )  # Different UUID
+        with patch(
+                'service.models.Account.find_by_user_id',
+                return_value=dummy_account
+        ):
+            is_owner = AccountService.check_if_user_is_owner(
+                self.valid_uuid_str,
+                self.valid_uuid
+            )
+            self.assertFalse(is_owner)
