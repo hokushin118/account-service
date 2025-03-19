@@ -241,7 +241,7 @@ def info() -> Response:
         'content': {
             'application/json': {
                 'schema': {
-                    '$ref': '#/components/schemas/CreateUpdateAccountDTO'}
+                    '$ref': '#/components/schemas/CreateAccountDTO'}
             }
         }
     },
