@@ -131,6 +131,27 @@ def register_error_handlers(app: Flask) -> None:
         )
         return handle_forbidden(error)
 
+    @app.errorhandler(ValueError)
+    def handle_value_error(
+            error: ValueError
+    ) -> Tuple[Dict[str, Any], int]:
+        """Handles ValueError exceptions.
+
+        This error handler catches ValueError exceptions
+        and returns a 400 Bad Request response.
+
+        Args:
+            error: The ValueError instance.
+
+        Returns:
+            A tuple containing the error response (a dictionary) and the
+            HTTP status code (400).
+        """
+        app.logger.debug(
+            'General Account error handler invoked...'
+        )
+        return handle_bad_request(error)
+
     @app.errorhandler(status.HTTP_400_BAD_REQUEST)
     def handle_bad_request(
             error: Exception

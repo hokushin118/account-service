@@ -9,8 +9,9 @@ from uuid import UUID
 
 from pydantic import (
     BaseModel,
-    validator,
-    EmailStr, constr
+    field_validator,
+    EmailStr,
+    constr
 )
 
 from service.common.constants import (
@@ -20,7 +21,65 @@ from service.common.constants import (
     PHONE_MAX_LENGTH, GENDER_MAX_LENGTH
 )
 
+ALLOWED_GENDERS = {'male', 'female', 'other'}
 
+
+######################################################################
+# VALIDATION METHODS
+######################################################################
+def validate_name_value(value: str) -> str:
+    """Validates the name string, ensuring it is not blank.
+
+    This function checks if the provided name string is empty or None.
+    If the name is valid (not blank), it is returned as is.
+
+    Args:
+        value: The name string to validate.
+
+    Returns:
+        The validated name string.
+
+    Raises:
+        ValueError: If the name is blank (empty or None).
+    """
+    if not value:
+        raise ValueError(
+            'Name can not be blank'
+        )
+    return value
+
+
+def validate_gender_value(value: Optional[str]) -> Optional[str]:
+    """Validates the gender field against a predefined set of allowed values (case-insensitive).
+
+    This validator checks if the provided gender value is one of the allowed values
+    defined in the `ALLOWED_GENDERS` set, ignoring case. If the value is `None`, it is
+    considered valid and returned as is. If the value is not in the allowed set, a
+    `ValueError` is raised.
+
+    Args:
+        value: The gender value to validate (can be `None`).
+
+    Returns:
+        The validated gender value (can be `None`).
+
+    Raises:
+        ValueError: If the gender value is not in the `ALLOWED_GENDERS` set.
+    """
+    if value is not None:
+        lower_value = value.lower()
+        lower_allowed_genders = {gender.lower() for gender in ALLOWED_GENDERS}
+        if lower_value not in lower_allowed_genders:
+            raise ValueError(
+                f"Invalid gender value: '{value}'. Allowed values are: "
+                f"{ALLOWED_GENDERS} (case-insensitive)"
+            )
+    return value
+
+
+######################################################################
+# SCHEMAS
+######################################################################
 class AccountDTO(BaseModel):
     """Data Transfer Object for an account."""
     id: UUID  # UUID
@@ -35,7 +94,7 @@ class AccountDTO(BaseModel):
     date_joined: date
     user_id: UUID
 
-    @validator('name')
+    @field_validator('name')
     # pylint: disable=no-self-argument
     def validate_name(cls, value: str) -> str:
         """Validates the name.
@@ -49,14 +108,30 @@ class AccountDTO(BaseModel):
         Raises:
             ValueError: If the name is blank (empty or None).
         """
-        if not value:
-            raise ValueError(
-                'Name can not be blank'
-            )
-        return value
+        return validate_name_value(value)
 
-    @validator('date_joined')
-    # pylint: disable=no-self-argument
+    @field_validator('gender')
+    # pylint: disable=E0213
+    def validate_gender(
+            cls,
+            value: Optional[str]
+    ) -> Optional[str]:
+        """Validates the gender field against a predefined set of allowed values.
+
+        Args:
+            cls: The class itself (used for accessing class-level attributes).
+            value: The gender value to validate (can be `None`).
+
+        Returns:
+            The validated gender value (can be `None`).
+
+        Raises:
+            ValueError: If the gender value is not in the `ALLOWED_GENDERS` set.
+        """
+        return validate_gender_value(value)
+
+    @field_validator('date_joined')
+    # pylint: disable=E0213
     def validate_date_joined(cls, value: date) -> date:
         """Validates date_joined (ISO 8601 format).
 
@@ -107,8 +182,8 @@ class CreateAccountDTO(BaseModel):
     address: Optional[constr(max_length=ADDRESS_MAX_LENGTH)] = None
     phone_number: Optional[constr(max_length=PHONE_MAX_LENGTH)] = None
 
-    @validator('name')
-    # pylint: disable=no-self-argument
+    @field_validator('name')
+    # pylint: disable=E0213
     def validate_name(cls, value: str) -> str:
         """Validates the name.
 
@@ -121,11 +196,27 @@ class CreateAccountDTO(BaseModel):
         Raises:
             ValueError: If the name is blank (empty or None).
         """
-        if not value:
-            raise ValueError(
-                'Name can not be blank'
-            )
-        return value
+        return validate_name_value(value)
+
+    @field_validator('gender')
+    # pylint: disable=E0213
+    def validate_gender(
+            cls,
+            value: Optional[str]
+    ) -> Optional[str]:
+        """Validates the gender field against a predefined set of allowed values.
+
+        Args:
+            cls: The class itself (used for accessing class-level attributes).
+            value: The gender value to validate (can be `None`).
+
+        Returns:
+            The validated gender value (can be `None`).
+
+        Raises:
+            ValueError: If the gender value is not in the `ALLOWED_GENDERS` set.
+        """
+        return validate_gender_value(value)
 
     def to_dict(self) -> dict:
         """Serializes an CreateAccountDTO into a dictionary.
@@ -156,8 +247,8 @@ class UpdateAccountDTO(BaseModel):
     address: Optional[constr(max_length=ADDRESS_MAX_LENGTH)] = None
     phone_number: Optional[constr(max_length=PHONE_MAX_LENGTH)] = None
 
-    @validator('name')
-    # pylint: disable=no-self-argument
+    @field_validator('name')
+    # pylint: disable=E0213
     def validate_name(cls, value: str) -> str:
         """Validates the name.
 
@@ -170,11 +261,27 @@ class UpdateAccountDTO(BaseModel):
         Raises:
             ValueError: If the name is blank (empty or None).
         """
-        if not value:
-            raise ValueError(
-                'Name can not be blank'
-            )
-        return value
+        return validate_name_value(value)
+
+    @field_validator('gender')
+    # pylint: disable=E0213
+    def validate_gender(
+            cls,
+            value: Optional[str]
+    ) -> Optional[str]:
+        """Validates the gender field against a predefined set of allowed values.
+
+        Args:
+            cls: The class itself (used for accessing class-level attributes).
+            value: The gender value to validate (can be `None`).
+
+        Returns:
+            The validated gender value (can be `None`).
+
+        Raises:
+            ValueError: If the gender value is not in the `ALLOWED_GENDERS` set.
+        """
+        return validate_gender_value(value)
 
     def to_dict(self) -> dict:
         """Serializes an UpdateAccountDTO into a dictionary.
@@ -204,6 +311,26 @@ class PartialUpdateAccountDTO(BaseModel):
     gender: Optional[constr(max_length=GENDER_MAX_LENGTH)] = None
     address: Optional[constr(max_length=ADDRESS_MAX_LENGTH)] = None
     phone_number: Optional[constr(max_length=PHONE_MAX_LENGTH)] = None
+
+    @field_validator('gender')
+    # pylint: disable=E0213
+    def validate_gender(
+            cls,
+            value: Optional[str]
+    ) -> Optional[str]:
+        """Validates the gender field against a predefined set of allowed values.
+
+        Args:
+            cls: The class itself (used for accessing class-level attributes).
+            value: The gender value to validate (can be `None`).
+
+        Returns:
+            The validated gender value (can be `None`).
+
+        Raises:
+            ValueError: If the gender value is not in the `ALLOWED_GENDERS` set.
+        """
+        return validate_gender_value(value)
 
     def to_dict(self) -> dict:
         """Serializes an PartialUpdateAccountDTO into a dictionary.

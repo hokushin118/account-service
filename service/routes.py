@@ -97,7 +97,8 @@ def audit_log(function: Callable) -> Callable:
     'operationId': 'getIndex',
     'tags': ['General'],
     'summary': 'Returns a welcome message for the Account API',
-    'description': 'Provides a basic welcome message for the Account API.',
+    'description': 'Provides a basic welcome message for the Account API.</br></br>'
+                   'This endpoint is accessible to anonymous users.',
     'responses': {
         200: {'description': 'OK'},
         # For any other internal errors
@@ -123,7 +124,8 @@ def index() -> Response:
     'tags': ['General'],
     'summary': 'Returns the health status of the service',
     'description': 'Checks the overall health of the service. Currently, '
-                   'it always returns a 200 OK status with a "status: UP" message.',
+                   'it always returns a 200 OK status with a "status: UP" message.</br></br>'
+                   'This endpoint is accessible to anonymous users.',
     'responses': {
         200: {'description': 'OK',
               'content': {
@@ -152,7 +154,8 @@ def health() -> Response:
     'tags': ['General'],
     'summary': 'Returns information about the service',
     'description': 'Provides information about the service, including its '
-                   'name, version, and uptime.',
+                   'name, version, and uptime.</br></br>'
+                   'This endpoint is accessible to anonymous users.',
     'responses': {
         200: {'description': 'OK'},
         # For any other internal errors
@@ -395,7 +398,9 @@ def find_by_id(account_id: UUID) -> Response:
     'tags': ['Accounts V1'],
     'summary': 'Update Account by ID',
     'description': 'Updates an existing account with the provided JSON data.</br></br>'
-                   'Only authenticated users can access this endpoint.',
+                   'Only authenticated users can access this endpoint.</br></br>'
+                   'A user with the role **ROLE_USER** can update only their own account.</br>'
+                   'A user with the role **ROLE_ADMIN** can update any account.',
     'security': [{'oauth2': ['openid', 'profile', 'email']}],
     'parameters': [
         {
@@ -476,7 +481,9 @@ def update_by_id(account_id: UUID) -> Response:
     'tags': ['Accounts V1'],
     'summary': 'Partial Update Account by ID',
     'description': 'Partially updates an existing account with the provided JSON data.</br></br>'
-                   'Only authenticated users can access this endpoint.',
+                   'Only authenticated users can access this endpoint.</br></br>'
+                   'A user with the role **ROLE_USER** can update only their own account.</br>'
+                   'A user with the role **ROLE_ADMIN** can update any account.',
     'security': [{'oauth2': ['openid', 'profile', 'email']}],
     'parameters': [
         {
@@ -561,7 +568,9 @@ def partial_update_by_id(account_id: UUID) -> Response:
     'tags': ['Accounts V1'],
     'summary': 'Delete Account by ID',
     'description': 'Deletes an account based on its unique identifier.</br></br>'
-                   'Only authenticated users can access this endpoint.',
+                   'Only authenticated users can access this endpoint.</br></br>'
+                   'A user with the role **ROLE_USER** can delete only their own account.</br>'
+                   'A user with the role **ROLE_ADMIN** can delete any account.',
     'security': [{'oauth2': ['openid', 'profile', 'email']}],
     'parameters': [
         {

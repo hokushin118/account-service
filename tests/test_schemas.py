@@ -11,7 +11,8 @@ from pydantic import ValidationError
 
 from service import NAME_MIN_LENGTH, NAME_MAX_LENGTH
 from service.schemas import AccountDTO, PartialUpdateAccountDTO, \
-    UpdateAccountDTO, CreateAccountDTO
+    UpdateAccountDTO, CreateAccountDTO, validate_gender_value, ALLOWED_GENDERS, \
+    validate_name_value
 from tests.factories import AccountFactory
 
 
@@ -433,3 +434,55 @@ class TestPartialUpdateAccountDTO(TestCase):
             partial_update_account_dto_dict.get('phone_number'),
             data['phone_number']
         )
+
+
+######################################################################
+# VALIDATION METHODS TEST CASES
+######################################################################
+class TestValidateNameValue(TestCase):
+    """The validate_name_value Function Tests."""
+
+    def test_valid_name_returns_input(self):
+        """It should return the name if a valid non-empty name is provided."""
+        valid_name = 'John Doe'
+        result = validate_name_value(valid_name)
+        self.assertEqual(result, valid_name)
+
+    def test_blank_name_raises_value_error(self):
+        """It should raise ValueError if a blank name is provided."""
+        with self.assertRaises(ValueError) as context:
+            validate_name_value('')
+        self.assertIn('Name can not be blank', str(context.exception))
+
+
+class TestValidateGenderValue(TestCase):
+    """The validate_gender_value Function Tests."""
+
+    def test_none_value_returns_none(self):
+        """It should return None when passed None."""
+        self.assertIsNone(validate_gender_value(None))
+
+    def test_valid_gender_lower(self):
+        """It should return the input if a valid gender in lower case is provided."""
+        # Assume ALLOWED_GENDERS includes "Male", "Female", "Other"
+        valid_input = 'male'
+        self.assertEqual(validate_gender_value(valid_input), valid_input)
+
+    def test_valid_gender_upper(self):
+        """It should return the input if a valid gender in upper case is provided."""
+        valid_input = 'FEMALE'
+        self.assertEqual(validate_gender_value(valid_input), valid_input)
+
+    def test_valid_gender_mixed_case(self):
+        """It should return the input if a valid gender in mixed case is provided."""
+        valid_input = 'Other'
+        self.assertEqual(validate_gender_value(valid_input), valid_input)
+
+    def test_invalid_gender_raises_value_error(self):
+        """It should raise a ValueError when an invalid gender is provided."""
+        invalid_input = 'nonbinary'  # Assuming this value is not in ALLOWED_GENDERS.
+        with self.assertRaises(ValueError) as context:
+            validate_gender_value(invalid_input)
+        error_message = str(context.exception)
+        self.assertIn('Invalid gender value', error_message)
+        self.assertIn(str(ALLOWED_GENDERS), error_message)

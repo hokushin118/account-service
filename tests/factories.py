@@ -21,7 +21,7 @@ class AccountFactory(factory.Factory):
     id = factory.LazyAttribute(lambda o: uuid4())
     name = factory.Faker('name')
     email = factory.Faker('email')
-    gender = FuzzyChoice(['Male', 'Female', 'Other', 'Prefer not to say'])
+    gender = FuzzyChoice(['male', 'female', 'other'])
     address = factory.Faker('address')
     phone_number = factory.Faker('phone_number')
     date_joined = FuzzyDate(date(2008, 1, 1))

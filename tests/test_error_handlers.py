@@ -56,6 +56,12 @@ class RegisterErrorHandlersTests(TestCase):
                 'Account authorization error occurred'
             )
 
+        @self.app.route('/test/account-value-error')
+        def account_value_error():
+            raise ValueError(
+                'Name can not be blank'
+            )
+
         @self.app.route('/test/internal-server')
         def internal_server_error():
             # Any generic exception will be interpreted and handled as a 500
@@ -118,6 +124,16 @@ class RegisterErrorHandlersTests(TestCase):
             'Account authorization error occurred',
             data.get('message')
         )
+
+    def test_account_value_error_handler(self):
+        """It should return a 400 Bad Request JSON response when a ValueError
+        is raised."""
+        response = self.client.get('/test/account-value-error')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        data = json.loads(response.get_data(as_text=True))
+        self.assertEqual(data.get('status'), status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(data.get('error'), 'Bad Request')
+        self.assertIn('Name can not be blank', data.get('message'))
 
     def test_internal_server_error_handler(self):
         """It should return a 500 Internal Server Error JSON response when an unexpected
