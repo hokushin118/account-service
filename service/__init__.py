@@ -292,7 +292,8 @@ def configure_swagger(current_app: Flask) -> None:
                         },
                         'gender': {
                             'type': 'string',
-                            'description': 'Gender',
+                            'enum': ['male', 'female', 'other'],
+                            'description': 'Gender of the account holder',
                             'maxLength': GENDER_MAX_LENGTH
                         },
                         'address': {
@@ -334,7 +335,8 @@ def configure_swagger(current_app: Flask) -> None:
                         },
                         'gender': {
                             'type': 'string',
-                            'description': 'Gender',
+                            'enum': ['male', 'female', 'other'],
+                            'description': 'Gender of the account holder',
                             'maxLength': GENDER_MAX_LENGTH
                         },
                         'address': {
@@ -366,7 +368,8 @@ def configure_swagger(current_app: Flask) -> None:
                         },
                         'gender': {
                             'type': 'string',
-                            'description': 'Gender',
+                            'enum': ['male', 'female', 'other'],
+                            'description': 'Gender of the account holder',
                             'maxLength': GENDER_MAX_LENGTH
                         },
                         'address': {
@@ -398,7 +401,8 @@ def configure_swagger(current_app: Flask) -> None:
                         },
                         'gender': {
                             'type': 'string',
-                            'description': 'Gender',
+                            'enum': ['male', 'female', 'other'],
+                            'description': 'Gender of the account holder',
                             'maxLength': GENDER_MAX_LENGTH
                         },
                         'address': {
@@ -471,7 +475,14 @@ def configure_swagger(current_app: Flask) -> None:
                         "objects. It provides endpoints for creating new "
                         "accounts, listing all accounts, retrieving a "
                         "specific account by ID, updating an account, "
-                        "partially updating an account, and deleting an account."),
+                        "partially updating an account, and deleting an account.</br></br>"
+                        "The following test users are available in the "
+                        "Keycloak IAM development/testing realm **cba-dev**.</br>"
+                        "<table><thead><tr><th>user name</th><th>password</th><th>roles"
+                        "</th></tr></thead><tbody><tr><td>admin</td><td>admin</td>"
+                        "<td>__ROLE_ADMIN__, __ROLE_USER__</td></tr><tr><td>test</td>"
+                        "<td>test</td><td>__ROLE_USER__</td></tr></tbody></table>"
+            ),
             'contact': {
                 'responsibleOrganization': LazyString(lambda: 'ME'),
                 'responsibleDeveloper': LazyString(lambda: 'ME'),

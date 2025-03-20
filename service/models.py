@@ -388,6 +388,10 @@ class Account(db.Model, PersistentBase):
             self.gender = data.get('gender')
             self.address = data.get('address')
             self.phone_number = data.get('phone_number')
+
+            # Convert gender to lowercase if it's not None
+            if self.gender is not None:
+                self.gender = self.gender.lower()
         except KeyError as err:
             raise DataValidationError(
                 f"Invalid Account: missing {err.args[0]}"
