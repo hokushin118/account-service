@@ -238,7 +238,10 @@ class TestAccountService(TestCase):
         mock_get_jwt_identity.get_jwt_identity.return_value = TEST_USER_ID
 
         account = AccountFactory()
-        cached_value = account, TEST_ETAG
+        account_dto = AccountDTO.model_validate(account)
+        data = account_dto.model_dump()
+
+        cached_value = data, TEST_ETAG
         mock_cache.get.return_value = cached_value
         # pylint: disable=W0212
         mock_account_service._get_cached_data.return_value = cached_value
@@ -246,7 +249,7 @@ class TestAccountService(TestCase):
         data, etag = AccountService.get_account_by_id(TEST_ACCOUNT_ID)
 
         mock_account_service._get_cached_data.assert_called_once()
-        self.assertEqual(data, account)
+        self.assertEqual(data, account_dto)
         self.assertEqual(etag, TEST_ETAG)
 
     @patch('service.services.generate_etag_hash')
