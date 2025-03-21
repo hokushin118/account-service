@@ -217,7 +217,7 @@ class AccountService:
     # CREATE A NEW ACCOUNT
     ######################################################################
     @staticmethod
-    def create(create_account_dto: CreateAccountDTO) -> Dict[str, str]:
+    def create(create_account_dto: CreateAccountDTO) -> AccountDTO:
         """Creates a new account using the given data and current user ID.
 
         Args:
@@ -225,7 +225,7 @@ class AccountService:
                 the account creation data.
 
         Returns:
-            Dict[str, str]: A dictionary representing the created account.
+            AccountDTO: The newly created account in DTO format.
 
         Raises:
             ValidationError: If the provided data is invalid.
@@ -241,7 +241,12 @@ class AccountService:
         account = Account()
         account.deserialize(create_account_dto.to_dict())
         account.user_id = current_user_id
+
+        # Persist the account to the database
         account.create()
+
+        # Convert the persisted model into a DTO
+        account_dto = AccountDTO.model_validate(account)
 
         app.logger.info(
             'Account created successfully.'
@@ -251,7 +256,7 @@ class AccountService:
         AccountService.invalidate_all_account_pages()
         app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
-        return AccountDTO.from_orm(account).to_dict()
+        return account_dto
 
     ######################################################################
     # LIST ALL ACCOUNTS

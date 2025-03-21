@@ -68,7 +68,8 @@ class TestAccountService(TestCase):
     @patch('service.services.get_jwt_identity')
     @patch('service.services.app')
     def test_create_success(
-            self, mock_app,
+            self,
+            mock_app,
             mock_get_jwt_identity,
             mock_account,
             mock_account_dto,
@@ -89,11 +90,12 @@ class TestAccountService(TestCase):
 
         # Set up the AccountDTO.from_orm method to return an object with a to_dict method.
         dummy_account_dto_instance = MagicMock()
+        dummy_account_dto_instance.id = TEST_ACCOUNT_ID
         dummy_account_dto_instance.to_dict.return_value = {
             "id": TEST_USER_ID,
             "status": "created"
         }
-        mock_account_dto.from_orm.return_value = dummy_account_dto_instance
+        mock_account_dto.model_validate.return_value = dummy_account_dto_instance
 
         # Create a DTO instance.
         create_account_dto = CreateAccountDTO(**ACCOUNT_DATA)
@@ -120,11 +122,11 @@ class TestAccountService(TestCase):
             any(ACCOUNT_CACHE_KEY in message for message in debug_calls)
         )
         # 7. Ensure that AccountDTO.from_orm was called with the account instance.
-        mock_account_dto.from_orm.assert_called_once_with(
+        mock_account_dto.model_validate.assert_called_once_with(
             dummy_account_instance
         )
-        # 8. The result should match the output of dummy_account_dto_instance.to_dict().
-        self.assertEqual(result, {"id": TEST_USER_ID, "status": "created"})
+        # 8. The result should match the output of dummy_account_dto_instance.
+        self.assertEqual(result.id, TEST_ACCOUNT_ID)
 
     ######################################################################
     #  LIST ALL ACCOUNTS TEST CASES
