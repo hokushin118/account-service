@@ -7,7 +7,39 @@ from kafka.errors import KafkaConnectionError  # pylint: disable=E0401
 
 from service.common.kafka_producer import KafkaProducerManager
 from service.configs import KafkaProducerConfig
+from service.schemas import AccountPagedListDTO, AccountDTO
 from tests.utils.constants import TEST_TOPIC
+from tests.utils.factories import AccountFactory
+
+
+def create_account_paged_list_dto() -> AccountPagedListDTO:
+    """Create a dummy AccountPagedListDTO for testing purposes.
+
+    This function uses the AccountFactory to generate two dummy accounts,
+    converts them into AccountDTO objects, and constructs a paginated DTO
+    with preset pagination values and a total count.
+
+    Returns:
+        AccountPagedListDTO: A dummy paginated list of AccountDTO objects.
+    """
+    # Generate dummy accounts
+    account1 = AccountFactory()
+    account2 = AccountFactory()
+
+    # Convert dummy accounts to DTOs
+    account_dto1 = AccountDTO.model_validate(account1)
+    account_dto2 = AccountDTO.model_validate(account2)
+
+    # Assemble the DTOs into a list
+    accounts = [account_dto1, account_dto2]
+
+    # Create and return the paginated DTO.
+    return AccountPagedListDTO(
+        items=accounts,
+        page=1,
+        per_page=10,
+        total=len(accounts)
+    )
 
 
 class DummyRecordMetadata:

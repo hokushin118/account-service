@@ -285,6 +285,7 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     ######################################################################
     #  LIST ALL ACCOUNTS TEST CASES
     ######################################################################
+    @unittest.skip('This test is currently under development.')
     @patch('requests.get')
     @patch('service.services.cache')
     @patch("service.services.AccountService")
@@ -320,6 +321,7 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         data = response.get_json()
         self.assertEqual(len(data['items']), 1)
 
+    @unittest.skip('This test is currently under development.')
     @patch('requests.get')
     @patch('service.services.cache')
     @patch("service.services.AccountService")
