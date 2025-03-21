@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from service import NAME_MIN_LENGTH, NAME_MAX_LENGTH
 from service.schemas import AccountDTO, PartialUpdateAccountDTO, \
     UpdateAccountDTO, CreateAccountDTO, validate_gender_value, ALLOWED_GENDERS, \
-    validate_name_value
+    validate_name_value, AccountPagedListDTO
 from tests.utils.constants import ACCOUNT_DATA
 from tests.utils.factories import AccountFactory
 
@@ -215,26 +215,25 @@ class TestCreateAccountDTO(TestCase):
 
     def test_to_dict_serialization(self):
         """It should serialize the DTO to a dictionary using to_dict()."""
-        data = {
-            'name': 'John Doe',
-            'email': 'john.doe@example.com',
-            'gender': 'Male',
-            'address': '123 Main St',
-            'phone_number': '123-456-7890'
-        }
-        create_account_dto = CreateAccountDTO(**data)
+        create_account_dto = CreateAccountDTO(**ACCOUNT_DATA)
         create_account_dto_dict = create_account_dto.to_dict()
         self.assertIsInstance(create_account_dto_dict, dict)
-        self.assertEqual(create_account_dto_dict['name'], data['name'])
-        self.assertEqual(create_account_dto_dict['email'], data['email'])
-        self.assertEqual(create_account_dto_dict.get('gender'), data['gender'])
+        self.assertEqual(create_account_dto_dict['name'], ACCOUNT_DATA['name'])
+        self.assertEqual(
+            create_account_dto_dict['email'],
+            ACCOUNT_DATA['email']
+        )
+        self.assertEqual(
+            create_account_dto_dict.get('gender'),
+            ACCOUNT_DATA['gender']
+        )
         self.assertEqual(
             create_account_dto_dict.get('address'),
-            data['address']
+            ACCOUNT_DATA['address']
         )
         self.assertEqual(
             create_account_dto_dict.get('phone_number'),
-            data['phone_number']
+            ACCOUNT_DATA['phone_number']
         )
 
 
@@ -297,26 +296,25 @@ class TestUpdateAccountDTO(TestCase):
 
     def test_to_dict_serialization(self):
         """It should serialize the DTO to a dictionary using to_dict()."""
-        data = {
-            'name': 'John Doe',
-            'email': 'john.doe@example.com',
-            'gender': 'Male',
-            'address': '123 Main St',
-            'phone_number': '123-456-7890'
-        }
-        update_account_dto = UpdateAccountDTO(**data)
+        update_account_dto = UpdateAccountDTO(**ACCOUNT_DATA)
         update_account_dto_dict = update_account_dto.to_dict()
         self.assertIsInstance(update_account_dto_dict, dict)
-        self.assertEqual(update_account_dto_dict['name'], data['name'])
-        self.assertEqual(update_account_dto_dict['email'], data['email'])
-        self.assertEqual(update_account_dto_dict.get('gender'), data['gender'])
+        self.assertEqual(
+            update_account_dto_dict['name'], ACCOUNT_DATA['name']
+        )
+        self.assertEqual(
+            update_account_dto_dict['email'], ACCOUNT_DATA['email']
+        )
+        self.assertEqual(
+            update_account_dto_dict.get('gender'), ACCOUNT_DATA['gender']
+        )
         self.assertEqual(
             update_account_dto_dict.get('address'),
-            data['address']
+            ACCOUNT_DATA['address']
         )
         self.assertEqual(
             update_account_dto_dict.get('phone_number'),
-            data['phone_number']
+            ACCOUNT_DATA['phone_number']
         )
 
 
@@ -326,29 +324,25 @@ class TestPartialUpdateAccountDTO(TestCase):
     def test_valid_partial_update_account_dto(self):
         """It should create a valid PartialUpdateAccountDTO when all fields
         are provided correctly."""
-        data = {
-            'name': 'John Doe',
-            'email': 'john.doe@example.com',
-            'gender': 'Male',
-            'address': '123 Main St',
-            'phone_number': '123-456-7890'
-        }
-        partial_update_account_dto = PartialUpdateAccountDTO(**data)
+        partial_update_account_dto = PartialUpdateAccountDTO(**ACCOUNT_DATA)
         self.assertEqual(
-            partial_update_account_dto.name, 'John Doe'
+            partial_update_account_dto.name, ACCOUNT_DATA['name']
         )
         self.assertEqual(
             partial_update_account_dto.email,
-            'john.doe@example.com'
+            ACCOUNT_DATA['email']
         )
-        self.assertEqual(partial_update_account_dto.gender, 'Male')
+        self.assertEqual(
+            partial_update_account_dto.gender,
+            ACCOUNT_DATA['gender']
+        )
         self.assertEqual(
             partial_update_account_dto.address,
-            '123 Main St'
+            ACCOUNT_DATA['address']
         )
         self.assertEqual(
             partial_update_account_dto.phone_number,
-            '123-456-7890'
+            ACCOUNT_DATA['phone_number']
         )
 
     def test_partial_update_account_dto_some_fields(self):
@@ -396,32 +390,89 @@ class TestPartialUpdateAccountDTO(TestCase):
 
     def test_to_dict_serialization(self):
         """It should serialize the DTO to a dictionary using to_dict()."""
-        data = {
-            'name': 'John Doe',
-            'email': 'john.doe@example.com',
-            'gender': 'Male',
-            'address': '123 Main St',
-            'phone_number': '123-456-7890'
-        }
-        partial_update_account_dto = PartialUpdateAccountDTO(**data)
+        partial_update_account_dto = PartialUpdateAccountDTO(**ACCOUNT_DATA)
         partial_update_account_dto_dict = partial_update_account_dto.to_dict()
         self.assertIsInstance(partial_update_account_dto_dict, dict)
-        self.assertEqual(partial_update_account_dto_dict['name'], data['name'])
+        self.assertEqual(
+            partial_update_account_dto_dict['name'],
+            ACCOUNT_DATA['name']
+        )
         self.assertEqual(
             partial_update_account_dto_dict['email'],
-            data['email']
+            ACCOUNT_DATA['email']
         )
         self.assertEqual(
             partial_update_account_dto_dict.get('gender'),
-            data['gender']
+            ACCOUNT_DATA['gender']
         )
         self.assertEqual(
             partial_update_account_dto_dict.get('address'),
-            data['address']
+            ACCOUNT_DATA['address']
         )
         self.assertEqual(
             partial_update_account_dto_dict.get('phone_number'),
-            data['phone_number']
+            ACCOUNT_DATA['phone_number']
+        )
+
+
+class TestAccountPagedListDTO(TestCase):
+    """AccountPagedListDTO Tests."""
+
+    def test_default_values(self):
+        """It should test that the default values are correctly assigned."""
+        dto = AccountPagedListDTO(items=[])
+        self.assertEqual(dto.page, 1)
+        self.assertEqual(dto.per_page, 1)
+        self.assertEqual(dto.total, 0)
+        self.assertEqual(dto.items, [])
+
+    def test_valid_data(self):
+        """It should test that given values are correctly assigned."""
+        # Define some dummy account data.
+        account1 = AccountFactory()
+        account2 = AccountFactory()
+        account_dto1 = AccountDTO.model_validate(account1)
+        account_dto2 = AccountDTO.model_validate(account2)
+        # Create a list of dummy AccountDTO objects.
+        accounts = [account_dto1, account_dto2]
+        dto = AccountPagedListDTO(
+            items=accounts,
+            page=2,
+            per_page=10,
+            total=50
+        )
+        self.assertEqual(dto.page, 2)
+        self.assertEqual(dto.per_page, 10)
+        self.assertEqual(dto.total, 50)
+        self.assertEqual(len(dto.items), 2)
+        self.assertEqual(dto.items[0].name, account1.name)
+        self.assertEqual(dto.items[1].id, account2.id)
+
+    def test_invalid_negative_page(self):
+        """It should test that ge validation for page works."""
+        with self.assertRaises(ValidationError) as context:
+            AccountPagedListDTO(items=[], page=0)
+        self.assertIn(
+            'Input should be greater than or equal to 1',
+            str(context.exception)
+        )
+
+    def test_invalid_negative_per_page(self):
+        """It should test that ge validation for per_page works."""
+        with self.assertRaises(ValidationError) as context:
+            AccountPagedListDTO(items=[], per_page=0)
+        self.assertIn(
+            'Input should be greater than or equal to 1',
+            str(context.exception)
+        )
+
+    def test_invalid_negative_total(self):
+        """It should test that ge validation for total works."""
+        with self.assertRaises(ValidationError) as context:
+            AccountPagedListDTO(items=[], total=-5)
+        self.assertIn(
+            'Input should be greater than or equal to 0',
+            str(context.exception)
         )
 
 
