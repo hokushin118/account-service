@@ -8,7 +8,7 @@ hashes for cache validation.
 """
 import logging
 import os
-from typing import Any, Dict, Tuple, Optional
+from typing import Any, Tuple, Optional
 from uuid import UUID
 
 from flask_jwt_extended import get_jwt_identity
@@ -26,7 +26,7 @@ from service.models import Account
 from service.schemas import (
     AccountDTO,
     UpdateAccountDTO,
-    PartialUpdateAccountDTO, CreateAccountDTO
+    PartialUpdateAccountDTO, CreateAccountDTO, AccountPagedListDTO
 )
 
 logger = logging.getLogger(__name__)
@@ -262,7 +262,10 @@ class AccountService:
     # LIST ALL ACCOUNTS
     ######################################################################
     @staticmethod
-    def list_accounts(page: int, per_page: int) -> Tuple[Dict[str, Any], str]:
+    def list_accounts(
+            page: int,
+            per_page: int
+    ) -> Tuple[AccountPagedListDTO, str]:
         """Lists accounts with pagination and returns data together with an ETag hash.
 
         This method retrieves a paginated list of accounts, either from the cache
@@ -274,13 +277,9 @@ class AccountService:
             per_page (int): The number of items per page.
 
         Returns:
-            Tuple[Dict[str, Any], str]: A tuple containing:
-                - A dictionary with paginated account data:
-                    - 'items': A list of account dictionaries.
-                    - 'page': The current page number.
-                    - 'per_page': The number of items per page.
-                    - 'total': The total number of accounts.
-                - The ETag hash as a string.
+            Tuple[AccountPagedListDTO, str]: A tuple containing:
+                - AccountPagedListDTO: The paginated account data.
+                - str: The generated ETag hash identifying the data state.
 
         Raises:
             AccountError: If there's an issue retrieving data from the cache or database.
@@ -299,43 +298,59 @@ class AccountService:
 
         if cached_data:
             app.logger.debug('Retrieving Accounts (page %d) from cache.', page)
-            paginated_data, etag_hash = cached_data
+            data, etag_hash = cached_data
+            account_paginated_list_dto = AccountPagedListDTO.model_validate(
+                data)
         else:
             app.logger.debug(
                 "Fetching Accounts (page %d) from database.",
                 page
             )
 
-            accounts = Account.all_paginated(page=page, per_page=per_page)
+            accounts = Account.all_paginated(
+                page=page,
+                per_page=per_page
+            )
             account_list = [
-                AccountDTO.from_orm(account).to_dict() for account in accounts
+                AccountDTO.model_validate(account) for account in accounts
             ]
 
             total_accounts = Account.query.count()
 
             # Paginate the results
-            paginated_data = {
+            data = {
                 'items': account_list,
                 'page': page,
                 'per_page': per_page,
                 'total': total_accounts
             }
 
-            # Generate the ETag:
-            etag_hash = generate_etag_hash(paginated_data)
-            cache.set(
-                cache_key,
-                (paginated_data, etag_hash),
-                timeout=CACHE_DEFAULT_TIMEOUT
-            )
+            # Convert SQLAlchemy model to DTO
+            account_paginated_list_dto = AccountPagedListDTO(**data)
 
-        if paginated_data['items']:
+            # Generate the ETag:
+            etag_hash = generate_etag_hash(data)
+
+            # Cache the data
+            try:
+                cache.set(
+                    cache_key,
+                    (data, etag_hash),
+                    timeout=CACHE_DEFAULT_TIMEOUT
+                )
+            except (TypeError, ValueError, AttributeError) as err:
+                AccountService._handle_cache_error(err, type(err).__name__)
+            except Exception as err:  # pylint: disable=W0703
+                AccountService._handle_cache_error(err, 'unknown error')
+
+        if data['items']:
             app.logger.debug(
                 "Returning %d accounts (page %d)",
-                len(paginated_data['items']),
+                len(data['items']),
                 page
             )
-        return paginated_data, etag_hash
+
+        return account_paginated_list_dto, etag_hash
 
     ######################################################################
     # READ AN ACCOUNT

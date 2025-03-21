@@ -29,19 +29,24 @@ from service import (
 )
 from service.common import status
 from service.common.constants import (
-    ROLE_USER, ROLE_ADMIN
+    ROLE_USER,
+    ROLE_ADMIN
 )
 from service.common.keycloak_utils import has_roles
 from service.common.utils import (
     check_content_type,
     count_requests
 )
-from service.schemas import UpdateAccountDTO, \
-    PartialUpdateAccountDTO, CreateAccountDTO
+from service.schemas import (
+    UpdateAccountDTO,
+    PartialUpdateAccountDTO,
+    CreateAccountDTO
+)
 from service.services import AccountService
 
 logger = logging.getLogger(__name__)
 
+JSON_INDENT = 4
 IF_NONE_MATCH_HEADER = 'If-None-Match'
 CACHE_CONTROL_HEADER = 'Cache-Control'
 ROOT_PATH = '/api'
@@ -244,7 +249,10 @@ def create() -> Response:
 
     # Create account with provided JSON payload
     account_dto = account_service.create(create_account_dto)
-    json_data = account_dto.model_dump_json(exclude_none=True, indent=4)
+    json_data = account_dto.model_dump_json(
+        exclude_none=True,
+        indent=JSON_INDENT
+    )
 
     location_url = url_for(
         'find_by_id',
@@ -314,7 +322,14 @@ def list_accounts() -> Response:
     per_page = request.args.get('per_page', default=10, type=int)
 
     # Retrieve account data and ETag.
-    paginated_data, etag_hash = account_service.list_accounts(page, per_page)
+    account_paginated_list_dto, etag_hash = account_service.list_accounts(
+        page,
+        per_page
+    )
+    json_data = account_paginated_list_dto.model_dump_json(
+        exclude_none=True,
+        indent=JSON_INDENT
+    )
 
     # Check If-None-Match:
     if_none_match = request.headers.get(IF_NONE_MATCH_HEADER)
@@ -322,7 +337,7 @@ def list_accounts() -> Response:
         return make_response('', status.HTTP_304_NOT_MODIFIED)
 
     # Create the response with the ETag:
-    response = make_response(jsonify(paginated_data), status.HTTP_200_OK)
+    response = make_response(json_data, status.HTTP_200_OK)
     response.headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
     response.set_etag(etag_hash)  # Set the ETag header
     return response
@@ -378,7 +393,10 @@ def find_by_id(account_id: UUID) -> Response:
 
     # Retrieve account data and ETag.
     account_dto, etag_hash = account_service.get_account_by_id(account_id)
-    json_data = account_dto.model_dump_json(exclude_none=True, indent=4)
+    json_data = account_dto.model_dump_json(
+        exclude_none=True,
+        indent=JSON_INDENT
+    )
 
     # Check for If-None-Match header:
     if_none_match = request.headers.get(IF_NONE_MATCH_HEADER)
@@ -471,7 +489,10 @@ def update_by_id(account_id: UUID) -> Response:
         account_id,
         update_account_dto
     )
-    json_data = account_dto.model_dump_json(exclude_none=True, indent=4)
+    json_data = account_dto.model_dump_json(
+        exclude_none=True,
+        indent=JSON_INDENT
+    )
 
     # Return the updated account DTO as a JSON response with a 200 status code
     return make_response(json_data, status.HTTP_200_OK)
@@ -559,7 +580,10 @@ def partial_update_by_id(account_id: UUID) -> Response:
         account_id,
         partial_update_account_dto
     )
-    json_data = account_dto.model_dump_json(exclude_none=True, indent=4)
+    json_data = account_dto.model_dump_json(
+        exclude_none=True,
+        indent=JSON_INDENT
+    )
 
     # Return the updated account DTO as a JSON response with a 200 status code
     return make_response(json_data, status.HTTP_200_OK)

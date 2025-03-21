@@ -13,7 +13,8 @@ from uuid import UUID, uuid4
 
 from service.common.constants import (
     ACCOUNT_CACHE_KEY,
-    ROLE_ADMIN, ROLE_USER
+    ROLE_ADMIN,
+    ROLE_USER
 )
 from service.errors import (
     AccountError,
@@ -23,7 +24,8 @@ from service.errors import (
 from service.schemas import (
     AccountDTO,
     UpdateAccountDTO,
-    PartialUpdateAccountDTO, CreateAccountDTO
+    PartialUpdateAccountDTO,
+    CreateAccountDTO
 )
 from service.services import (
     AccountService,
@@ -34,11 +36,12 @@ from tests.utils.constants import (
     NEW_ETAG,
     TEST_PAGE,
     TEST_PER_PAGE,
-    TEST_TOTAL,
     TEST_USER_ID,
-    TEST_ACCOUNT_ID, ACCOUNT_DATA
+    TEST_ACCOUNT_ID,
+    ACCOUNT_DATA
 )
 from tests.utils.factories import AccountFactory
+from tests.utils.utils import create_account_paged_list_dto
 
 logger = logging.getLogger(__name__)
 
@@ -141,19 +144,19 @@ class TestAccountService(TestCase):
             mock_cache
     ):
         """It should return a list of accounts from cache."""
+        # Create a list of dummy AccountDTO objects
+        account_paged_list_dto = create_account_paged_list_dto()
+        data = account_paged_list_dto.model_dump()
         mock_get_jwt_identity.return_value = TEST_USER_ID
         mock_generate_etag_hash.return_value = TEST_ETAG
         mock_cache.get.return_value = (
-            {'items': [{'id': 1}],
-             'page': TEST_PAGE,
-             'per_page': TEST_PER_PAGE,
-             'total': TEST_TOTAL},
+            data,
             TEST_ETAG
         )
         mock_cache.set.return_value = None
         # Retrieve all accounts
         result, etag = AccountService.list_accounts(TEST_PAGE, TEST_PER_PAGE)
-        self.assertEqual(result['items'], [{'id': 1}])
+        self.assertEqual(result.items, account_paged_list_dto.items)
         self.assertEqual(etag, TEST_ETAG)
         mock_cache.get.assert_called_once_with(self.cache_key)
 
@@ -182,9 +185,9 @@ class TestAccountService(TestCase):
 
         result, etag = AccountService.list_accounts(TEST_PAGE, TEST_PER_PAGE)
 
-        self.assertEqual(result['page'], TEST_PAGE)
-        self.assertEqual(result['per_page'], TEST_PER_PAGE)
-        self.assertEqual(result['total'], total)
+        self.assertEqual(result.page, TEST_PAGE)
+        self.assertEqual(result.per_page, TEST_PER_PAGE)
+        self.assertEqual(result.total, total)
         self.assertEqual(etag, NEW_ETAG)
         mock_cache.get.assert_called_once_with(self.cache_key)
         mock_cache.set.assert_called_once()
@@ -214,7 +217,7 @@ class TestAccountService(TestCase):
 
         result, etag = AccountService.list_accounts(TEST_PAGE, TEST_PER_PAGE)
 
-        self.assertEqual(result['items'], [])
+        self.assertEqual(result.items, [])
         self.assertEqual(etag, TEST_ETAG)
         mock_cache.get.assert_called_once_with(self.cache_key)
         mock_cache.set.assert_called_once()

@@ -15,6 +15,7 @@ from service.schemas import AccountDTO, PartialUpdateAccountDTO, \
     validate_name_value, AccountPagedListDTO
 from tests.utils.constants import ACCOUNT_DATA
 from tests.utils.factories import AccountFactory
+from tests.utils.utils import create_account_paged_list_dto
 
 
 ######################################################################
@@ -428,25 +429,12 @@ class TestAccountPagedListDTO(TestCase):
 
     def test_valid_data(self):
         """It should test that given values are correctly assigned."""
-        # Define some dummy account data.
-        account1 = AccountFactory()
-        account2 = AccountFactory()
-        account_dto1 = AccountDTO.model_validate(account1)
-        account_dto2 = AccountDTO.model_validate(account2)
-        # Create a list of dummy AccountDTO objects.
-        accounts = [account_dto1, account_dto2]
-        dto = AccountPagedListDTO(
-            items=accounts,
-            page=2,
-            per_page=10,
-            total=50
-        )
-        self.assertEqual(dto.page, 2)
-        self.assertEqual(dto.per_page, 10)
-        self.assertEqual(dto.total, 50)
-        self.assertEqual(len(dto.items), 2)
-        self.assertEqual(dto.items[0].name, account1.name)
-        self.assertEqual(dto.items[1].id, account2.id)
+        # Create a list of dummy AccountDTO objects
+        account_paged_list_dto = create_account_paged_list_dto()
+        self.assertEqual(account_paged_list_dto.page, 1)
+        self.assertEqual(account_paged_list_dto.per_page, 10)
+        self.assertEqual(account_paged_list_dto.total, 2)
+        self.assertEqual(len(account_paged_list_dto.items), 2)
 
     def test_invalid_negative_page(self):
         """It should test that ge validation for page works."""
