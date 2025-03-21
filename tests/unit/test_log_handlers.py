@@ -1,5 +1,5 @@
 """
-Log Handler Test Suite.
+Log Handler Unit Test Suite.
 
 Test cases can be run with the following:
   nosetests -v --with-spec --spec-color

@@ -1,5 +1,5 @@
 """
-This module provides constants for use in unit tests.
+This module provides constants for use in tests.
 """
 TEST_ROLE = 'ROLE_TEST'
 TEST_OTHER_ROLE = 'ROLE_OTHER'
@@ -15,3 +15,10 @@ TEST_TOPIC = 'test_topic'
 TEST_PAGE = 1
 TEST_PER_PAGE = 10
 TEST_TOTAL = 1
+ACCOUNT_DATA = {
+    'name': 'John Doe',
+    'email': 'john.doe@example.com',
+    'gender': 'Male',
+    'address': '123 Main St',
+    'phone_number': '123-456-7890'
+}

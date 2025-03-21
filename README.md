@@ -476,17 +476,33 @@ To execute the microservice's tests, follow these steps:
    flask db-upgrade
    ```
 
-3. **Run Tests:**
-    * Execute the microservice's tests using `nosetests`.
+3. **Run Unit Tests:**
+    * Execute the microservice's unit tests using `nosetests`.
    ```bash
-   APP_SETTINGS=testing nosetests -v --with-spec --spec-color
+   nosetests -v --with-spec --spec-color tests/unit
    ```
-    * `APP_SETTINGS=testing`: Sets the environment for testing.
     * `nosetests`: Executes the nosetests test runner.
     * `-v`: Enables verbose output.
     * `--with-spec`: Enables the `nose-spec` plugin for a more readable test
       output.
     * `--spec-color`: Enables colored output for `nose-spec`.
+    * `tests/unit`: Specifies the directory where nosetests should discover and
+      execute unit tests.
+
+4. **Run Integration Tests:**
+    * Execute the microservice's integration tests using `nosetests`.
+   ```bash
+   APP_SETTINGS=testing RUN_INTEGRATION_TESTS=true nosetests -v --with-spec --spec-color tests/integration
+   ```
+    * `APP_SETTINGS=testing`: Sets the environment for integration testing.
+    * `RUN_INTEGRATION_TESTS=true`: Enables the execution of integration tests.
+    * `nosetests`: Executes the nosetests test runner.
+    * `-v`: Enables verbose output.
+    * `--with-spec`: Enables the `nose-spec` plugin for a more readable test
+      output.
+    * `--spec-color`: Enables colored output for `nose-spec`.
+    * `tests/integration`: Specifies the directory where nosetests should
+      discover and execute integration tests.
 
 **Important Notes:**
 

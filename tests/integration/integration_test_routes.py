@@ -1,19 +1,20 @@
 # pylint:disable=C0302
 """
-Account Routes Test Suite.
+Account Routes Integration Test Suite.
 
 Test cases can be run with:
-  nosetests -v --with-spec --spec-color
+  APP_SETTINGS=testing nosetests -v --with-spec --spec-color
   coverage report -m
 """
-from unittest import TestCase
+import os
+import unittest
 from unittest.mock import patch
 
 from cryptography.hazmat.primitives import serialization
 from flask_jwt_extended import JWTManager
 from jose import jwt
 
-from service import AUTHORIZATION_HEADER, BEARER_HEADER
+from service import AUTHORIZATION_HEADER, BEARER_HEADER, NAME, VERSION
 from service.common import status  # HTTP Status Codes
 from service.common.constants import ROLE_USER, ROLE_ADMIN
 from service.common.keycloak_utils import KEYS, REALM_ACCESS_CLAIM, ROLES_CLAIM
@@ -26,30 +27,34 @@ from service.routes import (
     HEALTH_PATH,
     IF_NONE_MATCH_HEADER,
     CACHE_CONTROL_HEADER,
-    audit_log, account_service
+    account_service, INFO_PATH
 )
 from service.schemas import AccountDTO, PartialUpdateAccountDTO
-from tests.factories import AccountFactory
-from tests.test_base import BaseTestCase
-from tests.test_constants import (
+from tests.integration.base import BaseTestCase
+from tests.utils.constants import (
     TEST_USER_ID,
     TEST_ETAG,
     TEST_PAGE,
     TEST_PER_PAGE,
     TEST_TOTAL
 )
+from tests.utils.factories import AccountFactory
 
 HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
 JWT_ALGORITHM = 'RS256'
-PRIVATE_KEY_PATH = './tests/keys/private.pem'
-PUBLIC_KEY_PATH = './tests/keys/public.pem'
+PRIVATE_KEY_PATH = './tests/utils/keys/private.pem'
+PUBLIC_KEY_PATH = './tests/utils/keys/public.pem'
 INVALID_ETAG = 'invalid-etag'
 ORIGINAL = 'original'
 
 
 ######################################################################
-#  ROUTE TEST CASES
+#  ROUTE INTEGRATION TEST CASES
 ######################################################################
+@unittest.skipIf(
+    os.getenv('RUN_INTEGRATION_TESTS') != 'true',
+    'Integration tests skipped'
+)
 class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     """Account Route Tests."""
 
@@ -187,6 +192,14 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         data = response.get_json()
         self.assertEqual(data['status'], 'UP')
 
+    def test_info(self):
+        """It should get 200_OK when the info endpoint is called."""
+        response = self.client.get(INFO_PATH)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.get_json()
+        self.assertEqual(data['name'], NAME)
+        self.assertEqual(data['version'], VERSION)
+
     def test_unsupported_media_type(self):
         """It should not create an Account when sending the wrong media type."""
         headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
@@ -252,6 +265,20 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
             self.test_account_dto.phone_number
         )
         self.assertEqual(new_account['user_id'], TEST_USER_ID)
+
+    @patch('requests.get')
+    def test_create_accounts_invalid_data(self, mock_get):
+        """It should not create a new Account."""
+        mock_get.return_value.status_code = status.HTTP_201_CREATED
+        mock_get.return_value.json.return_value = self.mock_certs
+        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            json=None,
+            content_type='application/json',
+            headers=headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     ######################################################################
     #  LIST ALL ACCOUNTS TEST CASES
@@ -987,33 +1014,3 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(response.data, b"")
-
-
-######################################################################
-#  AUDIT LOG DECORATOR TEST CASES
-######################################################################
-def dummy_function() -> str:
-    """A simple dummy function to test the audit_log decorator."""
-    return ORIGINAL
-
-
-class TestAuditLogDecorator(TestCase):
-    """Audit Log Decorator Tests."""
-
-    def test_audit_enabled(self):
-        """It should apply audit logging when AUDIT_ENABLED is True."""
-        with patch('service.routes.AUDIT_ENABLED', True), \
-                patch(
-                    'service.common.audit_utils.audit_log_kafka',
-                    side_effect=lambda f: f
-                ) as mock_audit_log_kafka:
-            decorated = audit_log(dummy_function)
-            mock_audit_log_kafka.assert_called_once_with(dummy_function)
-            self.assertEqual(decorated(), ORIGINAL)
-
-    def test_audit_disabled(self):
-        """It should not apply audit logging when AUDIT_ENABLED is False."""
-        with patch('service.routes.AUDIT_ENABLED', False):
-            result_function = audit_log(dummy_function)
-            self.assertIs(result_function, dummy_function)
-            self.assertEqual(result_function(), ORIGINAL)

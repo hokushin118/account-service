@@ -1,5 +1,5 @@
 """
-Error Handlers Test Suite.
+Error Handlers Unit Test Suite.
 
 Test cases can be run with the following:
   nosetests -v --with-spec --spec-color
@@ -19,7 +19,7 @@ from service.errors import (
     AccountAuthorizationError
 )
 from service.models import DataValidationError
-from tests.test_constants import TEST_ACCOUNT_ID, TEST_USER_ID
+from tests.utils.constants import TEST_ACCOUNT_ID, TEST_USER_ID
 
 
 class RegisterErrorHandlersTests(TestCase):
