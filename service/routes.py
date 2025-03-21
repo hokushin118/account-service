@@ -243,16 +243,17 @@ def create() -> Response:
     create_account_dto = CreateAccountDTO(**data)
 
     # Create account with provided JSON payload
-    result = account_service.create(create_account_dto)
+    account_dto = account_service.create(create_account_dto)
+    json_data = account_dto.model_dump_json(exclude_none=True, indent=4)
 
     location_url = url_for(
         'find_by_id',
-        account_id=result['id'],
+        account_id=account_dto.id,
         _external=True
     )
 
     return make_response(
-        jsonify(result), status.HTTP_201_CREATED, {'Location': location_url}
+        json_data, status.HTTP_201_CREATED, {'Location': location_url}
     )
 
 
