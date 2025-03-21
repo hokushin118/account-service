@@ -376,7 +376,8 @@ def find_by_id(account_id: UUID) -> Response:
     app.logger.info("Request to read an Account with id: %s", account_id)
 
     # Retrieve account data and ETag.
-    data, etag_hash = account_service.get_account_by_id(account_id)
+    account_dto, etag_hash = account_service.get_account_by_id(account_id)
+    json_data = account_dto.model_dump_json(exclude_none=True, indent=4)
 
     # Check for If-None-Match header:
     if_none_match = request.headers.get(IF_NONE_MATCH_HEADER)
@@ -384,7 +385,7 @@ def find_by_id(account_id: UUID) -> Response:
         return make_response('', status.HTTP_304_NOT_MODIFIED)
 
     # Create the response with the ETag:
-    response = make_response(jsonify(data), status.HTTP_200_OK)
+    response = make_response(json_data, status.HTTP_200_OK)
     response.headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
     response.set_etag(etag_hash)  # Set the ETag header
     return response

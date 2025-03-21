@@ -336,7 +336,7 @@ class AccountService:
     # READ AN ACCOUNT
     ######################################################################
     @staticmethod
-    def get_account_by_id(account_id: UUID) -> (Dict, str):
+    def get_account_by_id(account_id: UUID) -> Tuple[AccountDTO, str]:
         """Retrieves an account by its ID, using cache if available.
 
         This method first validates the JWT token and obtains the user identity.
@@ -347,9 +347,10 @@ class AccountService:
         Args:
             account_id (UUID): The ID of the account to retrieve.
 
-        Returns:
-            Tuple[Dict, str]: A tuple containing the account data as a dictionary
-                              and the ETag hash as a string.
+    Returns:
+        Tuple[AccountDTO, str]: A tuple containing:
+            - AccountDTO: The account data in DTO format.
+            - str: The generated ETag hash corresponding to the account data.
 
         Raises:
             AccountNotFound: If the account with the given ID is not found in the database.
@@ -371,15 +372,16 @@ class AccountService:
         if cached_data:
             app.logger.debug('Retrieving Account from cache...')
             data, etag_hash = cached_data
+            account_dto = AccountDTO.model_validate(data)
         else:
             app.logger.debug('Fetching Account from database...')
             account = AccountService.get_account_or_404(account_id)
 
             # Convert SQLAlchemy model to DTO
-            account_dto = AccountDTO.from_orm(account)
-            data = account_dto.to_dict()
+            account_dto = AccountDTO.model_validate(account)
+            data = account_dto.model_dump()
 
-            # Generate the ETag:
+            # Generate the ETag
             etag_hash = generate_etag_hash(data)
 
         # Cache the data
@@ -389,30 +391,14 @@ class AccountService:
                 (data, etag_hash),
                 timeout=CACHE_DEFAULT_TIMEOUT
             )
-        except TypeError as err:
-            AccountService._handle_cache_error(
-                err,
-                'type error'
-            )
-        except ValueError as err:
-            AccountService._handle_cache_error(
-                err,
-                'value error'
-            )
-        except AttributeError as err:
-            AccountService._handle_cache_error(
-                err,
-                'attribute error'
-            )
+        except (TypeError, ValueError, AttributeError) as err:
+            AccountService._handle_cache_error(err, type(err).__name__)
         except Exception as err:  # pylint: disable=W0703
-            AccountService._handle_cache_error(
-                err,
-                'unknown error'
-            )
+            AccountService._handle_cache_error(err, 'unknown error')
 
-        app.logger.debug(f"Account returned: {data}")
+        app.logger.debug(f"Account returned: {account_dto.model_dump()}")
 
-        return data, etag_hash
+        return account_dto, etag_hash
 
     ######################################################################
     # UPDATE AN EXISTING ACCOUNT

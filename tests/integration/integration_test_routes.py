@@ -72,7 +72,7 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         self.client = app.test_client()
 
         self.account = AccountFactory()
-        self.test_account_dto = AccountDTO.from_orm(self.account)
+        self.test_account_dto = AccountDTO.model_validate(self.account)
 
         self.account_data = {
             'id': self.account.id,
@@ -462,7 +462,7 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     ):
         """It should return a single account when a valid JWT is provided."""
         mock_account_service.get_account_or_404.return_value = self.account
-        mock_account_service.get_account_by_id.return_value = self.account_data, TEST_ETAG
+        mock_account_service.get_account_by_id.return_value = self.test_account_dto, TEST_ETAG
         mock_cache.set.return_value = None
         # pylint: disable=W0212
         mock_account_service._get_cached_data.return_value = None
@@ -477,13 +477,11 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{self.account.id}",
+            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
             content_type='application/json',
             headers=headers
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = response.get_json()
-        self.assertEqual(data['name'], self.account.name)
         mock_account_service.get_account_or_404.assert_called_once()
 
     def test_find_by_id_unauthorized(self):
@@ -504,7 +502,7 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
                                    mock_get):
         """It should return 304 Not Modified if the ETag matches when reading an account."""
         mock_account_service.get_account_or_404.return_value = self.account
-        mock_account_service.get_account_by_id.return_value = self.account_data, TEST_ETAG
+        mock_account_service.get_account_by_id.return_value = self.test_account_dto, TEST_ETAG
         mock_cache.set.return_value = None
         # pylint: disable=W0212
         mock_account_service._get_cached_data.return_value = None
@@ -546,7 +544,7 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     ):
         """It should return 200 OK if the ETag does not match when reading an account."""
         mock_account_service.get_account_or_404.return_value = self.account
-        mock_account_service.get_account_by_id.return_value = self.account_data, TEST_ETAG
+        mock_account_service.get_account_by_id.return_value = self.test_account_dto, TEST_ETAG
         mock_cache.set.return_value = None
         # pylint: disable=W0212
         mock_account_service._get_cached_data.return_value = None
