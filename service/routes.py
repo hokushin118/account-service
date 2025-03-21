@@ -554,13 +554,14 @@ def partial_update_by_id(account_id: UUID) -> Response:
     partial_update_account_dto = PartialUpdateAccountDTO(**data)
 
     # Partially update account with provided JSON payload
-    result = account_service.partial_update_by_id(
+    account_dto = account_service.partial_update_by_id(
         account_id,
         partial_update_account_dto
     )
+    json_data = account_dto.model_dump_json(exclude_none=True, indent=4)
 
     # Return the updated account DTO as a JSON response with a 200 status code
-    return make_response(jsonify(result), status.HTTP_200_OK)
+    return make_response(json_data, status.HTTP_200_OK)
 
 
 ######################################################################

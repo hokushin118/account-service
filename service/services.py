@@ -475,7 +475,7 @@ class AccountService:
     def partial_update_by_id(
             account_id: UUID,
             update_account_dto: PartialUpdateAccountDTO
-    ) -> Dict[str, str]:
+    ) -> AccountDTO:
         """Partially updates an existing account with the provided data payload.
 
         Retrieves the account, authorizes the user, updates the account
@@ -488,7 +488,7 @@ class AccountService:
             the update data.
 
         Returns:
-            Dict[str, str]: A dictionary representation of the updated account.
+            AccountDTO: The updated account in DTO format.
 
         Raises:
             AccountNotFound: If the account with the given ID is not found.
@@ -513,8 +513,15 @@ class AccountService:
             account.user_id
         )
 
+        # Update account with provided JSON payload
         account.partial_update(update_account_dto.to_dict())
+
+        # Persist the updated account to the database
         account.update()
+
+        # Convert the persisted model into a DTO
+        account_dto = AccountDTO.model_validate(account)
+
         app.logger.info(
             "Account with id %s updated successfully.",
             account_id
@@ -524,7 +531,7 @@ class AccountService:
         AccountService.invalidate_all_account_pages()
         app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
 
-        return AccountDTO.from_orm(account).to_dict()
+        return account_dto
 
     ######################################################################
     # DELETE AN ACCOUNT
