@@ -102,7 +102,7 @@ class AccountService:
             account = Account.find_by_user_id(user_uuid)
             return account is not None and account.user_id == account_user_id
         except ValueError as err:
-            logger.error("Invalid UUID %s string provided: %s", user_uuid, err)
+            logger.error("Invalid UUID %s string provided: %s", user_id, err)
             raise AccountError(f"Invalid user ID format: {user_id}") from err
         except Exception as err:  # pylint: disable=W0703
             logger.error(

@@ -1,5 +1,5 @@
 """
-Kafka Producer Test Suite.
+Kafka Producer Unit Test Suite.
 
 Test cases can be run with the following:
   nosetests -v --with-spec --spec-color
@@ -9,11 +9,8 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from service.common.kafka_producer import KafkaProducerManager
-from tests.test_base import (
-    DummyKafkaProducerConfig,
-    DummyKafkaProducer,
+from tests.utils.utils import DummyKafkaProducerConfig, DummyKafkaProducer, \
     DummyKafkaProducerError
-)
 
 
 class TestKafkaProducerManager(TestCase):

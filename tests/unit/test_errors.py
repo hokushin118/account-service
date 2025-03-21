@@ -1,5 +1,5 @@
 """
-Custom Errors Test Suite.
+Custom Errors Unit Test Suite.
 
 Test cases can be run with the following:
   nosetests -v --with-spec --spec-color

@@ -1,5 +1,5 @@
 """
-Account Service Schemas Test Suite.
+Account Schemas Unit Test Suite.
 
 Test cases can be run with the following:
   nosetests -v --with-spec --spec-color
@@ -13,7 +13,8 @@ from service import NAME_MIN_LENGTH, NAME_MAX_LENGTH
 from service.schemas import AccountDTO, PartialUpdateAccountDTO, \
     UpdateAccountDTO, CreateAccountDTO, validate_gender_value, ALLOWED_GENDERS, \
     validate_name_value
-from tests.factories import AccountFactory
+from tests.utils.constants import ACCOUNT_DATA
+from tests.utils.factories import AccountFactory
 
 
 ######################################################################
@@ -161,19 +162,13 @@ class TestCreateAccountDTO(TestCase):
     def test_valid_create_account_dto(self):
         """It should create a valid CreateAccountDTO when all required fields are
         provided correctly."""
-        data = {
-            'name': 'John Doe',
-            'email': 'john.doe@example.com',
-            'gender': 'Male',  # Optional field
-            'address': '123 Main St',  # Optional field
-            'phone_number': '123-456-7890'  # Optional field
-        }
-        create_account_dto = CreateAccountDTO(**data)
-        self.assertEqual(create_account_dto.name, data['name'])
-        self.assertEqual(create_account_dto.email, data['email'])
-        self.assertEqual(create_account_dto.gender, data['gender'])
-        self.assertEqual(create_account_dto.address, data['address'])
-        self.assertEqual(create_account_dto.phone_number, data['phone_number'])
+        create_account_dto = CreateAccountDTO(**ACCOUNT_DATA)
+        self.assertEqual(create_account_dto.name, ACCOUNT_DATA['name'])
+        self.assertEqual(create_account_dto.email, ACCOUNT_DATA['email'])
+        self.assertEqual(create_account_dto.gender, ACCOUNT_DATA['gender'])
+        self.assertEqual(create_account_dto.address, ACCOUNT_DATA['address'])
+        self.assertEqual(create_account_dto.phone_number,
+                         ACCOUNT_DATA['phone_number'])
 
     def test_blank_name(self):
         """It should raise a ValidationError when the name is blank (empty string)."""
@@ -249,19 +244,13 @@ class TestUpdateAccountDTO(TestCase):
     def test_valid_update_account_dto(self):
         """It should create a valid UpdateAccountDTO when all required fields are
         provided correctly."""
-        data = {
-            'name': 'John Doe',
-            'email': 'john.doe@example.com',
-            'gender': 'Male',  # Optional field
-            'address': '123 Main St',  # Optional field
-            'phone_number': '123-456-7890'  # Optional field
-        }
-        update_account_dto = UpdateAccountDTO(**data)
-        self.assertEqual(update_account_dto.name, data['name'])
-        self.assertEqual(update_account_dto.email, data['email'])
-        self.assertEqual(update_account_dto.gender, data['gender'])
-        self.assertEqual(update_account_dto.address, data['address'])
-        self.assertEqual(update_account_dto.phone_number, data['phone_number'])
+        update_account_dto = UpdateAccountDTO(**ACCOUNT_DATA)
+        self.assertEqual(update_account_dto.name, ACCOUNT_DATA['name'])
+        self.assertEqual(update_account_dto.email, ACCOUNT_DATA['email'])
+        self.assertEqual(update_account_dto.gender, ACCOUNT_DATA['gender'])
+        self.assertEqual(update_account_dto.address, ACCOUNT_DATA['address'])
+        self.assertEqual(update_account_dto.phone_number,
+                         ACCOUNT_DATA['phone_number'])
 
     def test_blank_name(self):
         """It should raise a ValidationError when the name is blank (empty string)."""

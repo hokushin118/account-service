@@ -58,7 +58,10 @@ jobs:
           DATABASE_URI: 'postgresql://postgres:pa$$wOrd123!@postgres:5432/account_db'
 
       - name: Run unit tests with nose
-        run: nosetests -v --with-spec --spec-color
+        run: nosetests -v --with-spec --spec-color tests/unit
+
+      - name: Run integration tests with nose
+        run: nosetests -v --with-spec --spec-color tests/integration
         env:
           DATABASE_URI: 'postgresql://postgres:pa$$wOrd123!@postgres:5432/account_db'
           CACHE_REDIS_HOST: 'redis'
@@ -66,3 +69,4 @@ jobs:
           CACHE_REDIS_DB: '0'
           SWAGGER_ENABLED: False
           AUDIT_ENABLED: False
+          RUN_INTEGRATION_TESTS: True

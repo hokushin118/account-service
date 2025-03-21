@@ -1,5 +1,5 @@
 """
-Utils Test Suite.
+Utils Unit Test Suite.
 
 Test cases can be run with the following:
   nosetests -v --with-spec --spec-color
@@ -12,15 +12,16 @@ from unittest import TestCase
 
 from service.common.utils import (
     generate_etag_hash,
-    count_requests, is_flask_cli_alternative, generate_correlation_id
+    count_requests,
+    is_flask_cli_alternative,
+    generate_correlation_id
 )
-from tests.test_base import BaseTestCase
 
 
 ######################################################################
-#  UTILS TEST CASES
+#  UTILS UNIT TEST CASES
 ######################################################################
-class TestUtils(BaseTestCase):
+class TestUtils(TestCase):
     """The Decorated Function Tests."""
 
     def test_count_requests_wraps(self):

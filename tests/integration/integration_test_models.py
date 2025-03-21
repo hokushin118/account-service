@@ -1,23 +1,29 @@
 """
-Test cases for Account Model
+Account Model Integration Test Suite.
 
 Test cases can be run with the following:
-  nosetests -v --with-spec --spec-color
+  APP_SETTINGS=testing nosetests -v --with-spec --spec-color
   coverage report -m
 """
+import os
+import unittest
 from uuid import UUID
 
 from sqlalchemy.sql.expression import desc
 
 from service.models import Account, DataValidationError
-from tests.factories import AccountFactory
-from tests.test_base import BaseTestCase
-from tests.test_constants import TEST_USER_ID
+from tests.integration.base import BaseTestCase
+from tests.utils.constants import TEST_USER_ID
+from tests.utils.factories import AccountFactory
 
 
 ######################################################################
 #  ACCOUNT MODEL TEST CASES
 ######################################################################
+@unittest.skipIf(
+    os.getenv('RUN_INTEGRATION_TESTS') != 'true',
+    'Integration tests skipped'
+)
 class TestAccount(BaseTestCase):  # pylint:disable=R0904
     """Test Cases for Account Model."""
 
@@ -198,6 +204,38 @@ class TestAccount(BaseTestCase):  # pylint:disable=R0904
         """It should not deserialize an account with a TypeError."""
         account = Account()
         self.assertRaises(DataValidationError, account.deserialize, [])
+
+    def test_create_success(self):
+        """It should create a new account."""
+        with self.app.app_context():
+            account = AccountFactory()
+            # Call the create method, which should add and commit the record.
+            returned_record = account.create()
+            self.assertIs(account, returned_record)
+
+            # Query the database to ensure the record has been persisted.
+            persisted = Account.query.filter_by(name=account.name).first()
+            self.assertIsNotNone(persisted)
+            self.assertEqual(persisted.name, account.name)
+
+    def test_create_integrity_error_with_email(self):
+        """It should raise a DataValidationError when creating a duplicate record,
+        due to an integrity error."""
+        with self.app.app_context():
+            # Create the first account
+            account1 = AccountFactory()
+            account1.create()
+
+            # Attempt to create a second account with the same email,
+            # triggering the unique constraint.
+            account2 = AccountFactory()
+            account2.email = account1.email  # Ensure the email is the same.
+            with self.assertRaises(DataValidationError) as context:
+                account2.create()
+            self.assertIn(
+                'Integrity error creating record',
+                str(context.exception)
+            )
 
     def test_partial_update_valid_data(self):
         """It should partially update an account."""

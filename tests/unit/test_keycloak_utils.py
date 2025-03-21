@@ -1,5 +1,5 @@
 """
-Account API Keycloak Test Suite.
+Account API Keycloak Unit Test Suite.
 
 Test cases can be run with the following:
   nosetests -v --with-spec --spec-color
@@ -28,7 +28,7 @@ from service.common.keycloak_utils import (
     get_keycloak_certificate,
     get_keycloak_certificate_with_retry, has_roles_and
 )
-from tests.test_constants import (
+from tests.utils.constants import (
     TEST_PATH,
     TEST_USER,
     TEST_ROLE,
