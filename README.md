@@ -451,6 +451,48 @@ including infrastructure setup, database migrations, and service access.
 
 ## Running Tests
 
+### Introduction
+
+The microservice utilizes unit tests to verify individual components and
+integration tests to ensure system-wide functionality.
+
+**1. Unit Tests: Verifying Individual Components**
+
+* **Focus on Isolation:**
+    * Unit tests are designed to isolate and examine the smallest testable
+      parts of the microservice, typically individual functions, methods, or
+      classes.
+    * This isolation is achieved through techniques like mocking and stubbing,
+      which replace external dependencies with controlled simulations.
+* **Granular Validation:**
+    * The primary goal is to ensure that each component behaves as expected in
+      isolation. This allows to pinpoint bugs at the most granular level,
+      making debugging significantly easier.
+* **Speed and Efficiency:**
+    * Unit tests are generally fast to execute, enabling rapid feedback during
+      development. This promotes a test-driven development (TDD) approach,
+      where tests are written before the actual code.
+* **Benefits:**
+    * Improved code quality and maintainability.
+    * Early detection of bugs.
+    * Facilitates refactoring by providing confidence in the code's behavior.
+    * Enhanced code documentation through executable examples.
+
+**2. Integration Tests: Ensuring System-Wide Functionality**
+
+* **Focus on Interactions:**
+    * Integration tests go beyond individual components and examine how
+      different parts of the microservice interact with each other.
+    * This includes testing the communication between modules, services,
+      databases, and external APIs.
+* **Benefits:**
+    * Detection of integration issues that are not apparent in unit tests.
+    * Validation of system-level functionality and performance.
+    * Increased confidence in the microservice's overall stability.
+    * Verifying that all parts of the system work together.
+
+### Execution
+
 To execute the microservice's tests, follow these steps:
 
 1. **Start Infrastructure Services:**

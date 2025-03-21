@@ -4,14 +4,15 @@ Schemas for Account microservice.
 All schemas are stored in this module.
 """
 from datetime import date
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from pydantic import (
     BaseModel,
     field_validator,
     EmailStr,
-    constr
+    constr,
+    Field
 )
 
 from service.common.constants import (
@@ -168,6 +169,27 @@ class AccountDTO(BaseModel):
         from_attributes = True
         # Allows the DTO to be populated by aliases
         populate_by_name = True
+
+
+class AccountPagedListDTO(BaseModel):
+    """Data Transfer Object for a paginated list of accounts.
+
+    This DTO wraps a list of AccountDTO objects with pagination metadata, including
+    the current page, the number of items per page, and the total number of
+    available accounts.
+    """
+    items: List[AccountDTO] = Field(
+        description='List of AccountDTO objects for the current page.'
+    )
+    page: int = Field(
+        1, ge=1, description='Current page number (1-indexed, starts from 1).'
+    )
+    per_page: int = Field(
+        1, ge=1, description='Number of AccountDTO objects per page.'
+    )
+    total: int = Field(
+        0, ge=0, description='Total number of available AccountDTO objects.'
+    )
 
 
 class CreateAccountDTO(BaseModel):
