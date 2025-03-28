@@ -181,7 +181,8 @@ class DummyKafkaProducerConfig(KafkaProducerConfig):
                  acks: Union[int, str],
                  linger_ms: int,
                  batch_size: int,
-                 health_check_interval: int
+                 health_check_interval: int,
+                 compression_type: Optional[str] = 'gzip'
                  ) -> None:
         """
         Initialize the KafkaProducer configuration with test-specific settings.
@@ -204,6 +205,6 @@ class DummyKafkaProducerConfig(KafkaProducerConfig):
             acks,
             linger_ms,
             batch_size,
-            health_check_interval
+            health_check_interval,
+            compression_type
         )
-        self.compression_type = 'gzip'

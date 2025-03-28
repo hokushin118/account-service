@@ -7,7 +7,6 @@ with pagination, utilizing caching for improved performance, and generating ETag
 hashes for cache validation.
 """
 import logging
-import os
 from typing import Any, Tuple, Optional
 from uuid import UUID
 
@@ -15,6 +14,7 @@ from flask_jwt_extended import get_jwt_identity
 
 from service import app, cache
 from service.common.constants import ACCOUNT_CACHE_KEY, ROLE_ADMIN
+from service.common.env_utils import get_int_from_env
 from service.common.keycloak_utils import get_user_roles
 from service.common.utils import generate_etag_hash
 from service.errors import (
@@ -26,12 +26,14 @@ from service.models import Account
 from service.schemas import (
     AccountDTO,
     UpdateAccountDTO,
-    PartialUpdateAccountDTO, CreateAccountDTO, AccountPagedListDTO
+    PartialUpdateAccountDTO,
+    CreateAccountDTO,
+    AccountPagedListDTO
 )
 
 logger = logging.getLogger(__name__)
 
-CACHE_DEFAULT_TIMEOUT = int(os.environ.get('CACHE_DEFAULT_TIMEOUT', 3600))
+CACHE_DEFAULT_TIMEOUT = get_int_from_env('CACHE_DEFAULT_TIMEOUT', 3600)
 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE = 'You are not authorized to modify this resource.'
 
 

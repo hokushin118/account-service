@@ -16,6 +16,7 @@ from flask import request, Response
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from kafka.producer.future import RecordMetadata  # pylint: disable=E0401
 
+from service.common.env_utils import get_int_from_env
 from service.common.kafka_producer import KafkaProducerManager
 from service.common.utils import generate_correlation_id
 from service.configs import KafkaProducerConfig
@@ -34,30 +35,30 @@ KAFKA_TOPIC = os.environ.get(
     'KAFKA_AUDIT_TOPIC',
     'audit-events'
 )
-KAFKA_RETRIES = int(os.environ.get(
+KAFKA_RETRIES = get_int_from_env(
     'KAFKA_AUDIT_RETRIES',
-    '5'
-))
-KAFKA_ACKS = int(os.environ.get(
+    5
+)
+KAFKA_ACKS = get_int_from_env(
     'KAFKA_AUDIT_ACKS',
-    '1'
-))
-KAFKA_LINGER_MS = int(os.environ.get(
+    1
+)
+KAFKA_LINGER_MS = get_int_from_env(
     'KAFKA_AUDIT_LINGER_MS',
-    '100'
-))
-KAFKA_BATCH_SIZE = int(os.environ.get(
+    100
+)
+KAFKA_BATCH_SIZE = get_int_from_env(
     'KAFKA_AUDIT_BATCH_SIZE',
-    '16384'
-))
+    16384
+)
 KAFKA_COMPRESSION = os.environ.get(
     'KAFKA_AUDIT_COMPRESSION',
     'gzip'
 )
-KAFKA_HEALTH_CHECK_INTERVAL = int(os.environ.get(
+KAFKA_HEALTH_CHECK_INTERVAL = get_int_from_env(
     'KAFKA_AUDIT_HEALTH_CHECK_INTERVAL',
-    '60'
-))
+    60
+)
 
 config = KafkaProducerConfig(
     bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,

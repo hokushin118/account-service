@@ -4,6 +4,7 @@ Utility functions.
 This module contains utility functions to REST API.
 """
 import hashlib
+import logging
 import sys
 import uuid
 from functools import wraps
@@ -21,8 +22,10 @@ from sqlalchemy import (
 from service import app
 from service.common import status
 
+logger = logging.getLogger(__name__)
+
 ######################################################################
-#  U T I L I T Y   F U N C T I O N S
+#  UTILITY FUNCTIONS
 ######################################################################
 
 request_counter = Counter(
