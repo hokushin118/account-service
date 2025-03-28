@@ -25,8 +25,10 @@ from service.common.constants import (
     ADDRESS_MAX_LENGTH,
     PHONE_MAX_LENGTH,
     AUTHORIZATION_HEADER,
-    BEARER_HEADER, GENDER_MAX_LENGTH
+    BEARER_HEADER,
+    GENDER_MAX_LENGTH
 )
+from service.common.env_utils import get_bool_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +104,9 @@ from service.common.keycloak_utils import (
     KEYCLOAK_URL,
     KEYCLOAK_REALM,
     get_keycloak_certificate,
-    get_keycloak_certificate_with_retry, KEYCLOAK_CLIENT_ID, KEYCLOAK_SECRET
+    get_keycloak_certificate_with_retry,
+    KEYCLOAK_CLIENT_ID,
+    KEYCLOAK_SECRET
 )
 
 app_config = AppConfig()
@@ -111,8 +115,8 @@ app_config = AppConfig()
 # This is a common way to manage configuration, especially in containerized environments.
 VERSION = os.environ.get('VERSION', '0.0.1')  # Default if not set
 NAME = os.environ.get('NAME', 'account-service')
-FORCE_HTTPS = os.environ.get('FORCE_HTTPS', 'False').lower() == 'true'
-SWAGGER_ENABLED = os.environ.get('SWAGGER_ENABLED', 'false').lower() == 'true'
+FORCE_HTTPS = get_bool_from_env('FORCE_HTTPS', False)
+SWAGGER_ENABLED = get_bool_from_env('SWAGGER_ENABLED', False)
 CACHE_TYPE = os.environ.get('CACHE_TYPE', 'redis')
 CACHE_REDIS_HOST = os.environ.get('CACHE_REDIS_HOST', 'localhost')
 CACHE_REDIS_PORT = os.environ.get('CACHE_REDIS_PORT', '6379')

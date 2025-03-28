@@ -5,7 +5,6 @@ This microservice handles the lifecycle of Accounts
 """
 import datetime
 import logging
-import os
 from typing import Callable
 from uuid import UUID
 
@@ -25,7 +24,7 @@ from service import (
     app,
     VERSION,
     NAME,
-    metrics
+    metrics, get_bool_from_env
 )
 from service.common import status
 from service.common.constants import (
@@ -54,9 +53,7 @@ HEALTH_PATH = f"{ROOT_PATH}/health"
 INFO_PATH = f"{ROOT_PATH}/info"
 ACCOUNTS_PATH_V1 = f"{ROOT_PATH}/v1/accounts"
 # Enable audit logging if AUDIT_ENABLED is set to "true"
-AUDIT_ENABLED = os.environ.get(
-    'AUDIT_ENABLED', 'False'
-).lower() == 'true'
+AUDIT_ENABLED = get_bool_from_env('AUDIT_ENABLED', False)
 
 # Initialize the AccountService
 account_service = AccountService()
