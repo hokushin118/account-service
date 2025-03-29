@@ -5,7 +5,7 @@ from typing import Union, Optional
 
 from kafka.errors import KafkaConnectionError  # pylint: disable=E0401
 
-from service.common.kafka_producer import KafkaProducerManager
+from service.kafka.kafka_producer import KafkaProducerManager
 from service.configs import KafkaProducerConfig
 from service.schemas import AccountPagedListDTO, AccountDTO
 from tests.utils.constants import TEST_TOPIC

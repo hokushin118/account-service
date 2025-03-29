@@ -13,10 +13,7 @@ from unittest.mock import patch
 from flask import request
 
 from service.common import status
-from service.common.audit_utils import (
-    get_request_body_or_none,
-    audit_log_kafka
-)
+from service.common.audit import AuditLogger
 from tests.integration.base import (
     BaseTestCase,
     dummy_route_success,
@@ -42,7 +39,7 @@ class TestGetRequestBodyOrNone(BaseTestCase):
                 method='POST',
                 json={'key': 'value'}
         ):
-            result = get_request_body_or_none()
+            result = AuditLogger.get_request_body_or_none()
             self.assertEqual(result, {'key': 'value'})
 
     def test_empty_body(self):
@@ -53,7 +50,7 @@ class TestGetRequestBodyOrNone(BaseTestCase):
                 data='',
                 content_type='application/json'
         ):
-            result = get_request_body_or_none()
+            result = AuditLogger.get_request_body_or_none()
             self.assertIsNone(result)
 
     def test_invalid_json_body(self):
@@ -65,10 +62,10 @@ class TestGetRequestBodyOrNone(BaseTestCase):
                 content_type='application/json'
         ):
             with self.assertLogs(
-                    'service.common.audit_utils',
+                    'service.common.audit',
                     level='ERROR'
             ) as common_module:
-                result = get_request_body_or_none()
+                result = AuditLogger.get_request_body_or_none()
                 self.assertIsNone(result)
                 # Check that error log includes a message about JSON decode failure.
                 self.assertIn(
@@ -85,8 +82,9 @@ class TestGetRequestBodyOrNone(BaseTestCase):
                 data=text_data,
                 content_type='text/plain'
         ):
-            result = get_request_body_or_none()
+            result = AuditLogger.get_request_body_or_none()
             self.assertEqual(result, text_data)
+
 
 @unittest.skipIf(
     os.getenv('RUN_INTEGRATION_TESTS') != 'true',
@@ -121,7 +119,8 @@ class TestAuditLogKafkaDecorator(BaseTestCase):
             mock_producer_instance.send.return_value.add_callback \
                 .return_value.add_errback.return_value = None
 
-            decorated = audit_log_kafka(dummy_route_success)
+            audit_logger = AuditLogger()
+            decorated = audit_logger.audit_log_kafka(dummy_route_success)
             with self._setup_request_context(
                     method='POST',
                     json_data={'input': 'data'}
@@ -135,7 +134,8 @@ class TestAuditLogKafkaDecorator(BaseTestCase):
     def test_decorator_jwt_failure(self):
         """It should execute the decorated function without audit logging
         when JWT verification fails."""
-        decorated = audit_log_kafka(dummy_route_success)
+        audit_logger = AuditLogger()
+        decorated = audit_logger.audit_log_kafka(dummy_route_success)
         with self._setup_request_context(method='GET'):
             response = decorated()
             self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -146,7 +146,8 @@ class TestAuditLogKafkaDecorator(BaseTestCase):
             mock_producer_instance = mock_producer.return_value
             mock_producer_instance.send.return_value.add_callback \
                 .return_value.add_errback.return_value = None
-            decorated = audit_log_kafka(dummy_route_failure)
+            audit_logger = AuditLogger()
+            decorated = audit_logger.audit_log_kafka(dummy_route_failure)
             with self._setup_request_context(method='GET'):
                 with self.assertRaises(Exception) as context:
                     decorated()

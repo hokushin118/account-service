@@ -1,5 +1,5 @@
 """
-Kafka Producer Management Module.
+Kafka Producer Manager Module.
 
 This module provides the KafkaProducerManager class that encapsulates the logic
 for lazy initialization, retrieval, and proper closure of a KafkaProducer
@@ -12,6 +12,7 @@ import json
 import logging
 import threading
 import time
+import uuid
 from types import TracebackType
 from typing import Optional, Union, Type
 
@@ -30,9 +31,20 @@ from service.configs import KafkaProducerConfig
 logger = logging.getLogger(__name__)
 
 
-class KafkaProducerManager:
+def generate_correlation_id() -> str:
+    """Generates a unique correlation ID.
+
+    It should create and return a new universally unique identifier (UUID)
+    as a string, which can be used to correlate logs or trace requests.
+
+    Returns:
+        str: A unique correlation ID in string format.
     """
-    Manages the Kafka producer instance.
+    return str(uuid.uuid4())
+
+
+class KafkaProducerManager:
+    """Manages the Kafka producer instance.
 
     It should encapsulate the logic for lazy initialization,
     retrieval, and proper closure of a KafkaProducer used for sending messages.
@@ -46,27 +58,32 @@ class KafkaProducerManager:
             self,
             config: KafkaProducerConfig
     ):
-        """Initializes the KafkaProducerManager with the given bootstrap servers and retry count.
-
-        It should store the configuration parameters and prepare the manager
-        for lazy creation of the producer instance.
+        """Initializes the KafkaProducerManager with the provided configuration.
 
         Args:
-            config (KafkaProducerConfig): Kafka configuration
+            config (KafkaProducerConfig): Kafka producer configuration.
         """
-        self.bootstrap_servers = config.bootstrap_servers
-        self.retries = self._validate_non_negative(config.retries)
-        self.acks = self._validate_acks(config.acks)
-        self.linger_ms = self._validate_non_negative(config.linger_ms)
-        self.batch_size = self._validate_non_negative(config.batch_size)
-        self.compression_type = config.compression_type
-        self.health_check_interval = config.health_check_interval
+        self._validate_config(config)
+        self.config = config
+        self.health_check_interval = self.config.health_check_interval
 
         self._producer: Optional[KafkaProducer] = None
         self._producer_lock = threading.Lock()
 
+        # Use an event flag to signal threads for a graceful shutdown
+        self._stop_event = threading.Event()
+
+        # Start asynchronous Kafka producer initialization in a background thread.
+        # This prevents the __init__ method from blocking, as producer initialization can be
+        # time-consuming particularly with slow brokers or network latency
         self._start_async_init()
+
+        # Start health check thread right away
         self._start_health_check_thread()
+
+    def __enter__(self) -> "KafkaProducerManager":
+        """Allows KafkaProducerManager to be used as a context manager."""
+        return self
 
     def __exit__(
             self,
@@ -90,6 +107,7 @@ class KafkaProducerManager:
         close_producer() method.
         """
         self.close_producer()
+        self._stop_event.set()
 
     def get_producer(self) -> Optional[KafkaProducer]:
         """Get (and lazily create) a KafkaProducer instance.
@@ -102,7 +120,7 @@ class KafkaProducerManager:
         """
         if self._producer is None:
             with self._producer_lock:
-                if self._producer is None:  # double check locking.
+                if self._producer is None:  # double check locking
                     logger.warning(
                         'Kafka producer has not been initialized yet. Trying to initialize now.'
                     )
@@ -120,10 +138,23 @@ class KafkaProducerManager:
         It should safely close the producer connection and unset the instance variable.
         After closure, it logs that the producer has been closed.
         """
-        if self._producer:
-            self._producer.close()
-            self._producer = None
-            logger.info('Kafka producer closed...')
+        with self._producer_lock:
+            if self._producer:
+                try:
+                    self._producer.close()
+                    logger.info('Kafka producer closed successfully.')
+                except Exception as err:  # pylint: disable=W0703
+                    logger.exception(
+                        'Error while closing Kafka producer: %s',
+                        err
+                    )
+                finally:
+                    logger.info('Kafka producer closed.')
+                    self._producer = None
+            else:
+                logger.info(
+                    'Close producer called, producer was already none.'
+                )
 
     def is_producer_healthy(self) -> bool:
         """Check if the Kafka producer is healthy.
@@ -139,6 +170,7 @@ class KafkaProducerManager:
             self._producer.partitions_for(
                 self.CONSUMER_OFFSETS_TOPIC
             )
+            # pylint: disable=R0801
             return True
         except (
                 KafkaConnectionError,
@@ -177,28 +209,50 @@ class KafkaProducerManager:
         with self._producer_lock:
             if self._producer is None:
                 try:
-                    self._producer = KafkaProducer(
-                        bootstrap_servers=self.bootstrap_servers,
-                        value_serializer=lambda v: json.dumps(v).encode(
+                    producer_kwargs = {
+                        'bootstrap_servers': self.config.bootstrap_servers,
+                        'value_serializer': lambda v: json.dumps(v).encode(
                             'utf-8'
                         ),
-                        acks=self.acks,
-                        retries=self.retries,
-                        linger_ms=self.linger_ms,
-                        batch_size=self.batch_size,
-                        compression_type=self.compression_type,
+                        'acks': self.config.acks
+                    }
+
+                    if self.config.retries is not None:
+                        producer_kwargs[
+                            'retries'
+                        ] = self.config.retries
+
+                    if self.config.linger_ms is not None:
+                        producer_kwargs[
+                            'linger_ms'
+                        ] = self.config.linger_ms
+
+                    if self.config.batch_size is not None:
+                        producer_kwargs[
+                            'batch_size'
+                        ] = self.config.batch_size
+
+                    if self.config.compression_type is not None:
+                        producer_kwargs[
+                            'compression_type'
+                        ] = self.config.compression_type
+
+                    self._producer = KafkaProducer(
+                        **producer_kwargs
                     )
+
                     logger.info(
                         "Kafka producer initialized asynchronously "
                         "with bootstrap servers: %s, retries: %s, acks: %s, "
                         "linger_ms: %s, batch_size: %s, compression: %s",
-                        self.bootstrap_servers,
-                        self.retries,
-                        self.acks,
-                        self.linger_ms,
-                        self.batch_size,
-                        self.compression_type
+                        self.config.bootstrap_servers,
+                        self.config.retries,
+                        self.config.acks,
+                        self.config.linger_ms,
+                        self.config.batch_size,
+                        self.config.compression_type
                     )
+                # pylint: disable=R0801
                 except (
                         NoBrokersAvailable,
                         NodeNotReadyError,
@@ -222,27 +276,28 @@ class KafkaProducerManager:
     def _reinitialize_producer(self) -> None:
         """Reinitialize the Kafka producer.
 
-        The method first closes the existing producer (if any) and then attempts to get a new
-        producer instance. It logs a warning before reinitialization and an appropriate
+        This method closes any existing producer, attempts to initialize a
+        new one. It logs a warning before reinitialization and an appropriate
         message based on the outcome.
         """
         logger.warning('Reinitializing Kafka producer...')
         self.close_producer()
-        self.get_producer()  # get producer will reinitialize the producer.
+        self._async_init()
         if self._producer:
             logger.info(
                 'Kafka producer reinitialized successfully...'
             )
-        else:
+        else:  # pylint: disable=R0801
             logger.error(
-                'Failed to reinitialize Kafka producer.'
+                'Failed to reinitialize Kafka producer...'
             )
 
-    def _start_health_check_thread(self) -> None:
+    def _start_health_check_thread(self) -> None:  # pylint: disable=R0801
         """Start the background health check thread.
 
         The thread runs as a daemon and periodically checks the Kafka producer's
         health by invoking _health_check_loop."""
+        # pylint: disable=R0801
         self._health_check_thread = threading.Thread(
             target=self._health_check_loop,
             daemon=True
@@ -256,15 +311,33 @@ class KafkaProducerManager:
         health_check_interval. If the producer is found to be unhealthy,
         it attempts reinitialization.
         """
-        while True:
+        while not self._stop_event.is_set():
             if not self.is_producer_healthy():
                 self._reinitialize_producer()
             time.sleep(self.health_check_interval)
 
     @staticmethod
-    def _validate_non_negative(input_val: int) -> int:
+    def _validate_config(config: KafkaProducerConfig) -> None:
+        """Validates the essential configuration parameters of a KafkaProducerConfig object.
+
+        This method checks for the presence of required configurations such as
+        'bootstrap_servers', and 'acks'. If any of these are missing, it raises a ValueError
+        with a descriptive message.
+
+        Args:
+            config (KafkaProducerConfig): The configuration object to validate.
+
+        Raises:
+            ValueError: If any of the required configurations are None.
         """
-        Validates that the 'input_val' is a non-negative integer.
+        if config.bootstrap_servers is None:
+            raise ValueError('bootstrap_servers must be provided.')
+        if config.acks is None:
+            raise ValueError('acks must be provided.')
+
+    @staticmethod
+    def _validate_non_negative(input_val: int) -> int:
+        """Validates that the 'input_val' is a non-negative integer.
 
         It should ensure that the provided parameter is an integer that is zero or positive.
 

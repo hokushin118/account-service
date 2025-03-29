@@ -30,7 +30,7 @@ class TestAuditLogDecorator(TestCase):
         """It should apply audit logging when AUDIT_ENABLED is True."""
         with patch('service.routes.AUDIT_ENABLED', True), \
                 patch(
-                    'service.common.audit_utils.audit_log_kafka',
+                    'service.common.audit.AuditLogger.audit_log_kafka',
                     side_effect=lambda f: f
                 ) as mock_audit_log_kafka:
             decorated = audit_log(dummy_function)

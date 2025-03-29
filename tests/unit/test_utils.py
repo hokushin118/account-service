@@ -7,14 +7,12 @@ Test cases can be run with the following:
 """
 import hashlib
 import sys
-import uuid
 from unittest import TestCase
 
 from service.common.utils import (
     generate_etag_hash,
     count_requests,
-    is_flask_cli_alternative,
-    generate_correlation_id
+    is_flask_cli_alternative
 )
 
 
@@ -131,24 +129,3 @@ class TestFlaskCliAlternative(TestCase):
         """It should return False when sys.argv does not contain any recognized Flask command."""
         sys.argv = ['python', 'app.py']
         self.assertFalse(is_flask_cli_alternative())
-
-
-class TestGenerateCorrelationID(TestCase):
-    """The generate_correlation_id Function Tests."""
-
-    def test_return_type(self):
-        """It should return a string representing the UUID."""
-        correlation_id = generate_correlation_id()
-        self.assertIsInstance(correlation_id, str)
-        try:
-            _ = uuid.UUID(correlation_id)
-        except ValueError:
-            self.fail('Returned correlation id is not a valid UUID')
-
-    def test_uniqueness(self):
-        """It should generate unique correlation IDs over multiple invocations."""
-        ids = {generate_correlation_id() for _ in range(1000)}
-        self.assertEqual(
-            len(ids), 1000,
-            'Expected 1000 unique correlation ids'
-        )

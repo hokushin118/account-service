@@ -44,4 +44,4 @@ USER cbotee
 EXPOSE 5000
 
 # Use gunicorn with a process manager (better for production)
-CMD ["gunicorn", "--bind=0.0.0.0:5000", "--log-level=info", "service:app", "--workers", "3", "--threads", "4", "--access-logfile", "-"]
+CMD ["gunicorn", "--bind=0.0.0.0:5000", "--log-level=info", "service:app", "--workers", "1", "--threads", "4", "--access-logfile", "-"]

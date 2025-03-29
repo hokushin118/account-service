@@ -7,7 +7,10 @@ and SQL database
 import datetime
 import logging
 import os
+import signal
 import sys
+from types import FrameType
+from typing import Optional
 
 from dotenv import load_dotenv
 from flasgger import Swagger, LazyString, LazyJSONEncoder, MK_SANITIZER
@@ -29,6 +32,7 @@ from service.common.constants import (
     GENDER_MAX_LENGTH
 )
 from service.common.env_utils import get_bool_from_env
+from service.consumers import get_kafka_consumer_manager
 
 logger = logging.getLogger(__name__)
 
@@ -603,6 +607,56 @@ def create_app() -> Flask:
     current_app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = \
         app_config.sqlalchemy_track_modifications
 
+    # Define a shutdown handler that captures the current_app via closure.
+    def shutdown_handler(signum: int, frame: Optional[FrameType]) -> None:
+        """Handles application shutdown signals and closes the Kafka consumer.
+
+        This function is designed to be used as a signal handler for graceful
+        application shutdown. It logs the shutdown event and closes the
+        KafkaConsumerManager associated with the Flask application.
+
+        Args:
+            signum: The signal number that triggered the handler.
+            frame: The current stack frame (optional).
+        """
+        logger.info(
+            'Application shutting down. Signal received: %s, '
+            'Frame: %s. Closing KafkaConsumerManager...',
+            signum,
+            frame
+        )
+        try:
+            if current_app and hasattr(
+                    current_app,
+                    'kafka_consumer_manager'
+            ) and current_app.kafka_consumer_manager:
+                current_app.kafka_consumer_manager.close_consumer()
+                logger.info('KafkaConsumerManager closed successfully.')
+            else:
+                logger.warning(
+                    'KafkaConsumerManager not initialized or not found.'
+                )
+        except Exception as err:  # pylint: disable=W0703
+            # pylint: disable=R0801
+            logger.error(
+                'Error closing KafkaConsumerManager: %s',
+                err,
+                exc_info=True
+            )
+        # pylint: disable=R0801
+        sys.exit(0)
+
+    # Register shutdown_app as the handler for SIGTERM and SIGINT.
+    # pylint: disable=R0801
+    signal.signal(
+        signal.SIGTERM,
+        shutdown_handler
+    )  # For Docker shutdown signals (or other system signals)
+    signal.signal(
+        signal.SIGINT,
+        shutdown_handler
+    )  # For keyboard interrupts (Ctrl+C)
+
     # Configure Security and Monitoring
     configure_security(current_app)
 
@@ -617,9 +671,14 @@ def create_app() -> Flask:
     # Configure JWT with Keycloak public certificate
     configure_jwt(current_app)
 
+    # Instantiate the KafkaConsumerManager
+    kafka_consumer_manager = get_kafka_consumer_manager()
+    # Attach the manager to the app instance
+    current_app.kafka_consumer_manager = kafka_consumer_manager
+
     # Record the application start time before handling the first request
     @current_app.before_first_request
-    def before_first_request() -> None:
+    def startup() -> None:
         """Records the application's start time.
 
         This function is executed only once, before the first request is
@@ -627,6 +686,9 @@ def create_app() -> Flask:
         which can then be used to calculate uptime.
         """
         current_app.start_time = datetime.datetime.now()
+        current_app.logger.info(
+            'Account microservice starting up with KafkaConsumerManager active...'
+        )
 
     # Set up logging for production
     log_handlers.init_logging(current_app, logging.DEBUG)

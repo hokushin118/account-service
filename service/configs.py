@@ -3,7 +3,6 @@ Global Configuration for Application
 """
 import logging
 import os
-import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Union, Optional
@@ -276,7 +275,7 @@ class KafkaConsumerConfig:
         Returns:
             str: A unique consumer ID.
         """
-        instance_id = uuid.uuid4()
+        instance_id = 1
         return f"{service_name}-{topic_name}-consumer-{instance_id}"
 
 

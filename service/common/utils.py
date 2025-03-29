@@ -6,7 +6,6 @@ This module contains utility functions to REST API.
 import hashlib
 import logging
 import sys
-import uuid
 from functools import wraps
 from typing import Any, Union, Callable
 from typing import Tuple
@@ -176,15 +175,3 @@ def is_flask_cli_alternative() -> bool:
         'db-history', 'db-create'
     }
     return any(arg in flask_commands for arg in sys.argv)
-
-
-def generate_correlation_id() -> str:
-    """Generates a unique correlation ID.
-
-    It should create and return a new universally unique identifier (UUID)
-    as a string, which can be used to correlate logs or trace requests.
-
-    Returns:
-        str: A unique correlation ID in string format.
-    """
-    return str(uuid.uuid4())

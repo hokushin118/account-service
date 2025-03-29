@@ -174,7 +174,6 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
                 'Could not create test Account'
             )
             new_account = response.get_json()
-            account.id = new_account['id']
             accounts.append(new_account)
         return accounts
 
