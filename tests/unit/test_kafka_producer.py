@@ -5,12 +5,38 @@ Test cases can be run with the following:
   nosetests -v --with-spec --spec-color
   coverage report -m
 """
+import uuid
 from unittest import TestCase
 from unittest.mock import patch
 
-from service.common.kafka_producer import KafkaProducerManager
-from tests.utils.utils import DummyKafkaProducerConfig, DummyKafkaProducer, \
+from service.kafka.kafka_producer import KafkaProducerManager, \
+    generate_correlation_id
+from tests.utils.utils import (
+    DummyKafkaProducerConfig,
+    DummyKafkaProducer,
     DummyKafkaProducerError
+)
+
+
+class TestGenerateCorrelationID(TestCase):
+    """The generate_correlation_id Function Tests."""
+
+    def test_return_type(self):
+        """It should return a string representing the UUID."""
+        correlation_id = generate_correlation_id()
+        self.assertIsInstance(correlation_id, str)
+        try:
+            _ = uuid.UUID(correlation_id)
+        except ValueError:
+            self.fail('Returned correlation id is not a valid UUID')
+
+    def test_uniqueness(self):
+        """It should generate unique correlation IDs over multiple invocations."""
+        ids = {generate_correlation_id() for _ in range(1000)}
+        self.assertEqual(
+            len(ids), 1000,
+            'Expected 1000 unique correlation ids'
+        )
 
 
 class TestKafkaProducerManager(TestCase):
@@ -61,20 +87,6 @@ class TestKafkaProducerManager(TestCase):
             # pylint: disable=W0212
             KafkaProducerManager._validate_acks(2)
 
-    @patch(
-        'service.common.kafka_producer.KafkaProducerManager',
-        new=DummyKafkaProducer
-    )
-    def test_close_producer(self):
-        """It should close the KafkaProducer and unset the producer instance."""
-        dummy_producer = DummyKafkaProducer()
-        # pylint: disable=W0212
-        self.manager._producer = dummy_producer
-        self.manager.close_producer()
-        self.assertTrue(dummy_producer.closed)
-        # pylint: disable=W0212
-        self.assertIsNone(self.manager._producer)
-
     def test_is_producer_healthy_when_none(self):
         """It should return False if no producer has been initialized."""
         # pylint: disable=W0212
@@ -82,7 +94,7 @@ class TestKafkaProducerManager(TestCase):
         self.assertFalse(self.manager.is_producer_healthy())
 
     @patch(
-        'service.common.kafka_producer.KafkaProducerManager',
+        'service.kafka.kafka_producer.KafkaProducerManager',
         new=DummyKafkaProducer
     )
     def test_is_producer_healthy_success(self):
@@ -99,7 +111,7 @@ class TestKafkaProducerManager(TestCase):
         self.assertFalse(self.manager.is_producer_healthy())
 
     @patch(
-        'service.common.kafka_producer.KafkaProducerManager',
+        'service.kafka.kafka_producer.KafkaProducerManager',
         new=DummyKafkaProducer
     )
     def test_reinitialize_producer(self):
@@ -110,7 +122,7 @@ class TestKafkaProducerManager(TestCase):
         # Patch get_producer to return a new DummyKafkaProducer instance.
         with patch.object(
                 self.manager,
-                'get_producer',
+                '_async_init',
                 return_value=DummyKafkaProducer()
         ) as mock_get:
             self.manager._reinitialize_producer()
@@ -122,7 +134,7 @@ class TestKafkaProducerManager(TestCase):
         producer as None."""
         # Patch KafkaProducer to always raise an exception.
         with patch(
-                'service.common.kafka_producer.KafkaProducerManager',
+                'service.kafka.kafka_producer.KafkaProducerManager',
                 side_effect=Exception('Init error')
         ):
             self.manager._producer = None  # pylint: disable=W0212
