@@ -2,7 +2,7 @@
 Account Model Integration Test Suite.
 
 Test cases can be run with the following:
-  APP_SETTINGS=testing nosetests -v --with-spec --spec-color
+  RUN_INTEGRATION_TESTS=true nosetests -v --with-spec --spec-color tests/integration
   coverage report -m
 """
 import os
@@ -10,11 +10,13 @@ import unittest
 from uuid import UUID
 
 from sqlalchemy.sql.expression import desc
+from testcontainers.postgres import PostgresContainer
 
 from service.models import Account, DataValidationError
 from tests.integration.base import BaseTestCase
 from tests.utils.constants import TEST_USER_ID
 from tests.utils.factories import AccountFactory
+from tests.utils.utils import apply_migrations
 
 
 ######################################################################
@@ -26,6 +28,28 @@ from tests.utils.factories import AccountFactory
 )
 class TestAccount(BaseTestCase):  # pylint:disable=R0904
     """Test Cases for Account Model."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Start Testcontainers
+        cls.postgres_container = PostgresContainer('postgres:14')
+        cls.postgres_container.start()
+
+        # Update app config with container connection details
+        cls.app.config[
+            'DATABASE_URI'] = cls.postgres_container.get_connection_url()
+        cls.app.config[
+            'SQLALCHEMY_DATABASE_URI'] = cls.postgres_container.get_connection_url()
+
+        # Apply migrations
+        apply_migrations(cls.app, cls.engine)
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        # Stop Testcontainers
+        cls.postgres_container.stop()
 
     ######################################################################
     #  TEST CASES

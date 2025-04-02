@@ -581,9 +581,7 @@ def configure_cache(current_app: Flask) -> Cache:
     ] = f"redis://{CACHE_REDIS_HOST}:{CACHE_REDIS_PORT}/{CACHE_REDIS_DB}"
 
     # Initialize Flask-Caching with Redis
-    redis_cache = Cache(current_app)
-    redis_cache.init_app(current_app)
-    return redis_cache
+    return Cache(current_app)
 
 
 # --- Flask Application Setup ---
