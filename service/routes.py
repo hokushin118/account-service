@@ -393,10 +393,13 @@ def list_accounts() -> Response:
         page,
         per_page
     )
+
     json_data = account_paginated_list_dto.model_dump_json(
         exclude_none=True,
         indent=JSON_INDENT
     )
+
+    app.logger.debug("Etag value: %s", etag_hash)
 
     # Check If-None-Match:
     if_none_match = request.headers.get(IF_NONE_MATCH_HEADER)
@@ -464,6 +467,8 @@ def find_by_id(account_id: UUID) -> Response:
         exclude_none=True,
         indent=JSON_INDENT
     )
+
+    app.logger.debug("Etag value: %s", etag_hash)
 
     # Check for If-None-Match header:
     if_none_match = request.headers.get(IF_NONE_MATCH_HEADER)

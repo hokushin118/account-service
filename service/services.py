@@ -11,6 +11,7 @@ from typing import Any, Tuple, Optional
 from uuid import UUID
 
 from flask_jwt_extended import get_jwt_identity
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from service import app, cache
 from service.common.constants import ACCOUNT_CACHE_KEY, ROLE_ADMIN
@@ -37,12 +38,110 @@ CACHE_DEFAULT_TIMEOUT = get_int_from_env('CACHE_DEFAULT_TIMEOUT', 3600)
 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE = 'You are not authorized to modify this resource.'
 
 
-class AccountService:
-    """Service class for handling Account operations."""
+class AccountServiceCache:
+    """Handles caching logic for AccountService."""
 
-    ######################################################################
-    # HELPER METHODS
-    ######################################################################
+    @staticmethod
+    def get_cached_data(cache_key: str) -> Optional[Any]:
+        """Retrieves data from the cache, handling potential errors.
+
+        Args:
+            cache_key (str): The key to retrieve from the cache.
+
+        Returns:
+            Optional[Any]: The cached data if successful, or None if an error occurred.
+        """
+        try:
+            cached_data = cache.get(cache_key)
+            if cached_data and isinstance(cached_data, tuple) and len(
+                    cached_data
+            ) == 2:
+                return cached_data
+            return None
+        except Exception as err:  # pylint: disable=W0703
+            error_message = f"Failed to retrieve cached account data due to: {err}"
+            app.logger.error(error_message)
+            return None
+
+    @staticmethod
+    def cache_account(cache_key: str, data: dict, etag_hash: str) -> None:
+        """Caches account data."""
+        try:
+            cache.set(
+                cache_key,
+                (data, etag_hash),
+                timeout=CACHE_DEFAULT_TIMEOUT
+            )
+        except (TypeError, ValueError, AttributeError) as err:
+            AccountServiceCache._handle_cache_error(err, type(err).__name__)
+        except Exception as err:  # pylint: disable=W0703
+            AccountServiceCache._handle_cache_error(err, 'unknown error')
+
+    @staticmethod
+    def invalidate_all_account_pages() -> None:
+        """Invalidate all cached results.
+
+        This function clears the cache and logs the process. If a Redis connection error occurs,
+        it logs an error message indicating the connection issue. Any unexpected
+        exceptions will also be logged.
+        """
+        app.logger.debug('Invalidating all cached results...')
+
+        try:
+            cache.clear()
+            app.logger.debug('All cache has been successfully invalidated.')
+        except RedisConnectionError as err:
+            app.logger.error(
+                'Redis connection error during cache invalidation: %s',
+                err
+            )
+        except Exception as err:  # pylint: disable=W0703
+            app.logger.error('Error invalidating cache: %s', err)
+
+    @staticmethod
+    def _handle_cache_error(err: Exception, error_type: str) -> None:
+        """Handles and logs cache-related errors, then raises an AccountError.
+
+        Args:
+            err (Exception): The exception that occurred.
+            error_type (str): A string describing the type of error (e.g., 'type error').
+        Raises:
+            AccountError: An exception indicating a caching failure.
+        """
+        error_message = str(err)
+        app.logger.error(
+            "Failed to cache account due to %s: %s",
+            error_type,
+            error_message
+        )
+        raise AccountError(error_message)
+
+
+class AccountServiceHelper:
+    """Helper methods for AccountService.
+
+    This class provides static methods to assist the AccountService with common tasks,
+    such as retrieving user IDs from JWTs and fetching account data with ETags.
+    """
+
+    @staticmethod
+    def get_user_id_from_jwt() -> str:
+        """Retrieves the user ID from the JWT token.
+
+        This method extracts the user's identity from the JSON Web Token (JWT)
+        present in the request's authorization header. It logs the retrieved
+        user ID for debugging purposes.
+
+        Returns:
+            str: The user ID extracted from the JWT.
+
+        Raises:
+            JWTError: If there is an issue with the JWT processing.
+        """
+        user_id = get_jwt_identity()
+        app.logger.debug('Current user ID: %s', user_id)
+        return user_id
+
     @staticmethod
     def get_account_or_404(account_id: UUID) -> Account:
         """Retrieves an account by its UUID or aborts the request with a 404 error if not found.
@@ -78,7 +177,73 @@ class AccountService:
             ) from err
 
     @staticmethod
-    def check_if_user_is_owner(
+    def get_account_dto_and_etag(account_id: UUID) -> Tuple[AccountDTO, str]:
+        """Fetches an account from the database, converts it to a DTO, and generates an ETag.
+
+        This method retrieves an account from the database using the provided account ID.
+        It then converts the account object into an AccountDTO (Data Transfer Object)
+        and generates an ETag based on the DTO's data.
+
+        Args:
+            account_id (UUID): The unique ID of the account to retrieve.
+
+        Returns:
+            Tuple[AccountDTO, str]: A tuple containing the AccountDTO and the generated ETag.
+
+        Raises:
+            HTTPException 404: if the account is not found.
+            Any other exception that AccountService.get_account_or_404 may raise.
+        """
+        account = AccountServiceHelper.get_account_or_404(account_id)
+        # Convert SQLAlchemy model to DTO
+        account_dto = AccountDTO.model_validate(account)
+        data = account_dto.model_dump()
+        # Generate the ETag
+        etag_hash = generate_etag_hash(data)
+        return account_dto, etag_hash
+
+    @staticmethod
+    def authorize_account(
+            current_user_id: str,
+            account_user_id: UUID
+    ) -> None:
+        """Authorizes a user to access and modify an account.
+
+        This function checks if the user has the necessary permissions to access
+        and modify the specified account. It first checks for the 'admin' role.
+        If the user is not an admin, it checks if the user is the owner of the account.
+
+        Args:
+            current_user_id (str): The ID of the currently logged-in user.
+            account_user_id (UUID): The ID of the account's owner.
+
+        Raises:
+            AccountAuthorizationError: If the user does not have permission.
+        """
+        # Retrieve user roles
+        roles = get_user_roles()
+        app.logger.debug('Roles: %s', roles)
+
+        if ROLE_ADMIN not in roles:
+            # If not ROLE_ADMIN, check ownership шf admin, then skip ownership check.
+            # Check if the logged-in user is the owner of the resource
+            if not AccountServiceHelper._check_if_user_is_owner(
+                    current_user_id,
+                    account_user_id
+            ):
+                app.logger.warning(
+                    "User %s does not have permission to access resource %s for modification.",
+                    current_user_id,
+                    account_user_id
+                )
+                raise AccountAuthorizationError(
+                    current_user_id,
+                    FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE,
+                    roles
+                )
+
+    @staticmethod
+    def _check_if_user_is_owner(
             user_id: str,
             account_user_id: UUID
     ) -> bool:
@@ -114,106 +279,9 @@ class AccountService:
                 f"Error checking ownership for user ID: {user_id}"
             ) from err
 
-    @staticmethod
-    def authorize_account(
-            current_user_id: str,
-            account_user_id: UUID
-    ) -> None:
-        """Authorizes a user to access and modify an account.
 
-        This function checks if the user has the necessary permissions to access
-        and modify the specified account. It first checks for the 'admin' role.
-        If the user is not an admin, it checks if the user is the owner of the account.
-
-        Args:
-            current_user_id (str): The ID of the currently logged-in user.
-            account_user_id (UUID): The ID of the account's owner.
-
-        Raises:
-            AccountAuthorizationError: If the user does not have permission.
-        """
-        # Retrieve user roles
-        roles = get_user_roles()
-        app.logger.debug('Roles: %s', roles)
-
-        if ROLE_ADMIN not in roles:
-            # If not ROLE_ADMIN, check ownership шf admin, then skip ownership check.
-            # Check if the logged-in user is the owner of the resource
-            if not AccountService.check_if_user_is_owner(
-                    current_user_id,
-                    account_user_id
-            ):
-                app.logger.warning(
-                    "User %s does not have permission to access resource %s for modification.",
-                    current_user_id,
-                    account_user_id
-                )
-                raise AccountAuthorizationError(
-                    current_user_id,
-                    FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE,
-                    roles
-                )
-
-    @staticmethod
-    def invalidate_all_account_pages() -> None:
-        """Invalidate all cached results.
-
-        This function clears the cache and logs the process. If a Redis connection error occurs,
-        it logs an error message indicating the connection issue. Any unexpected
-        exceptions will also be logged.
-        """
-        app.logger.debug('Invalidating all cached results...')
-
-        try:
-            cache.clear()
-            app.logger.debug('All cache has been successfully invalidated.')
-        except ConnectionError as err:
-            app.logger.error(
-                'Redis connection error during cache invalidation: %s',
-                err
-            )
-        except Exception as err:  # pylint: disable=W0703
-            app.logger.error('Error invalidating cache: %s', err)
-
-    @staticmethod
-    def _get_cached_data(cache_key: str) -> Optional[Any]:
-        """Retrieves data from the cache, handling potential errors.
-
-        Args:
-            cache_key (str): The key to retrieve from the cache.
-
-        Returns:
-            Optional[Any]: The cached data if successful, or None if an error occurred.
-
-        Raises:
-            AccountError: If there's an issue retrieving data from the cache.
-        """
-        try:
-            return cache.get(cache_key)
-        except Exception as err:  # pylint: disable=W0703
-            error_message = f"Failed to retrieve cached account data due to: {err}"
-            app.logger.error(error_message)
-            raise AccountError(
-                error_message
-            ) from err
-
-    @staticmethod
-    def _handle_cache_error(err: Exception, error_type: str) -> None:
-        """Handles and logs cache-related errors, then raises an AccountError.
-
-        Args:
-            err (Exception): The exception that occurred.
-            error_type (str): A string describing the type of error (e.g., 'type error').
-        Raises:
-            AccountError: An exception indicating a caching failure.
-        """
-        error_message = str(err)
-        app.logger.error(
-            "Failed to cache account due to %s: %s",
-            error_type,
-            error_message
-        )
-        raise AccountError(error_message)
+class AccountService:
+    """Service class for handling Account operations."""
 
     ######################################################################
     # CREATE A NEW ACCOUNT
@@ -236,8 +304,7 @@ class AccountService:
         app.logger.info('Service - Request to create an Account...')
 
         # Get the user identity from the JWT token
-        current_user_id = get_jwt_identity()
-        app.logger.debug('Current user ID: %s', current_user_id)
+        current_user_id = AccountServiceHelper.get_user_id_from_jwt()
 
         # Create account with provided JSON payload
         account = Account()
@@ -254,9 +321,8 @@ class AccountService:
             'Account created successfully.'
         )
 
-        # Invalidate specific cache key(s)
-        AccountService.invalidate_all_account_pages()
-        app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
+        # Invalidate all cache keys
+        AccountServiceCache.invalidate_all_account_pages()
 
         return account_dto
 
@@ -289,14 +355,13 @@ class AccountService:
         app.logger.info('Service - Request to list Accounts...')
 
         # Validate JWT token and obtain user identity.
-        current_user_id = get_jwt_identity()
-        app.logger.debug('Current user ID: %s', current_user_id)
+        AccountServiceHelper.get_user_id_from_jwt()
 
         # Cache key for paginated results (include page and per_page)
         cache_key = f"{ACCOUNT_CACHE_KEY}:{page}:{per_page}"
 
         # Attempt to retrieve cached data
-        cached_data = AccountService._get_cached_data(cache_key)
+        cached_data = AccountServiceCache.get_cached_data(cache_key)
 
         if cached_data:
             app.logger.debug('Retrieving Accounts (page %d) from cache.', page)
@@ -334,16 +399,7 @@ class AccountService:
             etag_hash = generate_etag_hash(data)
 
             # Cache the data
-            try:
-                cache.set(
-                    cache_key,
-                    (data, etag_hash),
-                    timeout=CACHE_DEFAULT_TIMEOUT
-                )
-            except (TypeError, ValueError, AttributeError) as err:
-                AccountService._handle_cache_error(err, type(err).__name__)
-            except Exception as err:  # pylint: disable=W0703
-                AccountService._handle_cache_error(err, 'unknown error')
+            AccountServiceCache.cache_account(cache_key, data, etag_hash)
 
         if data['items']:
             app.logger.debug(
@@ -383,13 +439,12 @@ class AccountService:
         )
 
         # Validate JWT token and obtain user identity.
-        current_user_id = get_jwt_identity()
-        app.logger.debug('Current user ID: %s', current_user_id)
+        AccountServiceHelper.get_user_id_from_jwt()
 
         cache_key = f"{ACCOUNT_CACHE_KEY}:{account_id}"
 
         # Attempt to retrieve cached data
-        cached_data = AccountService._get_cached_data(cache_key)
+        cached_data = AccountServiceCache.get_cached_data(cache_key)
 
         if cached_data:
             app.logger.debug('Retrieving Account from cache...')
@@ -397,7 +452,7 @@ class AccountService:
             account_dto = AccountDTO.model_validate(data)
         else:
             app.logger.debug('Fetching Account from database...')
-            account = AccountService.get_account_or_404(account_id)
+            account = AccountServiceHelper.get_account_or_404(account_id)
 
             # Convert SQLAlchemy model to DTO
             account_dto = AccountDTO.model_validate(account)
@@ -407,16 +462,7 @@ class AccountService:
             etag_hash = generate_etag_hash(data)
 
         # Cache the data
-        try:
-            cache.set(
-                cache_key,
-                (data, etag_hash),
-                timeout=CACHE_DEFAULT_TIMEOUT
-            )
-        except (TypeError, ValueError, AttributeError) as err:
-            AccountService._handle_cache_error(err, type(err).__name__)
-        except Exception as err:  # pylint: disable=W0703
-            AccountService._handle_cache_error(err, 'unknown error')
+        AccountServiceCache.cache_account(cache_key, data, etag_hash)
 
         app.logger.debug(f"Account returned: {account_dto.model_dump()}")
 
@@ -454,14 +500,13 @@ class AccountService:
         )
 
         # Get the user identity from the JWT token
-        current_user_id = get_jwt_identity()
-        app.logger.debug('Current user ID: %s', current_user_id)
+        current_user_id = AccountServiceHelper.get_user_id_from_jwt()
 
         # Retrieve the account to be updated or return a 404 error if not found
-        account = AccountService.get_account_or_404(account_id)
+        account = AccountServiceHelper.get_account_or_404(account_id)
 
         # Authorizes a user to access and modify an account
-        AccountService.authorize_account(
+        AccountServiceHelper.authorize_account(
             current_user_id,
             account.user_id
         )
@@ -484,9 +529,8 @@ class AccountService:
             account_id
         )
 
-        # Invalidate specific cache key(s)
-        AccountService.invalidate_all_account_pages()
-        app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
+        # Invalidate all cache keys
+        AccountServiceCache.invalidate_all_account_pages()
 
         return account_dto
 
@@ -523,14 +567,13 @@ class AccountService:
         )
 
         # Get the user identity from the JWT token
-        current_user_id = get_jwt_identity()
-        app.logger.debug('Current user ID: %s', current_user_id)
+        current_user_id = AccountServiceHelper.get_user_id_from_jwt()
 
         # Retrieve the account to be updated or return a 404 error if not found
-        account = AccountService.get_account_or_404(account_id)
+        account = AccountServiceHelper.get_account_or_404(account_id)
 
         # Authorizes a user to access and modify an account
-        AccountService.authorize_account(
+        AccountServiceHelper.authorize_account(
             current_user_id,
             account.user_id
         )
@@ -549,9 +592,8 @@ class AccountService:
             account_id
         )
 
-        # Invalidate specific cache key(s)
-        AccountService.invalidate_all_account_pages()
-        app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
+        # Invalidate all cache keys
+        AccountServiceCache.invalidate_all_account_pages()
 
         return account_dto
 
@@ -575,17 +617,16 @@ class AccountService:
         )
 
         # Get the user identity from the JWT token
-        current_user_id = get_jwt_identity()
-        app.logger.debug('Current user ID: %s', current_user_id)
+        current_user_id = AccountServiceHelper.get_user_id_from_jwt()
 
         # Retrieve the account to be updated or return a 404 error if not found
         try:
-            account = AccountService.get_account_or_404(account_id)
+            account = AccountServiceHelper.get_account_or_404(account_id)
         except AccountNotFoundError:
             return None
 
         # Authorizes a user to access and modify an account
-        AccountService.authorize_account(
+        AccountServiceHelper.authorize_account(
             current_user_id,
             account.user_id
         )
@@ -596,8 +637,7 @@ class AccountService:
             account_id
         )
 
-        # Invalidate specific cache key(s)
-        AccountService.invalidate_all_account_pages()
-        app.logger.debug("Cache key %s invalidated.", ACCOUNT_CACHE_KEY)
+        # Invalidate all cache keys
+        AccountServiceCache.invalidate_all_account_pages()
 
         return None

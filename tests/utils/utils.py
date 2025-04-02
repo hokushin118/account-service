@@ -1,15 +1,123 @@
 """
 This module provides utility methods for use in tests.
 """
+import logging
+import os
+import subprocess
+import sys
+import time
 from typing import Union, Optional
 
+import redis
+from flask import Flask
 from kafka.errors import KafkaConnectionError  # pylint: disable=E0401
+from redis.exceptions import ConnectionError as RedisConnectionError
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
 
-from service.kafka.kafka_producer import KafkaProducerManager
 from service.configs import KafkaProducerConfig
+from service.kafka.kafka_producer import KafkaProducerManager
 from service.schemas import AccountPagedListDTO, AccountDTO
 from tests.utils.constants import TEST_TOPIC
 from tests.utils.factories import AccountFactory
+
+logger = logging.getLogger(__name__)
+
+
+######################################################################
+#  HELPER METHODS
+######################################################################
+def wait_for_redis_container(app: Flask) -> None:
+    """Waits for the Redis container to become ready by attempting to ping it.
+
+    This function repeatedly tries to establish a connection to the Redis server
+    using the URL specified in the Flask application's configuration ('REDIS_URL').
+    It retries for a maximum of 10 times with a 1-second interval between attempts.
+
+    Args:
+        app: The Flask application instance containing the Redis connection URL.
+
+    Raises:
+        Exception: If the Redis container fails to become ready after the maximum
+                   number of retries.
+    """
+    redis_client = redis.Redis.from_url(app.config['REDIS_URL'])
+    max_retries = 10
+    retry_interval = 1
+    for _ in range(max_retries):
+        try:
+            redis_client.ping()
+            logging.info('Redis is ready...')
+            return
+        except RedisConnectionError:
+            logging.warning(
+                "Redis not ready, retrying in %s seconds...",
+                retry_interval
+            )
+            time.sleep(retry_interval)
+    raise Exception(
+        'Redis container failed to become ready.'
+    )
+
+
+def apply_migrations(app: Flask, engine: Engine) -> None:
+    """Applies Alembic database migrations to the specified database.
+
+    This function locates the Flask executable, constructs the `db-upgrade` command,
+    executes it using `subprocess.run`, and then verifies that the `accounts` table
+    exists in the database after the migrations are applied.
+
+    Args:
+        app: The Flask application instance, used to access the database URI.
+        engine: The SQLAlchemy Engine instance for database interaction.
+
+    Raises:
+        subprocess.CalledProcessError: If the `db-upgrade` command fails.
+        Exception: If the `accounts` table does not exist after migrations.
+    """
+    try:
+        # Determine the Flask executable path based on the operating system
+        flask_executable = os.path.join(
+            sys.prefix,
+            'bin',
+            'flask'
+        )  # Linux/macOS
+        if os.name == 'nt':  # Windows
+            flask_executable = os.path.join(
+                sys.prefix,
+                'Scripts',
+                'flask.exe'
+            )
+
+        logger.debug("Flask executable: %s", flask_executable)
+        logger.debug("Current working directory: %s", os.getcwd())
+
+        # Run the custom Flask command using the full path
+        subprocess.run(
+            [flask_executable, 'db-upgrade'],
+            env={'DATABASE_URI': app.config['SQLALCHEMY_DATABASE_URI']},
+            check=True,  # Raise CalledProcessError on non-zero exit code
+        )
+
+        logger.debug(
+            'Migrations applied successfully using flask db-upgrade.'
+        )
+
+        time.sleep(2)  # # Allow time for database changes to take effect
+
+        with engine.connect() as connection:  # check that the table exists.
+            try:
+                connection.execute(text("SELECT 1 FROM accounts LIMIT 1"))
+                logger.debug("Accounts table exists.")
+            except Exception as err:  # pylint: disable=W0703
+                logger.error(
+                    "Accounts table does not exist after migrations: %s",
+                    err
+                )
+                raise
+    except subprocess.CalledProcessError as err:
+        logger.error("Error applying migrations: %s", err)
+        raise
 
 
 def create_account_paged_list_dto() -> AccountPagedListDTO:

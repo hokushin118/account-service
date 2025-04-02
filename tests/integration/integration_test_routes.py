@@ -1,51 +1,51 @@
-# pylint:disable=C0302
 """
 Account Routes Integration Test Suite.
 
 Test cases can be run with:
-  APP_SETTINGS=testing nosetests -v --with-spec --spec-color
+  RUN_INTEGRATION_TESTS=true nosetests -v --with-spec --spec-color tests/integration
   coverage report -m
 """
+import json
+import logging
 import os
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from cryptography.hazmat.primitives import serialization
+from flask_caching import Cache
 from flask_jwt_extended import JWTManager
-from jose import jwt
+from testcontainers.kafka import KafkaContainer
+from testcontainers.postgres import PostgresContainer
+from testcontainers.redis import RedisContainer
 
-from service import AUTHORIZATION_HEADER, BEARER_HEADER, NAME, VERSION
+from service import (
+    NAME,
+    VERSION
+)
 from service.common import status  # HTTP Status Codes
-from service.common.constants import ROLE_USER, ROLE_ADMIN
-from service.common.keycloak_utils import KEYS, REALM_ACCESS_CLAIM, ROLES_CLAIM
 from service.errors import AccountAuthorizationError
-from service.models import db, Account
+from service.models import db
 from service.routes import (
     app,
     ACCOUNTS_PATH_V1,
-    ROOT_PATH,
-    HEALTH_PATH,
     IF_NONE_MATCH_HEADER,
-    CACHE_CONTROL_HEADER,
-    account_service, INFO_PATH
+    ROOT_PATH,
+    INFO_PATH,
+    HEALTH_PATH
 )
-from service.schemas import AccountDTO, PartialUpdateAccountDTO
-from tests.integration.base import BaseTestCase
-from tests.utils.constants import (
-    TEST_USER_ID,
-    TEST_ETAG,
-    TEST_PAGE,
-    TEST_PER_PAGE,
-    TEST_TOTAL
+from service.schemas import UpdateAccountDTO
+from service.services import AccountService
+from tests.integration.base import BaseTestCase, PUBLIC_KEY_PATH
+from tests.utils.constants import TEST_USER_ID
+from tests.utils.utils import (
+    wait_for_redis_container,
+    apply_migrations
 )
-from tests.utils.factories import AccountFactory
+
+logger = logging.getLogger(__name__)
 
 HTTPS_ENVIRON = {'wsgi.url_scheme': 'https'}
-JWT_ALGORITHM = 'RS256'
-PRIVATE_KEY_PATH = './tests/utils/keys/private.pem'
-PUBLIC_KEY_PATH = './tests/utils/keys/public.pem'
 INVALID_ETAG = 'invalid-etag'
-ORIGINAL = 'original'
 
 
 ######################################################################
@@ -58,158 +58,138 @@ ORIGINAL = 'original'
 class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     """Account Route Tests."""
 
-    account_data = None
-    paginated_data = None
-    account = None
-    test_account_dto = None
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Start Testcontainers
+        cls.postgres_container = PostgresContainer('postgres:14')
+        cls.postgres_container.start()
+        cls.kafka_container = KafkaContainer()
+        cls.kafka_container.start()
+        cls.redis_container = RedisContainer()
+        cls.redis_container.start()
+
+        # Update app config with container connection details
+        app.config[
+            'DATABASE_URI'] = cls.postgres_container.get_connection_url()
+        app.config[
+            'SQLALCHEMY_DATABASE_URI'] = cls.postgres_container.get_connection_url()
+        app.config[
+            'KAFKA_AUDIT_BOOTSTRAP_SERVERS'] = cls.kafka_container.get_bootstrap_server()
+
+        # Construct Redis URL manually
+        redis_host = cls.redis_container.get_container_host_ip()
+        redis_port = cls.redis_container.get_exposed_port(6379)
+        redis_url = f"redis://{redis_host}:{redis_port}/0"
+
+        # Configure Flask app to use the Redis container
+        app.config['CACHE_REDIS_URL'] = redis_url
+        app.config['REDIS_URL'] = redis_url
+        app.config['CACHE_TYPE'] = 'redis'
+        app.config['CACHE_REDIS_DB'] = '0'
+        app.config['CACHE_REDIS_HOST'] = redis_host
+        app.config['CACHE_REDIS_PORT'] = redis_port
+
+        app.config['KAFKA_PRODUCER_TOPIC'] = 'test_topic'
+        app.config['KAFKA_PRODUCER_ACKS'] = 1
+        app.config[
+            'KAFKA_PRODUCER_BOOTSTRAP_SERVERS'] = cls.kafka_container.get_bootstrap_server()
+
+        app.config[
+            'KAFKA_AUDIT_BOOTSTRAP_SERVERS'] = cls.kafka_container.get_bootstrap_server()
+
+        app.config[
+            'KAFKA_CONSUMER_BOOTSTRAP_SERVERS'] = cls.kafka_container.get_bootstrap_server()
+
+        # Initialize JWT Manager
+        cls.jwt = JWTManager(app)
+
+        # Initialize Account Service
+        cls.account_service = AccountService()
+
+        db.create_all()
+
+        # Apply migrations
+        apply_migrations(app, cls.engine)
+
+        # Redis readiness check
+        wait_for_redis_container(app)
+
+        cls.cache = Cache(app)
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        # Stop Testcontainers
+        cls.postgres_container.stop()
+        cls.kafka_container.stop()
+        cls.redis_container.stop()
 
     def setUp(self):
-        """It should run before each test to set up the testing environment."""
-        db.session.rollback()
-        db.session.query(Account).delete()
-        db.session.commit()
-
+        super().setUp()
         self.client = app.test_client()
 
-        self.account = AccountFactory()
-        self.test_account_dto = AccountDTO.model_validate(self.account)
-
-        self.account_data = {
-            'id': self.account.id,
-            'name': self.account.name,
-            'email': self.account.email,
-            'address': self.account.address,
-            'phone_number': self.account.phone_number,
-            'date_joined': self.account.date_joined,
-            'user_id': self.account.user_id
-        }
-
-        self.paginated_data = {
-            'items': [self.account_data],
-            'page': TEST_PAGE,
-            'per_page': TEST_PER_PAGE,
-            'total': TEST_TOTAL
-        }
-
-        # Generate a private/public key pair.
-        # For example:
-        #   openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:2048
-        #   openssl rsa -pubout -in private.pem -out public.pem
-
-        # Load private key
-        with open(PRIVATE_KEY_PATH, 'rb') as private_key_file:
-            private_key_object = serialization.load_pem_private_key(
-                private_key_file.read(),
-                password=None
-            )
-            self.private_key = private_key_object.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
-            )
-        # Load public key
         with open(PUBLIC_KEY_PATH, 'rb') as public_key_file:
-            self.public_key = serialization.load_pem_public_key(
-                public_key_file.read()
-            )
-        # Mock Keycloak public key retrieval
-        self.mock_certs = {
-            KEYS: [{
-                'kty': 'RSA',
-                'kid': 'test-kid',
-                'use': 'sig',
-                'n': self.public_key.public_numbers().n,
-                'e': self.public_key.public_numbers().e
-            }]
-        }
-        # Generate a test JWT using RS256
-        self.test_jwt = jwt.encode(
-            {
-                'sub': TEST_USER_ID,
-                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
-            },
-            self.private_key,
-            algorithm=JWT_ALGORITHM,
-            headers={'kid': 'test-kid'}
-        )
-        with open(PUBLIC_KEY_PATH, 'rb') as public_key_file:
-            app.config['JWT_PUBLIC_KEY'] = serialization.load_pem_public_key(
-                public_key_file.read()
-            )
-        app.config['JWT_ALGORITHM'] = JWT_ALGORITHM
-        app.config['JWT_TOKEN_LOCATION'] = ['headers']
-        app.config['JWT_HEADER_NAME'] = AUTHORIZATION_HEADER
-        app.config['JWT_HEADER_TYPE'] = BEARER_HEADER
-
-        # Initialize JWTManager
-        JWTManager(app)
-
-    ######################################################################
-    #  HELPER METHODS
-    ######################################################################
-    @unittest.skip('This test is currently under development.')
-    def _create_accounts(self, count):
-        """It should create a specified number of accounts using the factory."""
-        accounts = []
-        for _ in range(count):
-            account = AccountFactory()
-            # Generate test JWT for this account (using account.user_id and role)
-            test_jwt = jwt.encode(
-                {
-                    'sub': str(account.user_id),
-                    REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
-                },
-                self.private_key,
-                algorithm=JWT_ALGORITHM,
-                headers={'kid': 'test-kid'}
-            )
-            headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-            response = self.client.post(
-                ACCOUNTS_PATH_V1,
-                json=account.to_dict(),
-                headers=headers
-            )
-            self.assertEqual(
-                response.status_code, status.HTTP_201_CREATED,
-                'Could not create test Account'
-            )
-            new_account = response.get_json()
-            accounts.append(new_account)
-        return accounts
+            app.config['JWT_PUBLIC_KEY'] = \
+                serialization.load_pem_public_key(
+                    public_key_file.read()
+                )
 
     ######################################################################
     #  GENERAL TEST CASES
     ######################################################################
+    def test_redis_connection(self):
+        """It should successfully store and retrieve data from Redis using Flask-Caching."""
+        with app.app_context():
+            self.cache.set('test_key', 'test_value')
+            retrieved_value = self.cache.get('test_key')
+            self.assertEqual(retrieved_value, 'test_value')
+
     def test_index(self):
         """It should get 200_OK from the Home Page."""
-        response = self.client.get(ROOT_PATH)
+        response = self.client.get(
+            ROOT_PATH,
+            content_type='application/json'
+        )
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            json.loads(response.data),
+            {"message": "Welcome to the Account API!"}
+        )
 
     def test_health(self):
         """It should be healthy when the health endpoint is called."""
-        response = self.client.get(HEALTH_PATH)
+        response = self.client.get(
+            HEALTH_PATH,
+            content_type='application/json'
+        )
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = response.get_json()
+        data = json.loads(response.data)
         self.assertEqual(data['status'], 'UP')
 
     def test_info(self):
         """It should get 200_OK when the info endpoint is called."""
-        response = self.client.get(INFO_PATH)
+        response = self.client.get(
+            INFO_PATH,
+            content_type='application/json'
+        )
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = response.get_json()
+        data = json.loads(response.data)
         self.assertEqual(data['name'], NAME)
         self.assertEqual(data['version'], VERSION)
 
     def test_unsupported_media_type(self):
         """It should not create an Account when sending the wrong media type."""
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-        account = AccountFactory()
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=account.to_dict(),
+            json=self.create_account_dto.dict(),
             content_type='test/html',
-            headers=headers
+            headers=self.headers
         )
+
         self.assertEqual(
             response.status_code,
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
@@ -217,14 +197,21 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
 
     def test_security_headers(self):
         """It should return the correct security headers."""
-        response = self.client.get(ROOT_PATH, environ_overrides=HTTPS_ENVIRON)
+        response = self.client.get(
+            ROOT_PATH,
+            content_type='application/json',
+            environ_overrides=HTTPS_ENVIRON
+        )
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
         expected_headers = {
             'X-Frame-Options': 'SAMEORIGIN',
             'X-Content-Type-Options': 'nosniff',
             'Content-Security-Policy': "default-src 'self'; object-src 'none'",
             'Referrer-Policy': 'strict-origin-when-cross-origin'
         }
+
         for key, value in expected_headers.items():
             # Optionally skip extra checks on headers that might vary.
             if key != 'Content-Security-Policy':
@@ -232,7 +219,12 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
 
     def test_cors_security(self):
         """It should include a CORS header allowing all origins."""
-        response = self.client.get(ROOT_PATH, environ_overrides=HTTPS_ENVIRON)
+        response = self.client.get(
+            ROOT_PATH,
+            content_type='application/json',
+            environ_overrides=HTTPS_ENVIRON
+        )
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             response.headers.get('Access-Control-Allow-Origin'),
@@ -242,123 +234,166 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     ######################################################################
     #  CREATE ACCOUNTS TEST CASES
     ######################################################################
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
-    def test_create_accounts_success(self, mock_get):
+    def test_create_accounts_success(self):
         """It should create a new Account successfully."""
-        mock_get.return_value.status_code = status.HTTP_201_CREATED
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.to_dict(),
             content_type='application/json',
-            headers=headers
+            json=self.create_account_dto.to_dict(),
+            headers=self.headers
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIsNotNone(response.headers.get('Location'))
-        new_account = response.get_json()
-        self.assertEqual(new_account['name'], self.test_account_dto.name)
-        self.assertEqual(new_account['email'], self.test_account_dto.email)
-        self.assertEqual(new_account['address'], self.test_account_dto.address)
-        self.assertEqual(
-            new_account['phone_number'],
-            self.test_account_dto.phone_number
-        )
-        self.assertEqual(new_account['user_id'], TEST_USER_ID)
 
-    @patch('requests.get')
-    def test_create_accounts_invalid_data(self, mock_get):
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    @patch('service.services.AccountServiceHelper')
+    def test_create_accounts_invalid_data(
+            self,
+            mock_account_service_helper
+    ):
         """It should not create a new Account."""
-        mock_get.return_value.status_code = status.HTTP_201_CREATED
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+
         response = self.client.post(
             ACCOUNTS_PATH_V1,
             json=None,
             content_type='application/json',
-            headers=headers
+            headers=self.headers
         )
+
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     ######################################################################
     #  LIST ALL ACCOUNTS TEST CASES
     ######################################################################
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
     @patch('service.services.cache')
-    @patch("service.services.AccountService")
+    @patch('service.services.AccountServiceHelper')
     def test_list_accounts_success(
             self,
-            mock_account_service,
-            mock_cache,
-            mock_get
+            mock_account_service_helper,
+            mock_cache
     ):
         """It should return a list of accounts when a valid JWT is provided."""
-        mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
         mock_cache.set.return_value = None
-        # pylint: disable=W0212
-        mock_account_service._get_cached_data.return_value = None
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-        # Create account first.
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.to_dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        # Retrieve all accounts.
+
+        # Create an account
+        account = self.account_service.create(self.create_account_dto)
+
         response = self.client.get(
             ACCOUNTS_PATH_V1,
             content_type='application/json',
-            headers=headers,
+            headers=self.headers
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = response.get_json()
-        self.assertEqual(len(data['items']), 1)
 
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
+        data = json.loads(response.data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(data['items']), 1)
+        self.assertEqual(data['items'][0]['id'], str(account.id))
+        self.assertEqual(data['items'][0]['name'], account.name)
+        self.assertEqual(data['items'][0]['email'], account.email)
+        self.assertEqual(data['items'][0]['address'], account.address)
+        self.assertEqual(
+            data['items'][0]['phone_number'],
+            account.phone_number
+        )
+        self.assertEqual(data['items'][0]['user_id'], str(account.user_id))
+        self.assertEqual(data['page'], 1)
+        self.assertEqual(data['per_page'], 10)
+        self.assertEqual(data['total'], 1)
+
     @patch('service.services.cache')
-    @patch("service.services.AccountService")
+    @patch('service.services.AccountServiceHelper')
     def test_list_accounts_paginated(
             self,
-            mock_account_service,
-            mock_cache,
-            mock_get
+            mock_account_service_helper,
+            mock_cache
     ):
         """It should return paginated account results when valid pagination
         parameters are provided."""
-        mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
         mock_cache.set.return_value = None
-        # pylint: disable=W0212
-        mock_account_service._get_cached_data.return_value = None
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-        # Create account first.
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.to_dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Create an account
+        account = self.account_service.create(self.create_account_dto)
+
         # List paginated accounts.
         response = self.client.get(
             f"{ACCOUNTS_PATH_V1}?page=1&per_page=5",
             content_type='application/json',
-            headers=headers,
+            headers=self.headers
         )
+
+        data = json.loads(response.data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = response.get_json()
         self.assertEqual(len(data['items']), 1)
+        self.assertEqual(data['items'][0]['id'], str(account.id))
+        self.assertEqual(data['items'][0]['name'], account.name)
+        self.assertEqual(data['items'][0]['email'], account.email)
+        self.assertEqual(data['items'][0]['address'], account.address)
+        self.assertEqual(
+            data['items'][0]['phone_number'],
+            account.phone_number
+        )
+        self.assertEqual(data['items'][0]['user_id'], str(account.user_id))
         self.assertEqual(data['page'], 1)
         self.assertEqual(data['per_page'], 5)
         self.assertEqual(data['total'], 1)
+
+    @patch('service.services.cache')
+    @patch('service.services.AccountServiceHelper')
+    def test_list_accounts_etag(
+            self,
+            mock_account_service_helper,
+            mock_cache
+    ):
+        """It should return 304 Not Modified if the ETag matches when reading an account."""
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+        mock_cache.get.return_value = None
+        mock_cache.set.return_value = None
+
+        # Create an account
+        response = self.client.post(
+            ACCOUNTS_PATH_V1,
+            content_type='application/json',
+            json=self.create_account_dto.to_dict(),
+            headers=self.headers
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Get the account and ETag
+        response = self.client.get(
+            ACCOUNTS_PATH_V1,
+            content_type='application/json',
+            headers=self.headers
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        etag = response.headers.get('ETag').replace('"', '')
+
+        # Request with matching ETag
+        headers_etag = self.headers.copy()
+        headers_etag[IF_NONE_MATCH_HEADER] = etag
+        response_etag = self.client.get(
+            ACCOUNTS_PATH_V1,
+            content_type='application/json',
+            headers=headers_etag
+        )
+
+        self.assertEqual(
+            response_etag.status_code,
+            status.HTTP_304_NOT_MODIFIED
+        )
+
+        # Request with invalid ETag
+        headers_invalid_etag = self.headers.copy()
+        headers_invalid_etag[IF_NONE_MATCH_HEADER] = INVALID_ETAG
+        response_invalid_etag = self.client.get(
+            ACCOUNTS_PATH_V1,
+            headers=headers_invalid_etag
+        )
+
+        self.assertEqual(response_invalid_etag.status_code, status.HTTP_200_OK)
 
     def test_list_accounts_unauthorized(self):
         """It should return 401 Unauthorized if no JWT is provided when listing accounts."""
@@ -366,214 +401,106 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
             ACCOUNTS_PATH_V1,
             content_type='application/json'
         )
+
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
-    @patch('requests.get')
-    @patch('service.services.cache')
-    @patch("service.services.AccountService")
-    def test_list_accounts_etag_match(
-            self,
-            mock_account_service,
-            mock_cache,
-            mock_get
-    ):
-        """It should return 304 Not Modified if the ETag matches the client's
-        If-None-Match header."""
-        mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
-        mock_cache.set.return_value = None
-        # pylint: disable=W0212
-        mock_account_service._get_cached_data.return_value = None
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-        # Create an account
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.to_dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        # First GET to collect an ETag.
-        response = self.client.get(
-            ACCOUNTS_PATH_V1,
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
-        etag = response.headers.get('ETag').replace('"', '')
-        headers[IF_NONE_MATCH_HEADER] = etag
-        # Second GET should yield 304 if ETag matches.
-        response = self.client.get(
-            ACCOUNTS_PATH_V1,
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_304_NOT_MODIFIED)
-        self.assertEqual(response.data, b'')
-
-    @patch('requests.get')
-    @patch('service.services.cache')
-    @patch("service.services.AccountService")
-    def test_list_accounts_etag_mismatch(
-            self,
-            mock_account_service,
-            mock_cache,
-            mock_get
-    ):
-        """It should return 200 OK if the ETag does not match the client's If-None-Match header."""
-        mock_account_service.list_accounts.return_value = self.paginated_data, TEST_ETAG
-        mock_cache.set.return_value = None
-        # pylint: disable=W0212
-        mock_account_service._get_cached_data.return_value = None
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.to_dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        response = self.client.get(
-            ACCOUNTS_PATH_V1,
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        headers[IF_NONE_MATCH_HEADER] = INVALID_ETAG
-        response = self.client.get(
-            ACCOUNTS_PATH_V1,
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     ######################################################################
     #  READ AN ACCOUNT TEST CASES
     ######################################################################
-    @patch('requests.get')
     @patch('service.services.cache')
-    @patch("service.services.AccountService")
+    @patch('service.services.AccountServiceHelper')
     def test_find_by_id_success(
             self,
-            mock_account_service,
-            mock_cache,
-            mock_get
+            mock_account_service_helper,
+            mock_cache
     ):
         """It should return a single account when a valid JWT is provided."""
-        mock_account_service.get_account_or_404.return_value = self.account
-        mock_account_service.get_account_by_id.return_value = self.test_account_dto, TEST_ETAG
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+        mock_account_service_helper.get_account_or_404.return_value = self.account
+        mock_cache.get.return_value = None
         mock_cache.set.return_value = None
-        # pylint: disable=W0212
-        mock_account_service._get_cached_data.return_value = None
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.to_dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Create an account
+        account = self.account_service.create(self.create_account_dto)
+
         response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
+            f'{ACCOUNTS_PATH_V1}/{account.id}',
             content_type='application/json',
-            headers=headers
+            headers=self.headers
         )
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        mock_account_service.get_account_or_404.assert_called_once()
+        data = json.loads(response.data)
+        self.assertEqual(data['name'], account.name)
+        self.assertEqual(data['email'], account.email)
 
     def test_find_by_id_unauthorized(self):
         """It should return 401 Unauthorized if no JWT is provided when reading an account."""
-        account = self._create_accounts(1)[0]
         response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{account.id}",
+            f"{ACCOUNTS_PATH_V1}/{self.account.id}",
             content_type='application/json'
         )
+
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch('requests.get')
     @patch('service.services.cache')
-    @patch("service.services.AccountService")
-    def test_find_by_id_etag_match(self,
-                                   mock_account_service,
-                                   mock_cache,
-                                   mock_get):
-        """It should return 304 Not Modified if the ETag matches when reading an account."""
-        mock_account_service.get_account_or_404.return_value = self.account
-        mock_account_service.get_account_by_id.return_value = self.test_account_dto, TEST_ETAG
-        mock_cache.set.return_value = None
-        # pylint: disable=W0212
-        mock_account_service._get_cached_data.return_value = None
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.to_dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        headers[CACHE_CONTROL_HEADER] = 'public, max-age=3600'
-        etag = response.headers.get('ETag').replace('"', '')
-        headers[IF_NONE_MATCH_HEADER] = etag
-        response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_304_NOT_MODIFIED)
-        self.assertEqual(response.data, b'')
-
-    @patch('requests.get')
-    @patch('service.services.cache')
-    @patch("service.services.AccountService")
-    def test_find_by_id_etag_mismatch(
+    @patch('service.services.AccountServiceHelper')
+    def test_find_by_id_etag(
             self,
-            mock_account_service,
-            mock_cache,
-            mock_get
+            mock_account_service_helper,
+            mock_cache
     ):
-        """It should return 200 OK if the ETag does not match when reading an account."""
-        mock_account_service.get_account_or_404.return_value = self.account
-        mock_account_service.get_account_by_id.return_value = self.test_account_dto, TEST_ETAG
+        """It should return 304 Not Modified if the ETag matches when reading an account."""
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+        mock_account_service_helper.get_account_or_404.return_value = self.account
+        mock_cache.get.return_value = None
         mock_cache.set.return_value = None
-        # pylint: disable=W0212
-        mock_account_service._get_cached_data.return_value = None
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+
+        # Create an account
         response = self.client.post(
             ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.to_dict(),
             content_type='application/json',
-            headers=headers
+            json=self.create_account_dto.to_dict(),
+            headers=self.headers
         )
+
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        account_id = json.loads(response.data)['id']
+
+        # Get the account and ETag
         response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
+            f"{ACCOUNTS_PATH_V1}/{account_id}",
             content_type='application/json',
-            headers=headers
+            headers=self.headers
         )
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        headers[IF_NONE_MATCH_HEADER] = INVALID_ETAG
-        response = self.client.get(
-            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
+        etag = response.headers.get('ETag').replace('"', '')
+
+        # Request with matching ETag
+        headers_etag = self.headers.copy()
+        headers_etag[IF_NONE_MATCH_HEADER] = etag
+        response_etag = self.client.get(
+            f"{ACCOUNTS_PATH_V1}/{account_id}",
             content_type='application/json',
-            headers=headers
+            headers=headers_etag
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.assertEqual(
+            response_etag.status_code,
+            status.HTTP_304_NOT_MODIFIED
+        )
+
+        # Request with invalid ETag
+        headers_invalid_etag = self.headers.copy()
+        headers_invalid_etag[IF_NONE_MATCH_HEADER] = INVALID_ETAG
+        response_invalid_etag = self.client.get(
+            f"{ACCOUNTS_PATH_V1}/"
+            f"{account_id}",
+            headers=headers_invalid_etag
+        )
+
+        self.assertEqual(response_invalid_etag.status_code, status.HTTP_200_OK)
 
     def test_find_by_id_not_found(self):
         """It should return 404 Not Found when requesting an account that does not exist."""
@@ -581,171 +508,99 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
             f"{ACCOUNTS_PATH_V1}/0",
             content_type='application/json'
         )
+
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     ######################################################################
     #  UPDATE AN EXISTING ACCOUNT TEST CASES
     ######################################################################
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
-    def test_update_by_id_success(self, mock_get):
+    @patch('service.services.AccountServiceHelper')
+    def test_update_by_id_success(
+            self,
+            mock_account_service_helper
+    ):
         """It should update an existing Account successfully when a valid
         JWT and ownership are provided."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        test_jwt = jwt.encode(
-            {
-                'sub': str(self.account.user_id),
-                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
-            },
-            self.private_key,
-            algorithm=JWT_ALGORITHM,
-            headers={'kid': 'test-kid'}
-        )
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        expected_result = self.test_account_dto
-        expected_result.phone_number = '918-295-1876'
-        expected_result.address = '718 Noah Drive\nChristensenburgh, NE 45784'
-        # Patch the account_service.update_by_id so it returns expected_result
-        with patch.object(
-                account_service, 'update_by_id',
-                return_value=expected_result
-        ) as mock_update:
-            new_account = response.get_json()
-            new_account['phone_number'] = '918-295-1876'
-            new_account[
-                'address'] = '718 Noah Drive\nChristensenburgh, NE 45784'
-            response = self.client.put(
-                f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
-                content_type='application/json',
-                json=new_account,
-                headers=headers
-            )
-            self.assertEqual(response.status_code, status.HTTP_200_OK)
-            # Create a mock response object
-            response = MagicMock()
-            # Configure the get_json method to return a specific dictionary
-            expected_json = self.test_account_dto.to_dict()
-            response.get_json.return_value = expected_json
-            updated_account = response.get_json()
-            self.assertEqual(updated_account['phone_number'], '918-295-1876')
-            self.assertEqual(
-                updated_account['address'],
-                '718 Noah Drive\nChristensenburgh, NE 45784'
-            )
-            mock_update.assert_called_once()
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+        mock_account_service_helper.get_account_or_404.return_value = self.account
 
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
-    def test_update_by_id_unauthorized(self, mock_get):
-        """It should return 401 Unauthorized when updating an account without a JWT."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        new_account = response.get_json()
-        update_data = {'name': 'Test Account', 'email': 'test@example.com'}
+        # Create an account
+        account = self.account_service.create(self.create_account_dto)
+        update_account_dto = UpdateAccountDTO(**self.account_data)
+        update_account_dto.name = 'Updated Account'
+        update_account_dto.phone_number = '918-295-1876'
+
         response = self.client.put(
-            f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
+            f'{ACCOUNTS_PATH_V1}/{account.id}',
+            json=update_account_dto.dict(),
             content_type='application/json',
-            json=update_data
+            headers=self.headers
         )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = json.loads(response.data)
+        self.assertEqual(data['name'], 'Updated Account')
+        self.assertEqual(data['phone_number'], '918-295-1876')
+
+    @patch('service.services.AccountServiceHelper')
+    def test_update_by_id_unauthorized(
+            self,
+            mock_account_service_helper
+    ):
+        """It should return 401 Unauthorized when attempting an update without a JWT."""
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+        mock_account_service_helper.get_account_or_404.return_value = self.account
+
+        # Create an account
+        account = self.account_service.create(self.create_account_dto)
+        update_account_dto = UpdateAccountDTO(**self.account_data)
+        update_account_dto.name = 'Updated Account'
+        update_account_dto.phone_number = '918-295-1876'
+
+        response = self.client.put(
+            f'{ACCOUNTS_PATH_V1}/{account.id}',
+            content_type='application/json',
+            json=update_account_dto.dict()
+        )
+
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
+    @patch('service.services.AccountServiceHelper')
     def test_update_by_id_wrong_role(
             self,
-            mock_get
+            mock_account_service_helper
     ):
-        """It should not update an Account when the JWT belongs to a user with the wrong role."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        expected_result = self.test_account_dto.dict()
-        expected_result['phone_number'] = '918-295-1876'
-        expected_result[
-            'address'] = '718 Noah Drive\nChristensenburgh, NE 45784'
-        # Patch the account_service.update_by_id so it returns expected_result
-        with patch.object(
-                account_service, 'update_by_id',
-                side_effect=AccountAuthorizationError("Authorization failed")
-        ) as mock_update:
-            new_account = response.get_json()
-            new_account['phone_number'] = '918-295-1876'
-            new_account[
-                'address'] = '718 Noah Drive\nChristensenburgh, NE 45784'
-            response = self.client.put(
-                f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
-                content_type='application/json',
-                json=new_account,
-                headers=headers
-            )
-            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-            mock_update.assert_called_once()
+        """It should not partially update an Account when the JWT belongs to a user
+        with the wrong role."""
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+        mock_account_service_helper.get_account_or_404.return_value = self.account
+        # Simulate that authorize_account raises an AccountAuthorizationError
+        mock_account_service_helper.authorize_account.side_effect = (
+            AccountAuthorizationError(
+                f"Account with user id {TEST_USER_ID} is not authorized to perform this action."
+            ))
 
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
-    def test_update_by_id_wrong_account_id_admin_role(self, mock_get):
-        """It should update an Account when the JWT is for an admin, even if the
-        account belongs to another user."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        test_jwt = jwt.encode(
-            {
-                'sub': TEST_USER_ID,
-                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_ADMIN]}
-            },
-            self.private_key,
-            algorithm=JWT_ALGORITHM,
-            headers={'kid': 'test-kid'}
-        )
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
         response = self.client.post(
             ACCOUNTS_PATH_V1,
             json=self.test_account_dto.dict(),
             content_type='application/json',
-            headers=headers
+            headers=self.headers
         )
+
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        new_account = response.get_json()
-        new_account['name'] = 'Something Known'
-        new_account['email'] = 'test@example.com'
+
+        update_account_dto = UpdateAccountDTO(**self.account_data)
+        update_account_dto.name = 'Updated Account'
+        update_account_dto.phone_number = '918-295-1876'
+
         response = self.client.put(
-            f"{ACCOUNTS_PATH_V1}/{new_account['id']}",
+            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
             content_type='application/json',
-            json=new_account,
-            headers=headers
+            json=update_account_dto.dict(),
+            headers=self.headers
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Create a mock response object
-        response = MagicMock()
-        # Configure the get_json method to return a specific dictionary
-        expected_json = new_account
-        response.get_json.return_value = expected_json
-        updated_account = response.get_json()
-        self.assertEqual(updated_account['name'], 'Something Known')
-        self.assertEqual(updated_account['email'], 'test@example.com')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_update_by_id_not_found(self):
         """It should return 404 Not Found when attempting to update an account
@@ -754,187 +609,90 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
             f"{ACCOUNTS_PATH_V1}/0",
             content_type='application/json'
         )
+
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     ######################################################################
     #  PARTIALLY UPDATE AN EXISTING ACCOUNT TEST CASES
     ######################################################################
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
-    def test_partial_update_by_id_success(self, mock_get):
-        """It should partially update an existing Account successfully when
-        a valid JWT and ownership are provided."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        test_jwt = jwt.encode(
-            {
-                'sub': str(self.account.user_id),
-                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
-            },
-            self.private_key,
-            algorithm=JWT_ALGORITHM,
-            headers={'kid': 'test-kid'}
-        )
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=self.test_account_dto.dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        expected_result = self.test_account_dto
-        expected_result.phone_number = '918-295-1876'
-        expected_result.address = '718 Noah Drive\nChristensenburgh, NE 45784'
-        # Patch the account_service.update_by_id so it returns expected_result
-        with patch.object(
-                account_service, 'partial_update_by_id',
-                return_value=expected_result
-        ) as mock_update:
-            new_account = response.get_json()
-            updated_account_id = new_account['id']
-            update_data = {
-                'phone_number': '918-295-1876',
-                'address': '718 Noah Drive\nChristensenburgh, NE 45784'
-            }
-            partial_update_account_dto = PartialUpdateAccountDTO(
-                **update_data
-            )
-            response = self.client.patch(
-                f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
-                content_type='application/json',
-                json=partial_update_account_dto.to_dict(),
-                headers=headers
-            )
-            self.assertEqual(response.status_code, status.HTTP_200_OK)
-            # Create a mock response object
-            response = MagicMock()
-            # Configure the get_json method to return a specific dictionary
-            expected_json = self.test_account_dto.to_dict()
-            response.get_json.return_value = expected_json
-            updated_account = response.get_json()
-            self.assertEqual(updated_account['phone_number'], '918-295-1876')
-            self.assertEqual(
-                updated_account['address'],
-                '718 Noah Drive\nChristensenburgh, NE 45784'
-            )
-            mock_update.assert_called_once()
+    @patch('service.services.AccountServiceHelper')
+    def test_partial_update_by_id_success(
+            self,
+            mock_account_service_helper
+    ):
+        """It should partially update an existing Account successfully when a
+        valid JWT and ownership are provided."""
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+        mock_account_service_helper.get_account_or_404.return_value = self.account
 
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
-    def test_partial_update_by_id_unauthorized(self, mock_get):
-        """It should return 401 Unauthorized when attempting a partial update without a JWT."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        test_account = AccountFactory()
-        test_account_dto = AccountDTO.from_orm(test_account)
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json',
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        new_account = response.get_json()
-        updated_account_id = new_account['id']
-        update_data = {'name': 'Test Account', 'email': 'test@example.com'}
+        # Create an account
+        account = self.account_service.create(self.create_account_dto)
+
         response = self.client.patch(
-            f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
+            f'{ACCOUNTS_PATH_V1}/{account.id}',
             content_type='application/json',
-            json=update_data
+            json={'name': 'Partially Updated Account'},
+            headers=self.headers
         )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            json.loads(response.data)['name'],
+            'Partially Updated Account'
+        )
+
+    @patch('service.services.AccountServiceHelper')
+    def test_partial_update_by_id_unauthorized(
+            self,
+            mock_account_service_helper
+    ):
+        """It should return 401 Unauthorized when attempting a partial update without a JWT."""
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+        mock_account_service_helper.get_account_or_404.return_value = self.account
+
+        # Create an account
+        account = self.account_service.create(self.create_account_dto)
+
+        response = self.client.patch(
+            f'{ACCOUNTS_PATH_V1}/{account.id}',
+            content_type='application/json',
+            json={'name': 'Partially Updated Account'}
+        )
+
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
+    @patch('service.services.AccountServiceHelper')
     def test_partial_update_by_id_wrong_role(
             self,
-            mock_get
+            mock_account_service_helper
     ):
         """It should not partially update an Account when the JWT belongs to a user
         with the wrong role."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+        mock_account_service_helper.get_account_or_404.return_value = self.account
+        # Simulate that authorize_account raises an AccountAuthorizationError
+        mock_account_service_helper.authorize_account.side_effect = (
+            AccountAuthorizationError(
+                f"Account with user id {TEST_USER_ID} is not authorized to perform this action."
+            ))
+
         response = self.client.post(
             ACCOUNTS_PATH_V1,
             json=self.test_account_dto.dict(),
             content_type='application/json',
-            headers=headers
+            headers=self.headers
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        expected_result = self.test_account_dto.dict()
-        expected_result['phone_number'] = '918-295-1876'
-        expected_result[
-            'address'] = '718 Noah Drive\nChristensenburgh, NE 45784'
-        # Patch the account_service.update_by_id so it returns expected_result
-        with patch.object(
-                account_service, 'partial_update_by_id',
-                side_effect=AccountAuthorizationError("Authorization failed")
-        ) as mock_update:
-            new_account = response.get_json()
-            updated_account_id = new_account['id']
-            update_data = {
-                'phone_number': '918-295-1876',
-                'address': '718 Noah Drive\nChristensenburgh, NE 45784'
-            }
-            partial_update_account_dto = PartialUpdateAccountDTO(
-                **update_data
-            )
-            response = self.client.patch(
-                f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
-                content_type='application/json',
-                json=partial_update_account_dto.to_dict(),
-                headers=headers
-            )
-            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-            mock_update.assert_called_once()
 
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
-    def test_partial_update_by_id_wrong_account_id_admin_role(self, mock_get):
-        """It should partially update an Account with an admin JWT even when the
-        account belongs to a different user."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        test_account = AccountFactory()
-        test_account_dto = AccountDTO.from_orm(test_account)
-        test_jwt = jwt.encode(
-            {
-                'sub': TEST_USER_ID,
-                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_ADMIN]}
-            },
-            self.private_key,
-            algorithm=JWT_ALGORITHM,
-            headers={'kid': 'test-kid'}
-        )
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-        response = self.client.post(
-            ACCOUNTS_PATH_V1,
-            json=test_account_dto.dict(),
-            content_type='application/json',
-            headers=headers
-        )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        new_account = response.get_json()
-        updated_account_id = new_account['id']
-        update_data = {'name': 'Something Known', 'email': 'test@example.com'}
+
         response = self.client.patch(
-            f"{ACCOUNTS_PATH_V1}/{updated_account_id}",
+            f"{ACCOUNTS_PATH_V1}/{self.test_account_dto.id}",
             content_type='application/json',
-            json=update_data,
-            headers=headers
+            json={'name': 'Partially Updated Account'},
+            headers=self.headers
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Create a mock response object
-        response = MagicMock()
-        # Configure the get_json method to return a specific dictionary
-        expected_json = update_data
-        response.get_json.return_value = expected_json
-        updated_account = response.get_json()
-        self.assertEqual(updated_account['name'], 'Something Known')
-        self.assertEqual(updated_account['email'], 'test@example.com')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_partial_update_by_id_not_found(self):
         """It should return 404 Not Found when attempting a partial update
@@ -943,102 +701,68 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
             f"{ACCOUNTS_PATH_V1}/0",
             content_type='application/json'
         )
+
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     ######################################################################
     #  DELETE AN ACCOUNT TEST CASES
     ######################################################################
-    @patch('requests.get')
-    @patch("service.services.AccountService")
+    @patch('service.services.AccountServiceHelper')
     def test_delete_by_id_success(
             self,
-            mock_account_service,
-            mock_get
+            mock_account_service_helper
     ):
         """It should delete an Account successfully when authorized."""
-        mock_account_service.delete_by_id.return_value = None
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        account = self._create_accounts(1)[0]
-        test_jwt = jwt.encode(
-            {
-                'sub': TEST_USER_ID,
-                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
-            },
-            self.private_key,
-            algorithm=JWT_ALGORITHM,
-            headers={'kid': 'test-kid'}
-        )
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+
+        # Create an account
+        account = self.account_service.create(self.create_account_dto)
+        account_id = account.id
+
         response = self.client.delete(
-            f"{ACCOUNTS_PATH_V1}/{account.id}",
-            headers=headers
+            f'{ACCOUNTS_PATH_V1}/{account_id}',
+            content_type='application/json',
+            headers=self.headers
         )
+
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(response.data, b"")
+
+        response = self.client.delete(
+            f'{ACCOUNTS_PATH_V1}/{account_id}',
+            content_type='application/json',
+            headers=self.headers
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_delete_by_id_unauthorized(self):
         """It should return 401 Unauthorized when deleting an Account without a JWT."""
-        account = self._create_accounts(1)[0]
-        response = self.client.delete(f"{ACCOUNTS_PATH_V1}/{account.id}")
+        response = self.client.delete(
+            f"{ACCOUNTS_PATH_V1}/{self.account.id}",
+            content_type='application/json'
+        )
+
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    @patch('requests.get')
-    def test_delete_by_id_wrong_role(self, mock_get):
+    @patch('service.services.AccountServiceHelper')
+    def test_delete_by_id_wrong_role(
+            self,
+            mock_account_service_helper
+    ):
         """It should not delete an Account when the JWT belongs to a user with the wrong role."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        account = self._create_accounts(1)[0]
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {self.test_jwt}"}
-        response = self.client.delete(
-            f"{ACCOUNTS_PATH_V1}/{account.id}",
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+        # Simulate that authorize_account raises an AccountAuthorizationError
+        mock_account_service_helper.authorize_account.side_effect = (
+            AccountAuthorizationError(
+                f"Account with user id {TEST_USER_ID} is not authorized to perform this action."
+            ))
 
-    @unittest.skip('This test is currently under development.')
-    @patch('requests.get')
-    def test_delete_by_id_wrong_account_id(self, mock_get):
-        """It should not delete an Account when the JWT belongs to a different user."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        account = self._create_accounts(1)[0]
-        test_jwt = jwt.encode(
-            {
-                'sub': TEST_USER_ID,
-                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
-            },
-            self.private_key,
-            algorithm=JWT_ALGORITHM,
-            headers={'kid': 'test-kid'}
-        )
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
         response = self.client.delete(
-            f"{ACCOUNTS_PATH_V1}/{account.id}",
-            headers=headers
+            f"{ACCOUNTS_PATH_V1}/{self.account.id}",
+            content_type='application/json',
+            headers=self.headers
         )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch('requests.get')
-    def test_delete_by_id_wrong_account_id_admin_role(self, mock_get):
-        """It should delete an Account when the JWT is for an admin, even if the
-        account belongs to a different user."""
-        mock_get.return_value.status_code = status.HTTP_200_OK
-        mock_get.return_value.json.return_value = self.mock_certs
-        account = self._create_accounts(1)[0]
-        test_jwt = jwt.encode(
-            {
-                'sub': TEST_USER_ID,
-                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_ADMIN]}
-            },
-            self.private_key,
-            algorithm=JWT_ALGORITHM,
-            headers={'kid': 'test-kid'}
-        )
-        headers = {AUTHORIZATION_HEADER: f"{BEARER_HEADER} {test_jwt}"}
-        response = self.client.delete(
-            f"{ACCOUNTS_PATH_V1}/{account.id}",
-            headers=headers
-        )
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(response.data, b"")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        # Verify that the user is authorized
+        mock_account_service_helper.authorize_account.assert_called_once()

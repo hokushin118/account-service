@@ -534,9 +534,8 @@ To execute the microservice's tests, follow these steps:
 4. **Run Integration Tests:**
     * Execute the microservice's integration tests using `nosetests`.
    ```bash
-   APP_SETTINGS=testing RUN_INTEGRATION_TESTS=true nosetests -v --with-spec --spec-color tests/integration
+   RUN_INTEGRATION_TESTS=true nosetests -v --with-spec --spec-color tests/integration
    ```
-    * `APP_SETTINGS=testing`: Sets the environment for integration testing.
     * `RUN_INTEGRATION_TESTS=true`: Enables the execution of integration tests.
     * `nosetests`: Executes the nosetests test runner.
     * `-v`: Enables verbose output.
