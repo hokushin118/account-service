@@ -267,14 +267,17 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     ######################################################################
     @patch('service.services.cache')
     @patch('service.services.AccountServiceHelper')
+    @patch('service.services.AccountServiceCache')
     def test_list_accounts_success(
             self,
+            mock_account_service_cache,
             mock_account_service_helper,
             mock_cache
     ):
         """It should return a list of accounts when a valid JWT is provided."""
-        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
         mock_cache.set.return_value = None
+        mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
+        mock_account_service_cache.get_cached_data.return_value = None
 
         # Create an account
         account = self.account_service.create(self.create_account_dto)
@@ -303,8 +306,10 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
 
     @patch('service.services.cache')
     @patch('service.services.AccountServiceHelper')
+    @patch('service.services.AccountServiceCache')
     def test_list_accounts_paginated(
             self,
+            mock_account_service_cache,
             mock_account_service_helper,
             mock_cache
     ):
@@ -312,6 +317,7 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         parameters are provided."""
         mock_account_service_helper.get_user_id_from_jwt.return_value = TEST_USER_ID
         mock_cache.set.return_value = None
+        mock_account_service_cache.get_cached_data.return_value = None
 
         # Create an account
         account = self.account_service.create(self.create_account_dto)
@@ -409,8 +415,10 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
     ######################################################################
     @patch('service.services.cache')
     @patch('service.services.AccountServiceHelper')
+    @patch('service.services.AccountServiceCache')
     def test_find_by_id_success(
             self,
+            mock_account_service_cache,
             mock_account_service_helper,
             mock_cache
     ):
@@ -419,6 +427,8 @@ class TestAccountRoute(BaseTestCase):  # pylint: disable=R0904
         mock_account_service_helper.get_account_or_404.return_value = self.account
         mock_cache.get.return_value = None
         mock_cache.set.return_value = None
+        mock_account_service_cache.get_cached_data.return_value = None
+        mock_account_service_cache.cache_account.return_value = None
 
         # Create an account
         account = self.account_service.create(self.create_account_dto)
