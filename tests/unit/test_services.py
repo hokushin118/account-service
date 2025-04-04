@@ -1092,3 +1092,108 @@ class TestInvalidateAllAccountPages(TestCase):
         mock_app.logger.debug.assert_any_call(
             'Invalidating all cached results...'
         )
+
+
+class TestCacheOperation(TestCase):
+    """The _cache_operation Function Tests."""
+
+    def test_cache_operation_success(self):
+        """It should execute the provided function once and return
+        its result."""
+        mock_func = MagicMock(return_value='success')
+
+        # pylint: disable=W0212
+        result = AccountServiceCache._cache_operation(
+            mock_func,
+            'arg1',
+            key='arg2'
+        )
+
+        self.assertEqual(result, 'success')
+        mock_func.assert_called_once_with(
+            'arg1', key='arg2'
+        )
+
+    def test_cache_operation_retry_type_error(self):
+        """It should retry the function once if a TypeError is raised,
+        and return the result on the second attempt."""
+        mock_func = MagicMock(side_effect=[TypeError, 'success'])
+
+        # pylint: disable=W0212
+        result = AccountServiceCache._cache_operation(
+            mock_func,
+            'arg1'
+        )
+
+        self.assertEqual(result, 'success')
+        self.assertEqual(mock_func.call_count, 2)
+
+    def test_cache_operation_retry_value_error(self):
+        """It should retry the function once if a ValueError is raised,
+        and return the result on the second attempt."""
+        mock_func = MagicMock(side_effect=[ValueError, 'success'])
+
+        # pylint: disable=W0212
+        result = AccountServiceCache._cache_operation(
+            mock_func,
+            'arg1'
+        )
+
+        self.assertEqual(result, 'success')
+        self.assertEqual(mock_func.call_count, 2)
+
+    def test_cache_operation_retry_attribute_error(self):
+        """It should retry the function once if an AttributeError is raised,
+        and return the result on the second attempt."""
+        mock_func = MagicMock(side_effect=[AttributeError, 'success'])
+
+        # pylint: disable=W0212
+        result = AccountServiceCache._cache_operation(
+            mock_func,
+            'arg1'
+        )
+
+        self.assertEqual(result, 'success')
+        self.assertEqual(mock_func.call_count, 2)
+
+    def test_cache_operation_retry_redis_connection_error(self):
+        """It should retry the function once if a RedisConnectionError is
+        raised, and return the result on the second attempt."""
+        mock_func = MagicMock(side_effect=[RedisConnectionError, 'success'])
+
+        # pylint: disable=W0212
+        result = AccountServiceCache._cache_operation(
+            mock_func,
+            'arg1'
+        )
+
+        self.assertEqual(result, 'success')
+        self.assertEqual(mock_func.call_count, 2)
+
+    def test_cache_operation_retry_max_attempts_fail(self):
+        """It should raise the exception if the function consistently raises
+        a retryable exception for the maximum number of attempts."""
+        mock_func = MagicMock(side_effect=TypeError)
+
+        with self.assertRaises(TypeError):
+            # pylint: disable=W0212
+            AccountServiceCache._cache_operation(
+                mock_func,
+                'arg1'
+            )
+
+        self.assertEqual(mock_func.call_count, 3)
+
+    def test_cache_operation_other_exception(self):
+        """It should raise the exception immediately if the function raises
+        an exception that is not in the retry list."""
+        mock_func = MagicMock(side_effect=ZeroDivisionError)
+
+        with self.assertRaises(ZeroDivisionError):
+            # pylint: disable=W0212
+            AccountServiceCache._cache_operation(
+                mock_func,
+                'arg1'
+            )
+
+        self.assertEqual(mock_func.call_count, 1)

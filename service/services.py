@@ -7,11 +7,18 @@ with pagination, utilizing caching for improved performance, and generating ETag
 hashes for cache validation.
 """
 import logging
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple, Optional, Callable
 from uuid import UUID
 
 from flask_jwt_extended import get_jwt_identity
+from pybreaker import CircuitBreaker, CircuitBreakerError
 from redis.exceptions import ConnectionError as RedisConnectionError
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type
+)
 
 from service import app, cache
 from service.common.constants import ACCOUNT_CACHE_KEY, ROLE_ADMIN
@@ -37,6 +44,32 @@ logger = logging.getLogger(__name__)
 CACHE_DEFAULT_TIMEOUT = get_int_from_env('CACHE_DEFAULT_TIMEOUT', 3600)
 FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE = 'You are not authorized to modify this resource.'
 
+# Maximum retry attempts
+CACHE_RETRY_ATTEMPTS = get_int_from_env(
+    'CACHE_RETRY_ATTEMPTS',
+    3
+)
+# Initial delay in seconds
+CACHE_RETRY_BASE_DELAY = get_int_from_env(
+    'CACHE_RETRY_BASE_DELAY',
+    1
+)
+# Maximum delay in seconds
+CACHE_RETRY_MAX_DELAY = get_int_from_env(
+    'CACHE_RETRY_MAX_DELAY',
+    10
+)
+# Maximum consecutive failures before opening the circuit
+CIRCUIT_BREAKER_FAIL_MAX = get_int_from_env(
+    'CIRCUIT_BREAKER_FAIL_MAX',
+    5
+)
+# Time (in seconds) the circuit breaker stays open before attempting to close
+CIRCUIT_BREAKER_RESET_TIMEOUT = get_int_from_env(
+    'CIRCUIT_BREAKER_RESET_TIMEOUT',
+    30
+)
+
 
 class AccountServiceCache:
     """Handles caching logic for AccountService."""
@@ -51,8 +84,12 @@ class AccountServiceCache:
         Returns:
             Optional[Any]: The cached data if successful, or None if an error occurred.
         """
+        app.logger.debug('Retrieving account data...')
         try:
-            cached_data = cache.get(cache_key)
+            cached_data = AccountServiceCache._cache_operation(
+                cache.get,
+                cache_key
+            )
             if cached_data and isinstance(cached_data, tuple) and len(
                     cached_data
             ) == 2:
@@ -65,30 +102,65 @@ class AccountServiceCache:
 
     @staticmethod
     def cache_account(cache_key: str, data: dict, etag_hash: str) -> None:
-        """Caches account data."""
+        """Caches account data in Redis with retry logic for transient errors.
+
+        This method attempts to store account data in the Redis cache. It uses
+        the `_cache_operation` helper function to apply retry logic in case of
+        transient errors like network issues or temporary Redis unavailability.
+
+        Args:
+            cache_key (str): The key under which to store the account data.
+            data (dict): The account data to be cached.
+            etag_hash (str): The ETag hash associated with the account data.
+
+        Returns:
+            None: This method does not return a value.
+
+        Raises:
+            AccountError: If there's an error during the caching process, even after retries.
+
+        Example:
+            To cache account data:
+
+           AccountServiceCache.cache_account(
+               'account:123', {'name': 'Test Account'}, 'some_etag_hash'
+           )
+        """
+        app.logger.debug('Caching account data...')
         try:
-            cache.set(
+            AccountServiceCache._cache_operation(
+                cache.set,
                 cache_key,
                 (data, etag_hash),
                 timeout=CACHE_DEFAULT_TIMEOUT
             )
-        except (TypeError, ValueError, AttributeError) as err:
-            AccountServiceCache._handle_cache_error(err, type(err).__name__)
         except Exception as err:  # pylint: disable=W0703
             AccountServiceCache._handle_cache_error(err, 'unknown error')
 
     @staticmethod
     def invalidate_all_account_pages() -> None:
-        """Invalidate all cached results.
+        """Invalidates all cached account pages in Redis with retry logic.
 
-        This function clears the cache and logs the process. If a Redis connection error occurs,
+        This method clears the entire Redis cache, effectively invalidating all
+        cached account data. It uses the `_cache_operation` helper function to
+        apply retry logic in case of transient errors, such as network issues
+        or temporary Redis unavailability.
+
+        If a Redis connection error occurs during the invalidation process,
         it logs an error message indicating the connection issue. Any unexpected
         exceptions will also be logged.
+
+        Returns:
+            None: This method does not return a value.
+
+        Example:
+            To invalidate all cached account pages:
+
+            AccountServiceCache.invalidate_all_account_pages()
         """
         app.logger.debug('Invalidating all cached results...')
-
         try:
-            cache.clear()
+            AccountServiceCache._cache_operation(cache.clear)
             app.logger.debug('All cache has been successfully invalidated.')
         except RedisConnectionError as err:
             app.logger.error(
@@ -97,6 +169,69 @@ class AccountServiceCache:
             )
         except Exception as err:  # pylint: disable=W0703
             app.logger.error('Error invalidating cache: %s', err)
+
+    @staticmethod
+    @retry(
+        stop=stop_after_attempt(CACHE_RETRY_ATTEMPTS),
+        wait=wait_exponential(
+            multiplier=1,
+            min=CACHE_RETRY_BASE_DELAY,
+            max=CACHE_RETRY_MAX_DELAY
+        ),
+        retry=retry_if_exception_type(
+            (
+                    TypeError,
+                    ValueError,
+                    AttributeError,
+                    RedisConnectionError
+            )
+        ),
+        reraise=True,
+    )
+    def _cache_operation(
+            func: Callable[..., Any],
+            *args: Any,
+            **kwargs: Any
+    ) -> Any:
+        """Applies retry logic to cache operations using the tenacity library.
+
+        This helper function wraps a given function (`func`) that interacts with the
+        cache, applying a retry strategy to handle transient errors. It uses exponential
+        backoff to increase the delay between retries, ensuring that the system doesn't
+        overwhelm the cache server during periods of instability.
+
+        Args:
+            func (callable): The function to execute, typically a cache operation
+                             (e.g., `cache.get`, `cache.set`, `cache.clear`).
+            *args: Variable length argument list to pass to `func`.
+            **kwargs: Arbitrary keyword arguments to pass to `func`.
+
+        Returns:
+            Any: The result of the wrapped function `func` if successful.
+
+        Raises:
+            TypeError, ValueError, AttributeError, RedisConnectionError:
+                If any of these exceptions occur during the cache operation, the function
+                will be retried up to 3 times. If all retries fail, the last exception
+                is re-raised.
+
+        Retry Strategy:
+            - Maximum 3 retry attempts.
+            - Exponential backoff with a base delay of 1 second, increasing up to a maximum
+              of 10 seconds between retries.
+            - Retries are triggered by `TypeError`, `ValueError`, `AttributeError`, or
+              `RedisConnectionError` exceptions.
+
+        Example:
+            To retry a cache get operation:
+
+            result = _cache_operation(cache.get, 'my_key')
+
+            To retry a cache set operation:
+
+            _cache_operation(cache.set, 'my_key', 'my_value', timeout=3600)
+        """
+        return func(*args, **kwargs)
 
     @staticmethod
     def _handle_cache_error(err: Exception, error_type: str) -> None:
@@ -281,7 +416,22 @@ class AccountServiceHelper:
 
 
 class AccountService:
-    """Service class for handling Account operations."""
+    """Service class for handling Account operations.
+
+    This class provides an abstraction layer between the API routes and the persistence layer.
+    It includes a static CircuitBreaker instance to ensure that account creation is resilient to
+    repeated failures.
+
+    Attributes:
+        db_circuit_breaker (CircuitBreaker): A static circuit breaker for database operations that
+            trips after 5 consecutive failures and resets after 30 seconds.
+    """
+
+    db_circuit_breaker = CircuitBreaker(
+        fail_max=CIRCUIT_BREAKER_FAIL_MAX,
+        reset_timeout=CIRCUIT_BREAKER_RESET_TIMEOUT,
+        name='DatabaseCircuitBreaker'
+    )
 
     ######################################################################
     # CREATE A NEW ACCOUNT
@@ -312,7 +462,21 @@ class AccountService:
         account.user_id = current_user_id
 
         # Persist the account to the database
-        account.create()
+        try:
+            # The circuit breaker monitors failures and, if necessary, prevents execution
+            with AccountService.db_circuit_breaker.calling():
+                account.create()
+        except CircuitBreakerError as err:
+            app.logger.error(
+                'Database circuit breaker is open during create operation.'
+            )
+            raise AccountError(
+                'Database is temporarily unavailable.'
+            ) from err
+        except Exception as err:  # pylint: disable=W0703
+            error_message = f'An error occurred: {err}'
+            logger.error(error_message)
+            raise AccountError(error_message) from err
 
         # Convert the persisted model into a DTO
         account_dto = AccountDTO.model_validate(account)
@@ -374,10 +538,25 @@ class AccountService:
                 page
             )
 
-            accounts = Account.all_paginated(
-                page=page,
-                per_page=per_page
-            )
+            try:
+                # The circuit breaker monitors failures and, if necessary, prevents execution
+                with AccountService.db_circuit_breaker.calling():
+                    accounts = Account.all_paginated(
+                        page=page,
+                        per_page=per_page
+                    )
+            except CircuitBreakerError as err:
+                app.logger.error(
+                    'Database circuit breaker is open during list operation.'
+                )
+                raise AccountError(
+                    'Database is temporarily unavailable.'
+                ) from err
+            except Exception as err:  # pylint: disable=W0703
+                error_message = f'An error occurred: {err}'
+                logger.error(error_message)
+                raise AccountError(error_message) from err
+
             account_list = [
                 AccountDTO.model_validate(account) for account in accounts
             ]
@@ -452,7 +631,26 @@ class AccountService:
             account_dto = AccountDTO.model_validate(data)
         else:
             app.logger.debug('Fetching Account from database...')
-            account = AccountServiceHelper.get_account_or_404(account_id)
+
+            try:
+                # The circuit breaker monitors failures and, if necessary, prevents execution
+                with AccountService.db_circuit_breaker.calling():
+                    account = AccountServiceHelper.get_account_or_404(
+                        account_id
+                    )
+            except CircuitBreakerError as err:
+                app.logger.error(
+                    'Database circuit breaker is open during get account by id operation.'
+                )
+                raise AccountError(
+                    'Database is temporarily unavailable.'
+                ) from err
+            except AccountNotFoundError:
+                raise
+            except Exception as err:  # pylint: disable=W0703
+                error_message = f'An error occurred: {err}'
+                logger.error(error_message)
+                raise AccountError(error_message) from err
 
             # Convert SQLAlchemy model to DTO
             account_dto = AccountDTO.model_validate(account)
@@ -519,7 +717,21 @@ class AccountService:
         account.phone_number = update_account_dto.phone_number
 
         # Persist the updated account to the database
-        account.update()
+        try:
+            # The circuit breaker monitors failures and, if necessary, prevents execution
+            with AccountService.db_circuit_breaker.calling():
+                account.update()
+        except CircuitBreakerError as err:
+            app.logger.error(
+                'Database circuit breaker is open during update account by id operation.'
+            )
+            raise AccountError(
+                'Database is temporarily unavailable.'
+            ) from err
+        except Exception as err:  # pylint: disable=W0703
+            error_message = f'An error occurred: {err}'
+            logger.error(error_message)
+            raise AccountError(error_message) from err
 
         # Convert the persisted model into a DTO
         account_dto = AccountDTO.model_validate(account)
@@ -578,11 +790,24 @@ class AccountService:
             account.user_id
         )
 
-        # Update account with provided JSON payload
-        account.partial_update(update_account_dto.to_dict())
-
         # Persist the updated account to the database
-        account.update()
+        try:
+            # The circuit breaker monitors failures and, if necessary, prevents execution
+            with AccountService.db_circuit_breaker.calling():
+                # Update account with provided JSON payload
+                account.partial_update(update_account_dto.to_dict())
+                account.update()
+        except CircuitBreakerError as err:
+            app.logger.error(
+                'Database circuit breaker is open during partial update account by id operation.'
+            )
+            raise AccountError(
+                'Database is temporarily unavailable.'
+            ) from err
+        except Exception as err:  # pylint: disable=W0703
+            error_message = f'An error occurred: {err}'
+            logger.error(error_message)
+            raise AccountError(error_message) from err
 
         # Convert the persisted model into a DTO
         account_dto = AccountDTO.model_validate(account)
@@ -621,9 +846,22 @@ class AccountService:
 
         # Retrieve the account to be updated or return a 404 error if not found
         try:
-            account = AccountServiceHelper.get_account_or_404(account_id)
+            # The circuit breaker monitors failures and, if necessary, prevents execution
+            with AccountService.db_circuit_breaker.calling():
+                account = AccountServiceHelper.get_account_or_404(account_id)
         except AccountNotFoundError:
             return None
+        except CircuitBreakerError as err:
+            app.logger.error(
+                'Database circuit breaker is open during delete account by id operation.'
+            )
+            raise AccountError(
+                'Database is temporarily unavailable.'
+            ) from err
+        except Exception as err:  # pylint: disable=W0703
+            error_message = f'An error occurred: {err}'
+            logger.error(error_message)
+            raise AccountError(error_message) from err
 
         # Authorizes a user to access and modify an account
         AccountServiceHelper.authorize_account(
@@ -631,7 +869,22 @@ class AccountService:
             account.user_id
         )
 
-        account.delete()
+        try:
+            # The circuit breaker monitors failures and, if necessary, prevents execution
+            with AccountService.db_circuit_breaker.calling():
+                account.delete()
+        except CircuitBreakerError as err:
+            app.logger.error(
+                'Database circuit breaker is open during delete account by id operation.'
+            )
+            raise AccountError(
+                'Database is temporarily unavailable.'
+            ) from err
+        except Exception as err:  # pylint: disable=W0703
+            error_message = f'An error occurred: {err}'
+            logger.error(error_message)
+            raise AccountError(error_message) from err
+
         app.logger.info(
             "Account with id %s deleted successfully.",
             account_id
