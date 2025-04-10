@@ -259,7 +259,27 @@ development environment.
     python3.9 -m pip install -r requirements.txt
     ```
 
-**6. Apply Database Migrations:**
+**6. Install or upgrade the cba-core-lib shared library from test.pypi.org:**
+
+* To install or upgrade the library from the test PyPI repository, use the
+  following command:
+
+    ```bash
+    pip install --index-url [https://test.pypi.org/simple/](https://test.pypi.org/simple/) --upgrade cba-core-lib
+    ```
+
+* To verify the installation and check the library's details, use the following
+  command:
+
+    ```bash
+    pip show cba-core-lib
+    ```
+
+This command will display information about the installed `cba-core-lib`
+library, including its version, location, and dependencies. It helps confirm
+that the package was installed correctly.
+
+**7. Apply Database Migrations:**
 
 * Apply any pending database migrations to update the database schema:
 
@@ -267,7 +287,7 @@ development environment.
     flask db upgrade
     ```
 
-**7. Run the Microservice:**
+**8. Run the Microservice:**
 
 * Start the microservice using the `wsgi.py` file:
 

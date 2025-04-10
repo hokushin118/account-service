@@ -27,6 +27,7 @@ DEFAULT_HOST = 'localhost'
 DEFAULT_PORT = '15432'
 TEST_KAFKA_BROKERS = 'broker1:9093,broker2:9094'
 TEST_SECRET_KEY = 'test_secret'
+TEST_LOG_LEVEL = 'INFO'
 API_VERSION = 'v2'
 
 
@@ -38,7 +39,8 @@ class TestAppConfig(TestCase):
         with patch.dict(os.environ, {
             'DATABASE_URI': TEST_DATABASE_URI,
             'SECRET_KEY': TEST_SECRET_KEY,
-            'API_VERSION': API_VERSION
+            'API_VERSION': API_VERSION,
+            'LOG_LEVEL': TEST_LOG_LEVEL
         }):
             self.config = AppConfig()
 
@@ -51,8 +53,8 @@ class TestAppConfig(TestCase):
         )
 
     def test_construct_database_uri_from_components(self):
-        """It should construct a valid database URI from individual environment variable
-        components if DATABASE_URI is not provided."""
+        """It should construct a valid database URI from individual environment
+        variable components if DATABASE_URI is not provided."""
         env_vars = {
             'DATABASE_USER': 'custom_user',
             'DATABASE_PASSWORD': 'custom_pass',
@@ -63,35 +65,50 @@ class TestAppConfig(TestCase):
         with patch.dict(os.environ, env_vars, clear=True):
             config = AppConfig()
             expected_uri = (
-                'postgresql://custom_user:custom_pass@custom_host:5432/custom_db'
+                'postgresql://custom_user:custom_pass@custom_host:5432/'
+                'custom_db'
             )
             self.assertEqual(config.database_uri, expected_uri)
             self.assertEqual(config.sqlalchemy_database_uri, expected_uri)
 
     def test_api_version_default(self):
-        """It should set the API version to 'v1' if API_VERSION is not provided."""
+        """It should set the API version to 'v1' if API_VERSION is not
+        provided."""
         with patch.dict(os.environ, {}, clear=True):
             config = AppConfig()
             self.assertEqual(config.api_version, 'v1')
 
     def test_api_version_from_env(self):
-        """It should use the API version provided in the environment variable."""
+        """It should use the API version provided in the environment
+        variable."""
         self.assertEqual(self.config.api_version, API_VERSION)
+
+    def test_log_level_default(self):
+        """It should set the log level to 'INFO' if LOG_LEVEL is not
+        provided."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = AppConfig()
+            self.assertEqual(config.log_level, TEST_LOG_LEVEL)
+
+    def test_log_level_from_env(self):
+        """It should use the log level provided in the environment variable."""
+        self.assertEqual(self.config.log_level, TEST_LOG_LEVEL)
 
     def test_secret_key_when_provided(self):
         """It should retrieve the provided SECRET_KEY from the environment."""
         self.assertEqual(self.config.secret_key, TEST_SECRET_KEY)
 
     def test_secret_key_generated_when_missing(self):
-        """It should generate a secret key if SECRET_KEY is not set in the environment."""
+        """It should generate a secret key if SECRET_KEY is not set in the
+        environment."""
         with patch.dict(os.environ, {}, clear=True):
             config = AppConfig()
             self.assertTrue(isinstance(config.secret_key, str))
             self.assertGreaterEqual(len(config.secret_key), 20)
 
     def test_database_uri_not_empty(self):
-        """It should always have a non-empty database_uri even if DATABASE_URI is missing
-        since defaults are provided."""
+        """It should always have a non-empty database_uri even if DATABASE_URI
+        is missing since defaults are provided."""
         with patch.dict(os.environ, {}, clear=True):
             config = AppConfig()
             expected_uri = (
@@ -113,6 +130,9 @@ class TestAppConfig(TestCase):
 
         with self.assertRaises(FrozenInstanceError):
             self.config.api_version = 'new_api_version'
+
+        with self.assertRaises(FrozenInstanceError):
+            self.config.log_level = 'new_log_level'
 
         with self.assertRaises(FrozenInstanceError):
             self.config.sqlalchemy_track_modifications = True

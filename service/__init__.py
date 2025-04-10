@@ -12,6 +12,7 @@ import sys
 from types import FrameType
 from typing import Optional
 
+from cba_core_lib.logging import init_logging
 from dotenv import load_dotenv
 from flasgger import Swagger, LazyString, LazyJSONEncoder, MK_SANITIZER
 from flask import Flask, request
@@ -21,7 +22,6 @@ from flask_jwt_extended import JWTManager
 from flask_talisman import Talisman
 from prometheus_flask_exporter import PrometheusMetrics
 
-from service.common import log_handlers
 from service.common.constants import (
     NAME_MAX_LENGTH,
     NAME_MIN_LENGTH,
@@ -43,7 +43,8 @@ APP_INFO_METRICS = 'app_info'
 
 def load_environment_variables() -> None:
     """
-    Loads environment variables from a .env file into the operating system's environment.
+    Loads environment variables from a .env file into the operating system's
+    environment.
 
     This function uses the `dotenv` library to load key-value pairs from a
     .env file located in the current working directory and sets them as
@@ -51,7 +52,8 @@ def load_environment_variables() -> None:
     settings without hardcoding them in the source code.
 
     Returns:
-        None: This function modifies the operating system's environment and does not return a value.
+        None: This function modifies the operating system's environment and does
+        not return a value.
     """
     # Load the correct .env file based on APP_SETTINGS
     # export APP_SETTINGS=docker  # Or production, etc.
@@ -114,6 +116,14 @@ from service.common.keycloak_utils import (
 )
 
 app_config = AppConfig()
+
+# Get the root logger
+root_logger = logging.getLogger()
+
+# Initialize logging with the root logger.
+# The logging configuration sets the application's logger to DEBUG level.
+# This will affect all loggers in the application.
+init_logging(root_logger, log_level=app_config.log_level)
 
 # Retrieving Information (Environment Variables Example):
 # This is a common way to manage configuration, especially in containerized environments.
@@ -598,6 +608,9 @@ def create_app() -> Flask:
     """
     current_app = Flask(__name__)
 
+    # Configure app.logger
+    init_logging(current_app.logger, log_level=app_config.log_level)
+
     # Configure app settings
     current_app.config.from_object(app_config)
     current_app.config['SQLALCHEMY_DATABASE_URI'] = \
@@ -687,9 +700,6 @@ def create_app() -> Flask:
         current_app.logger.info(
             'Account microservice starting up with KafkaConsumerManager active...'
         )
-
-    # Set up logging for production
-    log_handlers.init_logging(current_app, logging.DEBUG)
 
     current_app.logger.info(70 * '*')
     current_app.logger.info(

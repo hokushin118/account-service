@@ -35,13 +35,19 @@ class AppConfig:
     """Secret key used for session management and security."""
 
     api_version: str = field(init=False)
-    """The version of the API, retrieved from the API_VERSION environment variable."""
+    """The version of the API, retrieved from the API_VERSION environment
+    variable."""
+
+    log_level: str = field(init=False)
+    """Log level of the application, retrieved from the LOG_LEVEL
+    environment variable."""
 
     def __post_init__(self) -> None:
-        """Post-initialization to set derived attributes and validate configuration.
+        """Post-initialization to set derived attributes and validate
+        configuration.
 
-        Sets the database_uri, sqlalchemy_database_uri, secret_key, and api_version
-        attributes.
+        Sets the database_uri, sqlalchemy_database_uri, secret_key,
+        api_version and log_level attributes.
 
         Raises:
             ValueError: If the database URI cannot be constructed.
@@ -49,24 +55,26 @@ class AppConfig:
         database_uri = self._get_database_uri()
         secret_key = self._get_secret_key()
         api_version = os.getenv('API_VERSION', 'v1')
+        log_level = os.getenv('LOG_LEVEL', 'INFO')
 
         object.__setattr__(self, 'database_uri', database_uri)
         object.__setattr__(self, 'sqlalchemy_database_uri', database_uri)
         object.__setattr__(self, 'secret_key', secret_key)
         object.__setattr__(self, 'api_version', api_version)
+        object.__setattr__(self, 'log_level', log_level)
 
         if not database_uri:
             raise ValueError(
-                'DATABASE_URI must be configured. Set the DATABASE_URI environment '
-                'variable or other database credentials.'
+                'DATABASE_URI must be configured. Set the DATABASE_URI '
+                'environment variable or other database credentials.'
             )
 
     @staticmethod
     def _get_database_uri() -> str:
         """Constructs and returns the PostgreSQL database URI.
 
-        Prioritizes a complete DATABASE_URI environment variable. If not found, constructs
-        the URI from individual components.
+        Prioritizes a complete DATABASE_URI environment variable. If not found,
+        constructs the URI from individual components.
 
         Returns:
             str: The PostgreSQL database URI.
@@ -97,7 +105,8 @@ class AppConfig:
     def _get_secret_key() -> str:
         """Retrieves the secret key for session management.
 
-        Generates a secure random key if SECRET_KEY is not set in the environment.
+        Generates a secure random key if SECRET_KEY is not set in the
+        environment.
 
         Returns:
             str: The secret key.
@@ -108,7 +117,8 @@ class AppConfig:
             # Generate a secure random secret key if not set
             secret_key = secrets.token_urlsafe(32)
             logger.warning(
-                'Using a generated secret key. Set SECRET_KEY in environment for production.'
+                'Using a generated secret key. Set SECRET_KEY in environment '
+                'for production.'
             )
         return secret_key
 
@@ -119,9 +129,10 @@ class AppConfig:
 class SecurityProtocol(str, Enum):
     """Enum for Kafka security protocols.
 
-    This enum defines the various security protocols available for Kafka brokers.
-    These protocols determine how data is transmitted between clients and brokers,
-    including whether encryption and/or authentication is applied.
+    This enum defines the various security protocols available for Kafka
+    brokers. These protocols determine how data is transmitted between
+    clients and brokers, including whether encryption and/or authentication
+    is applied.
 
     Attributes:
         PLAINTEXT: Unencrypted, plain text communication.
@@ -138,13 +149,15 @@ class SecurityProtocol(str, Enum):
 class AutoOffsetReset(str, Enum):
     """Enum for Kafka consumer auto offset reset policies.
 
-    This enum defines the policies for resetting the consumer offset automatically
-    when there is no initial offset or if the current offset does not exist on the server.
+    This enum defines the policies for resetting the consumer offset
+    automatically when there is no initial offset or if the current offset
+    does not exist on the server.
 
     Attributes:
-        LATEST: Automatically reset the offset to the latest offset (i.e., only new messages).
-        EARLIEST: Automatically reset the offset to the earliest offset available.
-        NONE: Do not automatically reset the offset; instead, an error will be raised.
+        LATEST: Automatically reset the offset to the latest offset
+        (i.e., only new messages). EARLIEST: Automatically reset the offset
+        to the earliest offset available. NONE: Do not automatically reset
+        the offset; instead, an error will be raised.
     """
     LATEST = 'latest'
     EARLIEST = 'earliest'
@@ -156,7 +169,8 @@ class KafkaConsumerConfig:
     """Encapsulates Kafka consumer configuration settings.
 
     This class provides a read-only container for Kafka consumer settings,
-    ensuring that the configuration remains consistent throughout the application.
+    ensuring that the configuration remains consistent throughout the
+    application.
 
     This class is immutable.
     """
@@ -231,7 +245,8 @@ class KafkaConsumerConfig:
     """Optional service name associated with the consumer."""
 
     def __post_init__(self) -> None:
-        """Post-initialization to set derived attributes and validate configuration.
+        """Post-initialization to set derived attributes and validate
+        configuration.
 
         Sets the service_name, and group_id attributes.
 
@@ -252,7 +267,10 @@ class KafkaConsumerConfig:
                 object.__setattr__(self, 'group_id', generated_group_id)
                 logger.info('Generated group_id: %s', generated_group_id)
             else:
-                error_message = 'group_id cannot be generated without service_name and topic.'
+                error_message = (
+                    'group_id cannot be generated without service_name and '
+                    'topic.'
+                )
                 logger.error(error_message)
                 raise ValueError(error_message)
 
@@ -263,9 +281,10 @@ class KafkaConsumerConfig:
     ) -> str:
         """Generate a unique consumer ID.
 
-        This method constructs a consumer identifier by combining the service name,
-        topic name, and a randomly generated UUID. The resulting string follows the
-        format: '{service_name}-{topic_name}-consumer-{uuid}', ensuring that each consumer
+        This method constructs a consumer identifier by combining the service
+        name, topic name, and a randomly generated UUID. The resulting
+        string follows the format: '{service_name}-{topic_name}-consumer-{
+        uuid}', ensuring that each consumer
         has a unique identifier.
 
         Args:
@@ -284,7 +303,8 @@ class KafkaProducerConfig:
     """Encapsulates Kafka producer configuration settings.
 
     This class provides a read-only container for Kafka producer settings,
-    ensuring that the configuration remains consistent throughout the application.
+    ensuring that the configuration remains consistent throughout the
+    application.
 
     This class is immutable.
     """
@@ -305,8 +325,8 @@ class KafkaProducerConfig:
     """
 
     batch_size: int
-    """The size (in bytes) of the batch of messages to be sent. Larger values may
-     increase throughput."""
+    """The size (in bytes) of the batch of messages to be sent. Larger values
+    may increase throughput."""
 
     health_check_interval: int
     """The interval, in seconds, to perform connection health checks."""
