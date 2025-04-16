@@ -8,14 +8,13 @@ specified configurations and a message handler.
 import logging
 import os
 
-from kafka.consumer.fetcher import ConsumerRecord
-
-from service.kafka.kafka_consumer import KafkaConsumerManager
-from service.configs import (
+from cba_core_lib.kafka import KafkaConsumerManager
+from cba_core_lib.kafka.configs import (
     KafkaConsumerConfig,
     SecurityProtocol,
     AutoOffsetReset
 )
+from kafka.consumer.fetcher import ConsumerRecord
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +76,13 @@ def get_kafka_consumer_manager() -> KafkaConsumerManager:
         max_poll_interval_ms=300000,
         session_timeout_ms=10000,
         heartbeat_interval_ms=3000,
+        service_name='account-service',
     )
     # Instantiate and return the Kafka consumer manager.
     return KafkaConsumerManager(
         config=config,
-        message_handler=message_handler
+        key_deserializer=lambda x: x.decode('utf-8'),
+        value_deserializer=lambda x: x.decode('utf-8'),
+        message_handler=message_handler,
+        health_check_interval_seconds=30
     )

@@ -9,12 +9,12 @@ import os
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
+from cba_core_lib.kafka import KafkaProducerManager
+from cba_core_lib.kafka.configs import KafkaProducerConfig
 from flask import Flask, Response
 from flask_jwt_extended import JWTManager
 
 from service.common.audit import AuditLogger
-from service.configs import KafkaProducerConfig
-from service.kafka.kafka_producer import KafkaProducerManager
 from tests.utils.constants import TEST_TOPIC, JWT_SECRET_KEY
 from tests.utils.utils import DummyRecordMetadata
 
@@ -89,15 +89,13 @@ class TestAuditLogger(TestCase):
             mock_logger_error.assert_called_once()
 
     @patch('service.common.audit.AuditLogger.get_request_body_or_none')
-    @patch('service.kafka.kafka_producer.KafkaProducerManager.get_producer')
-    @patch('service.kafka.kafka_producer.KafkaProducer.send')
+    @patch('cba_core_lib.kafka.KafkaProducerManager.get_producer')
     @patch('flask_jwt_extended.verify_jwt_in_request')
     @patch('flask_jwt_extended.get_jwt_identity')
     def test_audit_log_kafka(
             self,
             mock_get_jwt_identity,
             mock_verify_jwt_in_request,
-            mock_kafka_send,
             mock_get_producer,
             mock_get_request_body
     ):
@@ -113,7 +111,7 @@ class TestAuditLogger(TestCase):
         mock_get_request_body.return_value = {'test': 'data'}
         mock_producer = Mock()
         mock_get_producer.return_value = mock_producer
-        mock_kafka_send.return_value = Mock()
+        mock_get_producer.send.return_value = Mock()
         mock_get_jwt_identity.return_value = 'test_user'
         mock_verify_jwt_in_request.return_value = None
 
@@ -127,15 +125,14 @@ class TestAuditLogger(TestCase):
             self.assertEqual(response.status_code, 200)
 
     @patch('service.common.audit.AuditLogger.get_request_body_or_none')
-    @patch('service.kafka.kafka_producer.KafkaProducerManager.get_producer')
-    @patch('service.kafka.kafka_producer.KafkaProducer.send')
+    @patch('cba_core_lib.kafka.KafkaProducerManager.get_producer')
     @patch('flask_jwt_extended.verify_jwt_in_request')
     @patch('flask_jwt_extended.get_jwt_identity')
     def test_audit_log_kafka_anonymous(
             self,
             mock_get_jwt_identity,
             mock_verify_jwt_in_request,
-            mock_kafka_send, mock_get_producer,
+            mock_get_producer,
             mock_get_request_body
     ):
         """It should handle anonymous users and send audit data to Kafka."""
@@ -150,7 +147,7 @@ class TestAuditLogger(TestCase):
         mock_get_request_body.return_value = {'test': 'data'}
         mock_producer = Mock()
         mock_get_producer.return_value = mock_producer
-        mock_kafka_send.return_value = Mock()
+        mock_get_producer.send.return_value = Mock()
         mock_get_jwt_identity.return_value = None
         mock_verify_jwt_in_request.return_value = None
 

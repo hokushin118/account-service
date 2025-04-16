@@ -9,14 +9,14 @@ import time
 from typing import Union, Optional
 
 import redis
+from cba_core_lib.kafka import KafkaProducerManager
+from cba_core_lib.kafka.configs import KafkaProducerConfig
 from flask import Flask
 from kafka.errors import KafkaConnectionError  # pylint: disable=E0401
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from service.configs import KafkaProducerConfig
-from service.kafka.kafka_producer import KafkaProducerManager
 from service.schemas import AccountPagedListDTO, AccountDTO
 from tests.utils.constants import TEST_TOPIC
 from tests.utils.factories import AccountFactory
