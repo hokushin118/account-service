@@ -11,13 +11,10 @@ from unittest import TestCase
 from unittest.mock import patch, MagicMock
 from uuid import UUID, uuid4
 
+from cba_core_lib.utils.enums import UserRole
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from service.common.constants import (
-    ACCOUNT_CACHE_KEY,
-    ROLE_ADMIN,
-    ROLE_USER
-)
+from service.common.constants import ACCOUNT_CACHE_KEY
 from service.errors import (
     AccountError,
     AccountNotFoundError,
@@ -951,7 +948,8 @@ class TestAuthorizeAccount(TestCase):
     ):
         """It should authorize an admin user regardless of ownership."""
         # Simulate that get_user_roles returns a list including admin role
-        mock_get_roles.return_value = [ROLE_ADMIN, ROLE_USER]
+        mock_get_roles.return_value = [UserRole.ADMIN.value,
+                                       UserRole.USER.value]
         # Even if owner check returns False, admin should pass
         # pylint: disable=W0212
         mock_account_service_helper._check_if_user_is_owner.return_value = False
@@ -981,7 +979,7 @@ class TestAuthorizeAccount(TestCase):
     ):
         """It should authorize a non-admin if they are the owner."""
         # Simulate that get_user_roles returns roles without admin
-        mock_get_roles.return_value = [ROLE_USER]
+        mock_get_roles.return_value = [UserRole.USER.value]
         # Simulate that the user is the owner
         # pylint: disable=W0212
         mock_account_service_helper._check_if_user_is_owner.return_value = True
@@ -1010,7 +1008,7 @@ class TestAuthorizeAccount(TestCase):
     ):
         """It should not authorize a non-admin user if they are not the owner."""
         # Return roles that do not include admin
-        mock_get_roles.return_value = [ROLE_USER]
+        mock_get_roles.return_value = [UserRole.USER.value]
         # Simulate that the user is not the owner
         # pylint: disable=W0212
         mock_account_service_helper._check_if_user_is_owner.return_value = False

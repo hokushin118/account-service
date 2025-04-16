@@ -9,12 +9,15 @@ from unittest import TestCase
 from unittest.mock import patch, Mock
 
 import requests
+from cba_core_lib.utils import status
+from cba_core_lib.utils.constants import (
+    AUTHORIZATION_HEADER,
+    BEARER_HEADER,
+)
+from cba_core_lib.utils.enums import UserRole
 from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager, create_access_token
 
-from service.common import status
-from service.common.constants import AUTHORIZATION_HEADER, BEARER_HEADER, \
-    ROLE_USER, ROLE_ADMIN
 from service.common.keycloak_utils import (
     has_roles,
     KEYCLOAK_CLIENT_ID,
@@ -219,7 +222,7 @@ class TestHasRolesDecorator(TestCase):
         self.client = self.app.test_client()
 
         @self.app.route(TEST_PATH)
-        @has_roles([TEST_ROLE, ROLE_USER])
+        @has_roles([TEST_ROLE, UserRole.USER.value])
         def test_route():
             """Test route with has_roles decorator."""
             return jsonify({'message': 'success'}), status.HTTP_200_OK
@@ -382,13 +385,13 @@ class TestHasRolesAndDecorator(TestCase):
         self.client = self.app.test_client()
 
         @self.app.route(TEST_PATH, methods=['GET'])
-        @has_roles_and([ROLE_USER, ROLE_ADMIN])
+        @has_roles_and([UserRole.USER.value, UserRole.ADMIN.value])
         def test_route():
             """Test route with has_roles decorator."""
             return jsonify({'message': 'success'}), status.HTTP_200_OK
 
         @self.app.route(TEST_NO_JWT_PATH, methods=['GET'])
-        @has_roles_and([ROLE_USER, ROLE_ADMIN])
+        @has_roles_and([UserRole.USER.value, UserRole.ADMIN.value])
         def test_route_no_jwt():
             """Test route without JWT token."""
             return jsonify({'message': 'success'}), status.HTTP_200_OK
@@ -402,8 +405,8 @@ class TestHasRolesAndDecorator(TestCase):
                     RESOURCE_ACCESS: {
                         KEYCLOAK_CLIENT_ID: {
                             ROLES_CLAIM: [
-                                ROLE_USER,
-                                ROLE_ADMIN
+                                UserRole.USER.value,
+                                UserRole.ADMIN.value
                             ]
                         }
                     }
@@ -427,7 +430,7 @@ class TestHasRolesAndDecorator(TestCase):
                     RESOURCE_ACCESS: {
                         KEYCLOAK_CLIENT_ID: {
                             ROLES_CLAIM: [
-                                ROLE_USER
+                                UserRole.USER.value
                             ]
                         }
                     }
@@ -527,7 +530,10 @@ class TestHasRolesAndDecorator(TestCase):
                 identity=TEST_USER,
                 additional_claims={
                     REALM_ACCESS_CLAIM: {
-                        ROLES_CLAIM: [ROLE_USER, ROLE_ADMIN]
+                        ROLES_CLAIM: [
+                            UserRole.USER.value,
+                            UserRole.ADMIN.value
+                        ]
                     }
                 }
             )

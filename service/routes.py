@@ -9,6 +9,10 @@ import sys
 from typing import Callable, Optional
 from uuid import UUID
 
+from cba_core_lib.utils import status
+from cba_core_lib.utils import validate_content_type
+from cba_core_lib.utils.enums import UserRole
+from cba_core_lib.utils.env_utils import get_bool_from_env
 from flasgger import swag_from
 # pylint: disable=unused-import
 from flask import (
@@ -25,17 +29,11 @@ from service import (
     app,
     VERSION,
     NAME,
-    metrics, get_bool_from_env
+    metrics,
 )
-from service.common import status
 from service.common.audit import AuditLogger
-from service.common.constants import (
-    ROLE_USER,
-    ROLE_ADMIN
-)
 from service.common.keycloak_utils import has_roles
 from service.common.utils import (
-    check_content_type,
     count_requests
 )
 from service.schemas import (
@@ -299,7 +297,8 @@ def create() -> Response:
     """Create a New Account"""
     app.logger.info('Request to create an Account...')
 
-    check_content_type('application/json')
+    content_type = request.headers.get('Content-Type')
+    validate_content_type(content_type, 'application/json')
 
     # Get the data payload from the request
     data = request.get_json()
@@ -491,7 +490,7 @@ def find_by_id(account_id: UUID) -> Response:
     'summary': 'Update Account by ID',
     'description': 'Updates an existing account with the provided JSON data.</br></br>'
                    'Only authenticated users can access this endpoint.</br></br>'
-                   'A user with the role **ROLE_USER** can update only their own account.</br>'
+                   'A user with the role **{ROLE_USER}** can update only their own account.</br>'
                    'A user with the role **ROLE_ADMIN** can update any account.',
     'security': [{'oauth2': ['openid', 'profile', 'email']}],
     'parameters': [
@@ -535,7 +534,7 @@ def find_by_id(account_id: UUID) -> Response:
     }
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['PUT'])
-@has_roles([ROLE_USER, ROLE_ADMIN])
+@has_roles([UserRole.USER.value, UserRole.ADMIN.value])
 @audit_log
 @count_requests
 def update_by_id(account_id: UUID) -> Response:
@@ -623,7 +622,7 @@ def update_by_id(account_id: UUID) -> Response:
     }
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['PATCH'])
-@has_roles([ROLE_USER, ROLE_ADMIN])
+@has_roles([UserRole.USER.value, UserRole.ADMIN.value])
 @audit_log
 @count_requests
 def partial_update_by_id(account_id: UUID) -> Response:
@@ -696,7 +695,7 @@ def partial_update_by_id(account_id: UUID) -> Response:
     }
 })
 @app.route(f"{ACCOUNTS_PATH_V1}/<uuid:account_id>", methods=['DELETE'])
-@has_roles([ROLE_USER, ROLE_ADMIN])
+@has_roles([UserRole.USER.value, UserRole.ADMIN.value])
 @audit_log
 @count_requests
 def delete_by_id(account_id: UUID) -> Response:

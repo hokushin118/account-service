@@ -11,6 +11,7 @@ import os
 import unittest
 from unittest.mock import patch
 
+from cba_core_lib.utils import status  # HTTP Status Codes
 from cryptography.hazmat.primitives import serialization
 from flask_caching import Cache
 from flask_jwt_extended import JWTManager
@@ -22,7 +23,6 @@ from service import (
     NAME,
     VERSION
 )
-from service.common import status  # HTTP Status Codes
 from service.errors import AccountAuthorizationError
 from service.models import db
 from service.routes import (

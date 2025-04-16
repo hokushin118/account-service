@@ -8,10 +8,10 @@ Test cases can be run with the following:
 import json
 from unittest import TestCase
 
+from cba_core_lib.utils import status, UnsupportedMediaTypeError
 from flask import Flask, request
 from werkzeug.exceptions import UnsupportedMediaType
 
-from service.common import status
 from service.common.error_handlers import register_error_handlers
 from service.errors import (
     AccountError,
@@ -61,6 +61,16 @@ class RegisterErrorHandlersTests(TestCase):
             raise ValueError(
                 'Name can not be blank'
             )
+
+        @self.app.route('/test/custom_unsupported_media_type_error',
+                        methods=['POST'])
+        def custom_unsupported_media_type():
+            if request.content_type != 'application/json':
+                raise UnsupportedMediaTypeError(
+                    'application/json',
+                    'text/plain'
+                )
+            return 'success', status.HTTP_200_OK
 
         @self.app.route('/test/internal-server')
         def internal_server_error():
@@ -188,3 +198,24 @@ class RegisterErrorHandlersTests(TestCase):
         )
         self.assertEqual(data.get('error'), 'Unsupported media type')
         self.assertIn('Media type not supported', data.get('message'))
+
+    def test_custom_unsupported_media_type_error_handler(self):
+        """It should return a 415 Unsupported Media Type JSON
+        response when an unsupported media type is used."""
+        # Call the endpoint with an unsupported content type.
+        response = self.client.post(
+            '/test/custom_unsupported_media_type_error',
+            data='test',
+            content_type='text/plain'
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+        )
+        data = json.loads(response.get_data(as_text=True))
+        self.assertEqual(
+            data.get('status'),
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+        )
+        self.assertEqual(data.get('error'), 'Unsupported media type')
+        self.assertIn('Unsupported Media Type.', data.get('message'))

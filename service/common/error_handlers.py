@@ -18,9 +18,9 @@ Usage:
 """
 from typing import Any, Dict, Tuple
 
+from cba_core_lib.utils import status, UnsupportedMediaTypeError
 from flask import Flask, jsonify
 
-from service.common import status
 from service.errors import (
     AccountNotFoundError,
     AccountError,
@@ -148,9 +148,30 @@ def register_error_handlers(app: Flask) -> None:
             HTTP status code (400).
         """
         app.logger.debug(
-            'General Account error handler invoked...'
+            'ValueError handler invoked...'
         )
         return handle_bad_request(error)
+
+    @app.errorhandler(UnsupportedMediaTypeError)
+    def handle_unsupported_media_type_error(
+            error: UnsupportedMediaTypeError
+    ) -> Tuple[Dict[str, Any], int]:
+        """Handles UnsupportedMediaTypeError exceptions.
+
+        This error handler catches UnsupportedMediaTypeError exceptions
+        and returns a 415 Unsupported Media Type response.
+
+        Args:
+            error: The UnsupportedMediaTypeError instance.
+
+        Returns:
+            A tuple containing the error response (a dictionary) and the
+            HTTP status code (415).
+        """
+        app.logger.debug(
+            'Unsupported Media Type error handler invoked...'
+        )
+        return handle_mediatype_not_supported(error)
 
     @app.errorhandler(status.HTTP_400_BAD_REQUEST)
     def handle_bad_request(

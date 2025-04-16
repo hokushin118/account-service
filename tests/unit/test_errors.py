@@ -8,7 +8,8 @@ Test cases can be run with the following:
 from unittest import TestCase
 from uuid import uuid4
 
-from service.common.constants import ROLE_USER, ROLE_ADMIN
+from cba_core_lib.utils.enums import UserRole
+
 from service.errors import (
     AccountError,
     AccountNotFoundError,
@@ -79,7 +80,7 @@ class TestAccountAuthorizationError(TestCase):
         the returned dictionary."""
         user_id = str(uuid4())
         custom_message = 'Custom authorization failure message.'
-        roles = [ROLE_USER, ROLE_ADMIN]
+        roles = [UserRole.USER.value, UserRole.ADMIN.value]
         error = AccountAuthorizationError(user_id, custom_message, roles)
         self.assertEqual(str(error), custom_message)
         result_dict = error.to_dict()
