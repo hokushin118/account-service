@@ -12,11 +12,11 @@ from functools import wraps
 from json import JSONDecodeError
 from typing import Any, Union, Optional, Callable
 
+from cba_core_lib.utils.env_utils import get_int_from_env
 from flask import request, Response
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from kafka.producer.future import RecordMetadata  # pylint: disable=E0401
 
-from service.common.env_utils import get_int_from_env
 from service.configs import KafkaProducerConfig
 from service.kafka.kafka_producer import (
     KafkaProducerManager,

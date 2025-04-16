@@ -8,6 +8,12 @@ import json
 import logging
 from unittest import TestCase
 
+from cba_core_lib.utils import status
+from cba_core_lib.utils.constants import (
+    AUTHORIZATION_HEADER,
+    BEARER_HEADER,
+)
+from cba_core_lib.utils.enums import UserRole
 from cryptography.hazmat.primitives import serialization
 from flask import Flask, Response
 from jose import jwt
@@ -15,12 +21,8 @@ from jose import jwt
 from service import (
     app_config,
     register_error_handlers,
-    AUTHORIZATION_HEADER,
-    BEARER_HEADER,
     app
 )
-from service.common import status
-from service.common.constants import ROLE_ADMIN, ROLE_USER
 from service.common.keycloak_utils import (
     REALM_ACCESS_CLAIM,
     ROLES_CLAIM,
@@ -173,7 +175,7 @@ class BaseTestCase(TestCase):
         self.jwt_token = jwt.encode(
             {
                 'sub': TEST_USER_ID,
-                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_USER]}
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [UserRole.USER.value]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,
@@ -187,7 +189,7 @@ class BaseTestCase(TestCase):
         self.jwt_token_admin = jwt.encode(
             {
                 'sub': TEST_ADMIN_USER_ID,
-                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [ROLE_ADMIN]}
+                REALM_ACCESS_CLAIM: {ROLES_CLAIM: [UserRole.ADMIN.value]}
             },
             self.private_key,
             algorithm=JWT_ALGORITHM,

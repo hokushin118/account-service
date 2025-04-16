@@ -16,12 +16,11 @@ from typing import Union, Any, Callable, List
 
 # import jwt
 import requests
+from cba_core_lib.utils import status
 from flask import jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 from jwt.algorithms import RSAAlgorithm
 from jwt.exceptions import InvalidKeyError
-
-from service.common import status
 
 logger = logging.getLogger(__name__)
 

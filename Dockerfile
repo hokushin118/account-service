@@ -26,8 +26,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir --index-url https://test.pypi.org/simple/ --upgrade cba-core-lib
-
+RUN pip install --no-cache-dir --index-url https://test.pypi.org/simple/ cba-core-lib==1.0.11
 
 # Copy only the necessary artifacts from builder stage
 COPY --from=builder /app /app

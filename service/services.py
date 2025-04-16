@@ -10,6 +10,9 @@ import logging
 from typing import Any, Tuple, Optional, Callable
 from uuid import UUID
 
+from cba_core_lib.utils import generate_etag_hash
+from cba_core_lib.utils.enums import UserRole
+from cba_core_lib.utils.env_utils import get_int_from_env
 from flask_jwt_extended import get_jwt_identity
 from pybreaker import CircuitBreaker, CircuitBreakerError
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -21,10 +24,8 @@ from tenacity import (
 )
 
 from service import app, cache
-from service.common.constants import ACCOUNT_CACHE_KEY, ROLE_ADMIN
-from service.common.env_utils import get_int_from_env
+from service.common.constants import ACCOUNT_CACHE_KEY
 from service.common.keycloak_utils import get_user_roles
-from service.common.utils import generate_etag_hash
 from service.errors import (
     AccountNotFoundError,
     AccountError,
@@ -359,7 +360,7 @@ class AccountServiceHelper:
         roles = get_user_roles()
         app.logger.debug('Roles: %s', roles)
 
-        if ROLE_ADMIN not in roles:
+        if UserRole.ADMIN.value not in roles:
             # If not ROLE_ADMIN, check ownership шf admin, then skip ownership check.
             # Check if the logged-in user is the owner of the resource
             if not AccountServiceHelper._check_if_user_is_owner(

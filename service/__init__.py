@@ -13,6 +13,11 @@ from types import FrameType
 from typing import Optional
 
 from cba_core_lib.logging import init_logging
+from cba_core_lib.utils.constants import (
+    AUTHORIZATION_HEADER,
+    BEARER_HEADER,
+)
+from cba_core_lib.utils.env_utils import get_bool_from_env
 from dotenv import load_dotenv
 from flasgger import Swagger, LazyString, LazyJSONEncoder, MK_SANITIZER
 from flask import Flask, request
@@ -27,11 +32,8 @@ from service.common.constants import (
     NAME_MIN_LENGTH,
     ADDRESS_MAX_LENGTH,
     PHONE_MAX_LENGTH,
-    AUTHORIZATION_HEADER,
-    BEARER_HEADER,
     GENDER_MAX_LENGTH
 )
-from service.common.env_utils import get_bool_from_env
 from service.consumers import get_kafka_consumer_manager
 
 logger = logging.getLogger(__name__)

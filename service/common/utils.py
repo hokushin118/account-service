@@ -3,23 +3,19 @@ Utility functions.
 
 This module contains utility functions to REST API.
 """
-import hashlib
 import logging
 import sys
 from functools import wraps
 from typing import Any, Union, Callable
 from typing import Tuple
 
-from flask import request, abort
+from flask import request
 from prometheus_flask_exporter import Counter
 from sqlalchemy import (
     Column,
     TIMESTAMP,
     func
 )
-
-from service import app
-from service.common import status
 
 logger = logging.getLogger(__name__)
 
@@ -67,27 +63,6 @@ def count_requests(function: Callable[..., Any]) -> Callable[..., Any]:
     return decorated_function
 
 
-def check_content_type(media_type: str) -> None:
-    """Checks that the Content-Type header matches the expected media type.
-
-    Args:
-        media_type: The expected Content-Type string (e.g., "application/json").
-
-    Raises:
-        HTTPException: If the Content-Type header is missing or does not match
-                       the expected media type.  A 415 Unsupported Media Type
-                       error is raised.
-    """
-    content_type = request.headers.get('Content-Type')
-    if content_type and content_type == media_type:
-        return
-    app.logger.error("Invalid Content-Type: %s", content_type)
-    abort(
-        status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-        f"Content-Type must be {media_type}",
-    )
-
-
 def account_to_dict(account_or_dto: Union[object, dict]) -> dict[str, Any]:
     """Converts an Account object or DTO to a dictionary.
 
@@ -111,23 +86,6 @@ def account_to_dict(account_or_dto: Union[object, dict]) -> dict[str, Any]:
         'date_joined': account_or_dto.date_joined.isoformat(),
         'user_id': account_or_dto.user_id,
     }
-
-
-def generate_etag_hash(data: dict) -> str:
-    """Generates an ETag hash for the given data.
-
-    This function calculates the MD5 hash of the string representation of the
-    input dictionary.  The resulting hash can be used as an ETag for caching
-    purposes.
-
-    Args:
-        data: A dictionary representing the data to be hashed.
-
-    Returns:
-        A string representing the hexadecimal MD5 hash of the data.
-    """
-    data_str = str(data).encode('utf-8')  # Encode to bytes before hashing
-    return hashlib.md5(data_str).hexdigest()  # Hash the data
 
 
 def timestamps(
