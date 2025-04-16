@@ -29,7 +29,8 @@ from service.schemas import (
 from service.services import (
     AccountService,
     FORBIDDEN_UPDATE_THIS_RESOURCE_ERROR_MESSAGE,
-    AccountServiceCache, AccountServiceHelper
+    AccountServiceCache,
+    AccountServiceHelper
 )
 from tests.utils.constants import (
     TEST_ETAG,

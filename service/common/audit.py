@@ -5,6 +5,7 @@ This module implements audit logging functionality for a Flask application.
 It leverages Kafka to asynchronously log audit messages that capture details
 of incoming requests and outgoing responses.
 """
+import json
 import logging
 import os
 from datetime import datetime
@@ -12,16 +13,15 @@ from functools import wraps
 from json import JSONDecodeError
 from typing import Any, Union, Optional, Callable
 
+from cba_core_lib.kafka import (
+    KafkaProducerManager,
+    generate_correlation_id
+)
+from cba_core_lib.kafka.configs import KafkaProducerConfig
 from cba_core_lib.utils.env_utils import get_int_from_env
 from flask import request, Response
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from kafka.producer.future import RecordMetadata  # pylint: disable=E0401
-
-from service.configs import KafkaProducerConfig
-from service.kafka.kafka_producer import (
-    KafkaProducerManager,
-    generate_correlation_id
-)
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +75,57 @@ class AuditLogger:
             acks=KAFKA_ACKS,
             linger_ms=KAFKA_LINGER_MS,
             batch_size=KAFKA_BATCH_SIZE,
-            compression_type=KAFKA_COMPRESSION,
+            compression_type=KAFKA_COMPRESSION if KAFKA_COMPRESSION else None,
             health_check_interval=KAFKA_HEALTH_CHECK_INTERVAL,
         )
+
+        def safe_string_serializer(input_str: Any) -> Optional[bytes]:
+            if input_str is None:
+                return None
+            if isinstance(input_str, bytes):
+                return input_str
+            return str(input_str).encode('utf-8')
+
+        def safe_json_serializer(input_value: Any) -> Optional[bytes]:
+            if input_value is None:
+                return None
+            if isinstance(input_value, bytes):
+                logger.warning(
+                    "Audit JSON serializer received unexpected bytes: %s",
+                    input_value[:100]
+                )
+                try:
+                    # Attempt to decode assuming UTF-8 JSON bytes
+                    v_decoded = json.loads(input_value.decode('utf-8'))
+                    return json.dumps(v_decoded).encode('utf-8')
+                except (
+                        UnicodeDecodeError,
+                        JSONDecodeError
+                ) as err:
+                    logger.error(
+                        "Could not decode bytes received by "
+                        "JSON serializer. %s",
+                        err
+                    )
+                    return None
+            try:
+                return json.dumps(input_value).encode('utf-8')
+            except TypeError as err:
+                logger.error(
+                    "Failed to JSON serialize audit value of type %s: %s",
+                    type(input_value), err
+                )
+                return None
+
         # Instantiate the Kafka producer manager.
         self.producer_manager = KafkaProducerManager(
-            config=self.config
+            config=self.config,
+            key_serializer=safe_string_serializer,  # Use safe serializer
+            value_serializer=safe_json_serializer  # Use safe serializer
+        )
+        logger.info(
+            "AuditLogger initialized with Kafka Manager for topic '%s'",
+            KAFKA_TOPIC
         )
 
     def get_producer_manager(self) -> KafkaProducerManager:
