@@ -5,14 +5,11 @@ This microservice handles the lifecycle of Accounts
 """
 import datetime
 import logging
-import sys
-from typing import Callable, Optional
 from uuid import UUID
 
 from cba_core_lib.utils import status
 from cba_core_lib.utils import validate_content_type
 from cba_core_lib.utils.enums import UserRole
-from cba_core_lib.utils.env_utils import get_bool_from_env
 from flasgger import swag_from
 # pylint: disable=unused-import
 from flask import (
@@ -31,7 +28,7 @@ from service import (
     NAME,
     metrics,
 )
-from service.common.audit import AuditLogger
+from service.common.audit_utils import audit_log
 from service.common.keycloak_utils import has_roles
 from service.common.utils import (
     count_requests
@@ -52,112 +49,9 @@ ROOT_PATH = '/api'
 HEALTH_PATH = f"{ROOT_PATH}/health"
 INFO_PATH = f"{ROOT_PATH}/info"
 ACCOUNTS_PATH_V1 = f"{ROOT_PATH}/v1/accounts"
-# Enable audit logging if AUDIT_ENABLED is set to "true"
-AUDIT_ENABLED = get_bool_from_env('AUDIT_ENABLED', False)
 
 # Initialize the AccountService
 account_service = AccountService()
-
-
-######################################################################
-# HELPER METHODS
-######################################################################
-def audit_log(function: Callable) -> Callable:
-    """Conditionally apply Kafka-based audit logging to a function based on the audit configuration.
-
-    If audit logging is enabled (i.e., AUDIT_ENABLED is True), this function dynamically imports
-    and applies the audit_log_kafka decorator to the provided function. Otherwise, it simply returns
-    the original function unmodified.
-
-    Args:
-        function (Callable): The function to be decorated with audit logging.
-
-    Returns:
-        Callable: The decorated function with Kafka-based audit logging if enabled,
-                  otherwise the original function.
-
-    Usage:
-        @audit_log
-        def my_route():
-           ...
-    """
-    if AUDIT_ENABLED:
-        # pylint:disable=C0415
-        import signal
-        from types import FrameType
-        logger.info('Audit is enabled.')
-        logger.debug("Auditing Kafka log for %s", function.__name__)
-
-        # Define a shutdown handler that captures the app via closure.
-        def shutdown_handler(signum: int, frame: Optional[FrameType]) -> None:
-            """Handles application shutdown signals and closes the Kafka consumer.
-
-            This function is designed to be used as a signal handler for graceful
-            application shutdown. It logs the shutdown event and closes the
-            KafkaProducerManager associated with the Flask application.
-
-            Args:
-                signum: The signal number that triggered the handler.
-                frame: The current stack frame (optional).
-            """
-            logger.info(
-                'Application shutting down. Signal received: %s, '
-                'Frame: %s. Closing KafkaProducerManager...',
-                signum,
-                frame
-            )
-            try:
-                if app and hasattr(
-                        app,
-                        'kafka_producer_manager'
-                ) and app.kafka_producer_manager:
-                    if app.kafka_producer_manager is not None:
-                        app.kafka_producer_manager.close_producer()
-                        logger.info(
-                            'KafkaProducerManager closed successfully.'
-                        )
-                    else:
-                        logger.warning('KafkaProducerManager is None.')
-                else:
-                    logger.warning(
-                        'KafkaProducerManager not initialized or not found.'
-                    )
-
-            except Exception as err:  # pylint: disable=W0703
-                logger.error(
-                    'Error closing KafkaProducerManager: %s',
-                    err,
-                    exc_info=True
-                )
-            sys.exit(0)
-
-        # Register shutdown_app as the handler for SIGTERM and SIGINT.
-        signal.signal(
-            signal.SIGTERM,
-            shutdown_handler
-        )  # For Docker shutdown signals (or other system signals)
-        signal.signal(
-            signal.SIGINT,
-            shutdown_handler
-        )  # For keyboard interrupts (Ctrl+C)
-
-        audit_logger = AuditLogger()
-
-        if app and hasattr(
-                app,
-                'kafka_producer_manager'
-        ) and app.kafka_producer_manager:
-            logger.debug('KafkaProducerManager available.')
-            return audit_logger.audit_log_kafka(function)
-
-        logger.warning(
-            'KafkaProducerManager not initialized; creating and attaching.'
-        )
-        app.kafka_producer_manager = audit_logger.get_producer_manager()
-        return audit_logger.audit_log_kafka(function)
-    # Skip audit logging if audit is not enabled
-    logger.info('Audit is disabled.')
-    return function
 
 
 ######################################################################

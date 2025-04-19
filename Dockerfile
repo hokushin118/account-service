@@ -26,7 +26,11 @@ WORKDIR /app
 COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir --index-url https://test.pypi.org/simple/ cba-core-lib==1.0.11
+ RUN pip install --no-cache-dir --index-url https://test.pypi.org/simple/ cba-core-lib==1.0.17
+
+# Local development
+# COPY dist/ ./dist
+# RUN pip install dist/cba_core_lib-1.0.17-py3-none-any.whl
 
 # Copy only the necessary artifacts from builder stage
 COPY --from=builder /app /app
