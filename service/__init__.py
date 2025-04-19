@@ -17,7 +17,7 @@ from cba_core_lib.utils.constants import (
     AUTHORIZATION_HEADER,
     BEARER_HEADER,
 )
-from cba_core_lib.utils.env_utils import get_bool_from_env
+from cba_core_lib.utils.env_utils import get_bool_from_env, get_int_from_env
 from dotenv import load_dotenv
 from flasgger import Swagger, LazyString, LazyJSONEncoder, MK_SANITIZER
 from flask import Flask, request
@@ -114,7 +114,7 @@ from service.common.keycloak_utils import (
     get_keycloak_certificate,
     get_keycloak_certificate_with_retry,
     KEYCLOAK_CLIENT_ID,
-    KEYCLOAK_SECRET
+    KEYCLOAK_SECRET, get_current_user_id
 )
 
 app_config = AppConfig()
@@ -128,11 +128,13 @@ root_logger = logging.getLogger()
 init_logging(root_logger, log_level=app_config.log_level)
 
 # Retrieving Information (Environment Variables Example):
-# This is a common way to manage configuration, especially in containerized environments.
+# This is a common way to manage configuration, especially in
+# containerized environments.
 VERSION = os.environ.get('VERSION', '0.0.1')  # Default if not set
 NAME = os.environ.get('NAME', 'account-service')
 FORCE_HTTPS = get_bool_from_env('FORCE_HTTPS', False)
 SWAGGER_ENABLED = get_bool_from_env('SWAGGER_ENABLED', False)
+AUDIT_ENABLED = get_bool_from_env('AUDIT_ENABLED', False)
 CACHE_TYPE = os.environ.get('CACHE_TYPE', 'redis')
 CACHE_REDIS_HOST = os.environ.get('CACHE_REDIS_HOST', 'localhost')
 CACHE_REDIS_PORT = os.environ.get('CACHE_REDIS_PORT', '6379')
@@ -572,11 +574,10 @@ def configure_jwt(current_app: Flask) -> None:
 
 # --- Cache Configuration ---
 def configure_cache(current_app: Flask) -> Cache:
-    """
-    Configures caching for the Flask application using Redis.
+    """Configures caching for the Flask application using Redis.
 
-    This function sets up the Flask-Caching extension with Redis as the backend,
-    using configuration values from the application's config.
+    This function sets up the Flask-Caching extension with Redis as the
+    backend, using configuration values from the application's config.
 
     Args:
         current_app (Flask): The Flask application instance to configure.
@@ -594,6 +595,166 @@ def configure_cache(current_app: Flask) -> Cache:
 
     # Initialize Flask-Caching with Redis
     return Cache(current_app)
+
+
+# --- Audit Configuration ---
+def configure_audit(current_app: Flask) -> None:
+    """Configures and initializes the audit logging system for the Flask app.
+
+    Reads configuration from environment variables (with defaults), sets up
+    a KafkaProducerManager, an AuditLogger, and a FlaskAuditAdapter if
+    audit logging is enabled via the AUDIT_ENABLED environment variable.
+
+    If AUDIT_ENABLED is not 'true' (case-insensitive), this function logs
+    an informational message and returns early, ensuring audit components
+    on `current_app` are None.
+
+    If initialization fails at any step (e.g., Kafka connection issues,
+    missing dependencies, configuration errors), it logs an error, disables
+    audit logging by setting `current_app.config['AUDIT_ENABLED'] = False`,
+    and cleans up partially initialized components on `current_app`.
+
+    Args:
+         current_app (Flask): The Flask application instance to configure.
+    """
+    bootstrap_servers_str = os.environ.get(
+        'KAFKA_AUDIT_BOOTSTRAP_SERVERS',
+        'kafka:9093'
+    )
+    current_app.config["KAFKA_AUDIT_BOOTSTRAP_SERVERS"] = [
+        s.strip() for s in bootstrap_servers_str.split(',') if s.strip()
+    ] if bootstrap_servers_str else []
+    current_app.config["KAFKA_AUDIT_TOPIC"] = os.environ.get(
+        'KAFKA_AUDIT_TOPIC',
+        'audit-events'
+    )
+    current_app.config["KAFKA_AUDIT_ACKS"] = get_int_from_env(
+        'KAFKA_AUDIT_ACKS',
+        1
+    )
+    current_app.config["KAFKA_AUDIT_RETRIES"] = get_int_from_env(
+        'KAFKA_AUDIT_RETRIES',
+        5
+    )
+    current_app.config["KAFKA_AUDIT_LINGER_MS"] = get_int_from_env(
+        'KAFKA_AUDIT_LINGER_MS',
+        100
+    )
+    current_app.config["KAFKA_AUDIT_BATCH_SIZE"] = get_int_from_env(
+        'KAFKA_AUDIT_BATCH_SIZE',
+        16384
+    )
+    current_app.config["KAFKA_AUDIT_COMPRESSION"] = os.environ.get(
+        'KAFKA_AUDIT_COMPRESSION',
+        'gzip'
+    )
+    current_app.config[
+        "KAFKA_AUDIT_HEALTH_CHECK_INTERVAL"] = get_int_from_env(
+        'KAFKA_AUDIT_HEALTH_CHECK_INTERVAL',
+        60
+    )
+
+    try:
+        # pylint: disable=C0415
+        from cba_core_lib.audit.configs import AuditConfig
+        from cba_core_lib.audit.adapters import FlaskAuditAdapter
+        from cba_core_lib.audit.core import AuditLogger
+        from cba_core_lib.kafka.configs import KafkaProducerConfig
+        from cba_core_lib.kafka.producer import KafkaProducerManager
+        from cba_core_lib.kafka.utils import (
+            safe_string_serializer,
+            safe_json_serializer,
+        )
+    except ImportError as err:
+        logger.exception(
+            "Failed to import required audit/Kafka library components. "
+            "Disabling audit logging. Error: %s",
+            err
+        )
+        current_app.config['AUDIT_ENABLED'] = False
+        return
+
+    try:
+        kafka_producer_config = KafkaProducerConfig(
+            bootstrap_servers=current_app.config[
+                'KAFKA_AUDIT_BOOTSTRAP_SERVERS'
+            ],
+            acks=current_app.config['KAFKA_AUDIT_ACKS'],
+            retries=current_app.config['KAFKA_AUDIT_RETRIES'],
+            linger_ms=current_app.config['KAFKA_AUDIT_LINGER_MS'],
+            batch_size=current_app.config['KAFKA_AUDIT_BATCH_SIZE'],
+            compression_type=current_app.config['KAFKA_AUDIT_COMPRESSION'],
+            health_check_interval=current_app.config[
+                'KAFKA_AUDIT_HEALTH_CHECK_INTERVAL'
+            ],
+        )
+
+        # Instantiate and attach the Kafka producer manager (Audit)
+        current_app.audit_producer_manager = KafkaProducerManager(
+            config=kafka_producer_config,
+            key_serializer=safe_string_serializer,
+            value_serializer=safe_json_serializer
+        )
+        logger.info(
+            "KafkaProducerManager for Audit initialized, "
+            "target servers: %s.",
+            kafka_producer_config.bootstrap_servers
+        )
+
+        # Create Audit Configuration
+        audit_config = AuditConfig(
+            audit_topic=current_app.config['KAFKA_AUDIT_TOPIC'],
+            event_source=NAME,
+            user_identifier_func=get_current_user_id,
+        )
+
+        # Create the core Audit Logger
+        audit_logger = AuditLogger(
+            config=audit_config,
+            producer_manager=current_app.audit_producer_manager
+        )
+        logger.info(
+            "AuditLogger initialized (Topic: '%s', Source: '%s').",
+            audit_config.audit_topic,
+            audit_config.event_source
+        )
+
+        # Create and attach the Flask Adapter
+        flask_adapter = FlaskAuditAdapter(audit_logger)
+        current_app.flask_audit_adapter = flask_adapter
+        logger.info(
+            'FlaskAuditAdapter initialized and attached successfully.'
+        )
+
+    except Exception as err:  # pylint: disable=W0703
+        logger.exception(
+            "Failed to initialize audit components "
+            "(Kafka/AuditLogger/Adapter). Disabling audit logging. "
+            "Error: %s", err
+        )
+        current_app.config['AUDIT_ENABLED'] = False
+
+        if hasattr(
+                current_app,
+                'audit_producer_manager'
+        ) and current_app.audit_producer_manager:
+            try:
+                if hasattr(
+                        current_app.audit_producer_manager,
+                        'shutdown'
+                ):
+                    current_app.audit_producer_manager.shutdown()
+                logger.info(
+                    'Complete termination of the KafkaProducerManager (Audit).'
+                )
+            except Exception as close_err:  # pylint: disable=W0703
+                logger.error(
+                    "Error during KafkaProducerManager (Audit) shutdown: %s",
+                    close_err
+                )
+
+        current_app.audit_producer_manager = None
+        current_app.flask_audit_adapter = None
 
 
 # --- Flask Application Setup ---
@@ -621,12 +782,14 @@ def create_app() -> Flask:
         app_config.sqlalchemy_track_modifications
 
     # Define a shutdown handler that captures the current_app via closure.
-    def shutdown_handler(signum: int, frame: Optional[FrameType]) -> None:
-        """Handles application shutdown signals and closes the Kafka consumer.
+    def shutdown_handler(
+            signum: int,
+            frame: Optional[FrameType]
+    ) -> None:
+        """Handles SIGTERM/SIGINT signals for graceful shutdown.
 
-        This function is designed to be used as a signal handler for graceful
-        application shutdown. It logs the shutdown event and closes the
-        KafkaConsumerManager associated with the Flask application.
+        Logs the shutdown event and attempts to close both the Kafka Consumer
+        and the Kafka Producer (for auditing) associated with the Flask app.
 
         Args:
             signum: The signal number that triggered the handler.
@@ -634,28 +797,63 @@ def create_app() -> Flask:
         """
         logger.info(
             'Application shutting down. Signal received: %s, '
-            'Frame: %s. Closing KafkaConsumerManager...',
+            'Frame: %s. Attempting graceful shutdown of Kafka resources...',
             signum,
             frame
         )
+
+        # --- Shutdown Kafka Consumer ---
         try:
-            if current_app and hasattr(
-                    current_app,
-                    'kafka_consumer_manager'
-            ) and current_app.kafka_consumer_manager:
-                current_app.kafka_consumer_manager.close_consumer()
+            consumer_manager = getattr(
+                current_app,
+                'kafka_consumer_manager',
+                None
+            )
+            if consumer_manager:
+                logger.info('Shutdown KafkaConsumerManager...')
+                consumer_manager.shutdown()
                 logger.info('KafkaConsumerManager closed successfully.')
             else:
-                logger.warning(
-                    'KafkaConsumerManager not initialized or not found.'
+                logger.info(
+                    'KafkaConsumerManager not found on app context, '
+                    'skipping closure.'
                 )
+
         except Exception as err:  # pylint: disable=W0703
             # pylint: disable=R0801
             logger.error(
-                'Error closing KafkaConsumerManager: %s',
+                'Error shutting down KafkaConsumerManager: %s',
                 err,
                 exc_info=True
             )
+
+        # Close Kafka Producer (for Audit)
+        try:
+            audit_producer_manager = getattr(
+                current_app,
+                'audit_producer_manager',
+                None
+            )
+            if audit_producer_manager:
+                logger.info('Shutdown KafkaProducerManager (Audit)...')
+                audit_producer_manager.shutdown()
+                logger.info(
+                    'KafkaProducerManager (Audit) closed successfully.'
+                )
+            else:
+                logger.info(
+                    'KafkaProducerManager (Audit) not found on app context, '
+                    'skipping closure.'
+                )
+
+        except Exception as err:  # pylint: disable=W0703
+            logger.error(
+                'Error shutting down KafkaProducerManager (Audit): %s',
+                err,
+                exc_info=True
+            )
+
+        logger.info('Graceful shutdown sequence finished.')
         # pylint: disable=R0801
         sys.exit(0)
 
@@ -683,6 +881,14 @@ def create_app() -> Flask:
 
     # Configure JWT with Keycloak public certificate
     configure_jwt(current_app)
+
+    # Conditionally initialize Audit
+    current_app.config["AUDIT_ENABLED"] = AUDIT_ENABLED
+    if current_app.config["AUDIT_ENABLED"]:
+        configure_audit(current_app)
+        current_app.logger.info('Audit is enabled.')
+    else:
+        current_app.logger.info('Audit is disabled.')
 
     # Instantiate the KafkaConsumerManager
     kafka_consumer_manager = get_kafka_consumer_manager()

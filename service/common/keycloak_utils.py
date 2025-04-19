@@ -12,13 +12,18 @@ and role validation based on JWT claims extracted from Keycloak token.
 import logging
 import os
 import time
-from typing import Union, Any, Callable, List
+from typing import Union, Any, Callable, List, Optional
 
 # import jwt
 import requests
 from cba_core_lib.utils import status
 from flask import jsonify
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import (
+    jwt_required,
+    get_jwt,
+    get_jwt_identity,
+    verify_jwt_in_request
+)
 from jwt.algorithms import RSAAlgorithm
 from jwt.exceptions import InvalidKeyError
 
@@ -297,6 +302,30 @@ def get_user_roles() -> List[str]:
         logging.debug("User roles: %s", all_roles)
         return all_roles
 
-    except (AttributeError, TypeError, KeyError) as err:
+    except (
+            AttributeError,
+            TypeError,
+            KeyError
+    ) as err:
         logging.error("Error extracting user roles: %s", err)
         return []
+
+
+def get_current_user_id() -> Optional[str]:
+    """Retrieves the current user's ID.
+
+    This function is a placeholder for retrieving the user ID from the
+    application's context (e.g., a request context in a web framework).
+    In a real application, this function would interact with the framework's
+    authentication/authorization mechanisms.  If no user is authenticated,
+    it returns None.
+
+    Returns:
+        Optional[str]: The current user's ID, or None if no user is logged in.
+    """
+    try:
+        verify_jwt_in_request()
+        return get_jwt_identity()
+    except Exception as err:  # pylint: disable=W0703
+        logging.error("Error extracting user id: %s", err)
+        return None
