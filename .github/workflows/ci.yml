@@ -76,7 +76,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip wheel setuptools
           pip install --no-cache-dir -r requirements.txt 
-          pip install --no-cache-dir --index-url https://test.pypi.org/simple/ cba-core-lib==1.0.17
+          pip install --no-cache-dir --index-url https://test.pypi.org/simple/ cba_core_lib[storage]==1.0.21
           # Install dependencies, ensuring pip checks TestPyPI *in addition* to PyPI
       #          python -m pip install \
       #            --extra-index-url https://test.pypi.org/simple/ \

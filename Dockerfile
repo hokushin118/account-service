@@ -12,11 +12,11 @@ RUN echo "----> Installing build dependencies..." && \
     pip install --no-cache-dir --prefer-binary -r requirements.txt && \
     # Install the specific core library version from TestPyPI
     echo "----> Installing cba-core-lib from TestPyPI..." && \
-    pip install --no-cache-dir --index-url https://test.pypi.org/simple/ cba-core-lib==1.0.19
+    pip install --no-cache-dir --index-url https://test.pypi.org/simple/ "cba-core-lib[storage]==1.0.21"
 
 # Local development
-#COPY dist/ ./dist
-#RUN pip install dist/cba_core_lib-1.0.19-py3-none-any.whl
+# COPY dist/ ./dist
+# RUN pip install dist/cba_core_lib-1.0.21-py3-none-any.whl[storage]
 
 # Copy the application contents
 COPY service/ ./service/
@@ -44,11 +44,11 @@ RUN echo "----> Installing runtime dependencies..." && \
     pip install --no-cache-dir --prefer-binary -r requirements.txt && \
     # Install the specific core library version from TestPyPI
     echo "----> Installing cba-core-lib from TestPyPI..." && \
-    pip install --no-cache-dir --index-url https://test.pypi.org/simple/ cba-core-lib==1.0.19
+    pip install --no-cache-dir --index-url https://test.pypi.org/simple/ "cba-core-lib[storage]==1.0.21"
 
 # Local development
-#COPY dist/ ./dist
-#RUN pip install dist/cba_core_lib-1.0.19-py3-none-any.whl
+# COPY dist/ ./dist
+# RUN pip install dist/cba_core_lib-1.0.21-py3-none-any.whl[storage]
 
 # Copy the application code from the builder stage.
 # This copy preserves the ownership set in the builder stage.

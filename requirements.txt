@@ -1,49 +1,63 @@
-# Pin dependancies that might cause breakage
-Werkzeug==2.1.2
-SQLAlchemy==1.4.46
-SQLAlchemy-Utils==0.41.2
+# --- Core Application Framework & Web Server ---
+Flask==2.1.2                  # Web framework core
+gunicorn==20.1.0              # WSGI HTTP Server (for production deployment)
+Werkzeug==2.1.2               # WSGI utility library (explicit pin for Flask 2.1 compatibility)
+click==8.1.8                  # CLI library (dependency of Flask)
 
-# Build dependencies
-Flask==2.1.2
-psycopg2-binary==2.9.3
-python-dotenv==0.20.0
-Flask-Talisman==1.1.0
-Flask-Cors==5.0.0
-Flask-Migrate==4.1.0
-Flask-SQLAlchemy==2.5.1
-flask_oidc==2.2.2
-requests==2.32.3
-keycloak==3.1.3
-flasgger==0.9.7.1
-pydantic==2.10.6
-pydantic[email]==2.10.6
-prometheus_flask_exporter==0.23.1
-python-dateutil==2.9.0.post0
-click==8.1.8
-Flask-JWT-Extended==4.7.1
-flask-caching==2.3.1
-redis== 5.2.1
-kafka-python==2.0.6
-pybreaker==1.3.0
-tenacity==9.1.2
+# --- Database & ORM ---
+SQLAlchemy==1.4.46            # Database Toolkit & ORM
+SQLAlchemy-Utils==0.41.2      # Adds useful utilities for SQLAlchemy
+Flask-SQLAlchemy==2.5.1       # Flask integration for SQLAlchemy
+Flask-Migrate==4.1.0          # SQLAlchemy database migrations for Flask using Alembic
+psycopg2-binary==2.9.3        # PostgreSQL adapter (binary version, faster install)
 
-# Runtime dependencies
-gunicorn==20.1.0
-honcho==1.1.0
+# --- Security & Authentication ---
+Flask-Talisman==1.1.0         # HTTP security headers for Flask apps
+Flask-Cors==5.0.0             # Handles Cross-Origin Resource Sharing (CORS)
+flask_oidc==2.2.2             # OpenID Connect extension for Flask
+keycloak==3.1.3               # Keycloak client library
+Flask-JWT-Extended==4.7.1     # JWT handling for Flask applications
 
-# Code quality
-pylint==2.14.0
-flake8==4.0.1
-black==22.3.0
 
-# Testing dependencies
-nose==1.3.7
-pinocchio==0.4.3
-factory-boy==2.12.0
-testcontainers==4.9.2
+# --- API, Schema Validation & Documentation ---
+requests==2.32.3              # HTTP library for making requests
+flasgger==0.9.7.1             # API documentation generation (Swagger UI) for Flask
+pydantic==2.10.6              # Data validation and settings management
+pydantic[email]==2.10.6       # Email-validator
+pydantic-settings==2.0.3      # Pydantic extension for loading settings from env vars, etc. (requires pydantic V2)
 
-# Code Coverage
-coverage==6.3.2
+# --- Monitoring & Observability ---
+prometheus_flask_exporter==0.23.1 # Exports Prometheus metrics for Flask apps
 
-# Utilities
-httpie==3.2.1
+# --- Caching ---
+flask-caching==2.3.1          # Caching support for Flask
+redis==5.2.1                  # Python client for Redis
+
+# --- Async, Queues & Resilience ---
+kafka-python==2.0.6           # Apache Kafka client for Python
+pybreaker==1.3.0              # Circuit breaker pattern implementation
+tenacity==9.1.2               # General-purpose retry library
+
+# --- Utilities ---
+python-dotenv==0.21.0         # Reads key-value pairs from .env files
+python-dateutil==2.9.0.post0  # Powerful extensions to the standard datetime module
+honcho==1.1.0                 # Process manager (alternative to Foreman, useful for Procfiles)
+httpie==3.2.1                 # Command-line HTTP client (useful development tool)
+
+# --- File Utilities ---
+minio==7.2.15 # There is no minio==7.2.15 on TestPyPI
+
+# --- Code Quality & Formatting ---
+pylint==2.14.0                # Static code analysis (Linter)
+flake8==4.0.1                 # Style guide enforcement (Linter)
+black==22.3.0                 # Uncompromising code formatter
+
+
+# --- Testing Framework & Tools ---
+nose==1.3.7                   # Testing framework
+pinocchio==0.4.3              # Mocking/stubbing library
+factory-boy==2.12.0           # Fixture generation library
+testcontainers==4.9.2         # Provides Docker containers for testing integration
+
+# --- Code Coverage ---
+coverage==6.3.2               # Code coverage measurement
