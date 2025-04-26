@@ -265,7 +265,7 @@ development environment.
   following command:
 
     ```bash
-    pip install --index-url https://test.pypi.org/simple/ --upgrade cba-core-lib
+    pip install --index-url https://test.pypi.org/simple/ --upgrade cba-core-lib[storage]
     ```
 
 * To verify the installation and check the library's details, use the following
