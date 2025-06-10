@@ -20,7 +20,7 @@ Flask-JWT-Extended==4.7.1     # JWT handling for Flask applications
 
 
 # --- API, Schema Validation & Documentation ---
-requests==2.32.3              # HTTP library for making requests
+requests==2.32.4              # HTTP library for making requests
 flasgger==0.9.7.1             # API documentation generation (Swagger UI) for Flask
 pydantic==2.10.6              # Data validation and settings management
 pydantic[email]==2.10.6       # Email-validator
