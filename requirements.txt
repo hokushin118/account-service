@@ -1,7 +1,7 @@
 # --- Core Application Framework & Web Server ---
 Flask==2.1.2                  # Web framework core
 gunicorn==20.1.0              # WSGI HTTP Server (for production deployment)
-Werkzeug==2.1.2               # WSGI utility library (explicit pin for Flask 2.1 compatibility)
+Werkzeug==3.1.5               # WSGI utility library (explicit pin for Flask 2.1 compatibility)
 click==8.1.8                  # CLI library (dependency of Flask)
 
 # --- Database & ORM ---
